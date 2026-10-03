@@ -9,6 +9,7 @@ import { SessionChecklists } from '../checklists/SessionChecklists'
 import { AnchorExcerpt } from '../notes/AnchorExcerpt'
 import { NoteCard } from '../notes/NoteCard'
 import { exportSessionReport } from './exportReport'
+import { repoHistoryPath } from '../../app/paths'
 
 function groupByFile(notes: Note[]): [string, Note[]][] {
   const groups = new Map<string, Note[]>()
@@ -28,7 +29,7 @@ export function SessionReport({ session, repo }: { session: Session; repo: Repo 
   return (
     <section className="page stack report-page">
       <div>
-        <Link to={`/repos/${repo.id}/history`}>← History</Link>
+        <Link to={repoHistoryPath(repo.id!)}>← History</Link>
         <h1>
           {repoLabel(repo)} · {session.branch}
         </h1>

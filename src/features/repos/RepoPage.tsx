@@ -8,6 +8,7 @@ import { gitService } from '../../git/client'
 import type { RepoInfo } from '../../git/types'
 import { githubDefaultBase } from '../github/defaultBase'
 import { RepoFolderGate } from './RepoFolderGate'
+import { repoHistoryPath } from '../../app/paths'
 
 export function RepoPage() {
   const repoId = useParams().repoId ?? ''
@@ -81,7 +82,7 @@ function RepoDetails({ repo }: { repo: OpenedRepo }) {
           {repo.folderName} · {branch ?? 'detached HEAD'} @ {info.headSha.slice(0, 7)}
         </p>
         {!info.owner && <p className="muted">No GitHub remote named origin was found.</p>}
-        <Link to={`/repos/${repoId}/history`}>Session history</Link>
+        <Link to={repoHistoryPath(repoId)}>Session history</Link>
       </div>
 
       {info.baseBranches.length === 0 ? (

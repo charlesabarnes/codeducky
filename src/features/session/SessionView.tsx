@@ -25,6 +25,7 @@ import { filterFiles, nextUnviewed, stepFile } from './fileNav'
 import { FilePane, OrphanPane, type NoteFocus } from './FilePane'
 import { useReanchor } from './useReanchor'
 import { useSessionScan } from './useSessionScan'
+import { repoPath } from '../../app/paths'
 
 const VIEW_MODE_KEY = 'skelbert.viewMode'
 const EMPTY_NOTES: Note[] = []
@@ -158,7 +159,7 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
     <div className="session-layout">
       <aside className="session-sidebar">
         <div className="session-meta stack" style={{ gap: '0.25rem' }}>
-          <Link to={`/repos/${repo.id}`}>← {repoLabel(repo)}</Link>
+          <Link to={repoPath(repo.id!)}>← {repoLabel(repo)}</Link>
           <div className="mono">
             {session.branch} vs origin/{repo.baseBranch}
           </div>
