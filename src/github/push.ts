@@ -25,7 +25,8 @@ export interface Placement {
 const sideOf = (note: Note): ReviewSide => (note.anchor.side === 'old' ? 'LEFT' : 'RIGHT')
 
 export function commentBody(note: Note): string {
-  return `**${note.severity}:** ${note.body.trim() || '_No text._'}`
+  const label = note.severity === 'blocker' ? 'Blocker' : note.severity
+  return `**${label}:** ${note.body.trim() || '_No text._'}`
 }
 
 /** Maps each note onto the PR's patch for its file, using the same matcher as local re-anchoring. */
@@ -68,13 +69,6 @@ export function placeNotes(notes: readonly Note[], files: readonly PullFile[]): 
   return placement
 }
 
-function indent(text: string): string {
-  return text
-    .split('\n')
-    .map((line) => (line ? `  ${line}` : ''))
-    .join('\n')
-}
-
 function bodyItem(note: Note): string {
   const where = `line ${note.anchor.line}${note.anchor.side === 'old' ? ' (base)' : ''}`
   const excerpt = noteExcerpt(note)
@@ -88,6 +82,13 @@ function bodyItem(note: Note): string {
 export function reviewBody(notes: readonly Note[]): string {
   if (notes.length === 0) return ''
   return ['Notes that do not map onto the diff:', '', [...notes].sort(compareNotes).map(bodyItem).join('\n\n')].join('\n')
+}
+
+function indent(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => (line ? `  ${line}` : ''))
+    .join('\n')
 }
 
 export function pendingReview(commitId: string, placed: readonly PlacedNote[], bodyNotes: readonly Note[]): PendingReviewInput {

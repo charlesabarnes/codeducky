@@ -21,7 +21,7 @@ export interface SplitRow {
 }
 
 export const DEFAULT_CONTEXT = 3
-const MIN_GAP = 4
+const MIN_GAP = 6
 const DIFF_TIMEOUT_MS = 2000
 
 function splitValue(value: string): { text: string; noNewline: boolean }[] {
@@ -70,6 +70,11 @@ export function countChanges(oldText: string, newText: string): { additions: num
     else if (line.kind === 'del') deletions++
   }
   return { additions, deletions }
+}
+
+/** Lines changed in total, for the file list's counts. */
+export function churn(counts: { additions: number; deletions: number }): number {
+  return counts.additions + counts.deletions
 }
 
 export function lineOn(line: DiffLine, side: DiffSide): number | null {
