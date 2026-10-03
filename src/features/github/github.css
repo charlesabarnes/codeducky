@@ -79,6 +79,10 @@
   min-width: 0;
 }
 
+.push-notes input[type='checkbox'] {
+  flex: none;
+}
+
 .push-notes .push-note-text {
   display: flex;
   flex-direction: column;
@@ -104,6 +108,11 @@
   gap: 0.5rem;
   justify-content: flex-end;
   align-items: center;
+}
+
+.push-dialog footer button {
+  flex: none;
+  white-space: nowrap;
 }
 
 .token-test {
