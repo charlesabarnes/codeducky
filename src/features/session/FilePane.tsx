@@ -3,6 +3,9 @@ import type { Note } from '../../db/schema'
 import type { ViewMode } from '../../diff/DiffTable'
 import { DiffViewer } from '../../diff/DiffViewer'
 import type { FileChange } from '../../git/types'
+import { useShortcuts } from '../../keys/context'
+import { DiffNavContext, type DiffNavApi, type NavRequest } from '../../keys/diffNavContext'
+import { withShortcut } from '../../keys/help'
 import { sideLines } from '../../review/lines'
 import { LostNotes } from '../notes/LostNotes'
 import { useNoteAnnotations } from '../notes/useNoteAnnotations'
@@ -23,10 +26,14 @@ interface FilePaneProps {
   viewed: boolean
   onToggleViewed: () => void
   focus: NoteFocus | null
+  /** Where the keyboard cursor should start, e.g. after n/p crossed into this file. */
+  navRequest: NavRequest | null
+  onBoundary: (direction: 1 | -1) => boolean
 }
 
 export function FilePane(props: FilePaneProps) {
   const { sessionId, change, notes, mode, onModeChange, generation, viewed, onToggleViewed, focus } = props
+  const { navRequest, onBoundary } = props
   const { contents, error, loading, loadLarge } = useFileContents(change, generation)
   const lines = useMemo(
     () => ({ old: sideLines(contents?.old ?? null), new: sideLines(contents?.new ?? null) }),
@@ -39,6 +46,32 @@ export function FilePane(props: FilePaneProps) {
   const collapsed = viewed && expandedKey !== paneKey && focusedId === null
   const lost = notes.filter((note) => note.anchorLost && note.status !== 'dismissed')
 
+  const focusedNote = focusedId === null ? undefined : notes.find((note) => note.id === focusedId)
+  const noteRequest = useMemo<NavRequest | null>(
+    () =>
+      focus && focusedNote && !focusedNote.anchorLost
+        ? { at: focus.at, target: { side: focusedNote.anchor.side, line: focusedNote.anchor.line } }
+        : null,
+    [focus, focusedNote],
+  )
+  const request = noteRequest && (!navRequest || noteRequest.at > navRequest.at) ? noteRequest : navRequest
+  const nav = useMemo<DiffNavApi>(() => ({ request, onBoundary }), [request, onBoundary])
+
+  // Fallbacks for when no diff is on screen (collapsed, binary or too large); the diff's own
+  // handlers take precedence whenever it is shown.
+  const expandCollapsed = () => {
+    if (!collapsed) return false
+    setExpandedKey(paneKey)
+  }
+  useShortcuts('file', {
+    'line.next': expandCollapsed,
+    'line.prev': expandCollapsed,
+    'change.next': expandCollapsed,
+    'change.prev': expandCollapsed,
+    'hunk.next': () => onBoundary(1),
+    'hunk.prev': () => onBoundary(-1),
+  })
+
   const scrolled = useRef<NoteFocus | null>(null)
   useEffect(() => {
     if (!focus || focusedId === null || scrolled.current === focus) return
@@ -50,14 +83,20 @@ export function FilePane(props: FilePaneProps) {
 
   return (
     <>
-      <div className="diff-toolbar">
+      <div className="diff-toolbar" data-sticky-header>
         <span className="path mono">{change.path}</span>
-        <label className="viewed-toggle">
-          <input type="checkbox" checked={viewed} onChange={onToggleViewed} /> Viewed
+        <label className="viewed-toggle" title={withShortcut('Viewed', 'file.viewed')}>
+          <input type="checkbox" checked={viewed} onChange={onToggleViewed} aria-keyshortcuts="v" /> Viewed
         </label>
-        <div className="segmented" role="group" aria-label="Diff layout">
+        <div className="segmented" role="group" aria-label="Diff layout" title={withShortcut('Switch layout', 'view.mode')}>
           {(['unified', 'split'] as const).map((option) => (
-            <button key={option} type="button" aria-pressed={mode === option} onClick={() => onModeChange(option)}>
+            <button
+              key={option}
+              type="button"
+              aria-pressed={mode === option}
+              aria-keyshortcuts="s"
+              onClick={() => onModeChange(option)}
+            >
               {option === 'unified' ? 'Unified' : 'Split'}
             </button>
           ))}
@@ -67,7 +106,7 @@ export function FilePane(props: FilePaneProps) {
       {collapsed ? (
         <p className="diff-notice muted">
           Marked as viewed.{' '}
-          <button type="button" className="link" onClick={() => setExpandedKey(paneKey)}>
+          <button type="button" className="link" onClick={() => setExpandedKey(paneKey)} title="Show diff (j)">
             Show diff
           </button>
         </p>
@@ -76,7 +115,9 @@ export function FilePane(props: FilePaneProps) {
           {error && <p className="diff-notice error">{error}</p>}
           {loading && <p className="diff-notice muted">Loading…</p>}
           {contents && (
-            <DiffViewer contents={contents} mode={mode} onLoadLarge={loadLarge} annotations={annotations} />
+            <DiffNavContext.Provider value={nav}>
+              <DiffViewer contents={contents} mode={mode} onLoadLarge={loadLarge} annotations={annotations} />
+            </DiffNavContext.Provider>
           )}
         </>
       )}

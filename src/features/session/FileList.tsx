@@ -1,3 +1,4 @@
+import type { Ref } from 'react'
 import type { ChangeStatus, FileChange, FileStats } from '../../git/types'
 
 const BADGES: Record<ChangeStatus, string> = { added: 'A', modified: 'M', deleted: 'D' }
@@ -8,7 +9,12 @@ export interface FileNoteCount {
 }
 
 interface FileListProps {
+  /** The files that match the filter. */
   files: FileChange[]
+  total: number
+  filter: string
+  onFilterChange: (filter: string) => void
+  filterRef: Ref<HTMLInputElement>
   stats: Record<string, FileStats>
   selected: string | null
   noteCounts: ReadonlyMap<string, FileNoteCount>
@@ -17,8 +23,45 @@ interface FileListProps {
   onToggleViewed: (file: FileChange) => void
 }
 
-export function FileList({ files, stats, selected, noteCounts, viewed, onSelect, onToggleViewed }: FileListProps) {
-  if (files.length === 0) return <p className="muted" style={{ padding: '1rem' }}>No changes against the base.</p>
+export function FileList(props: FileListProps) {
+  const { files, total, filter, onFilterChange, filterRef, onSelect } = props
+  if (total === 0) return <p className="muted" style={{ padding: '1rem' }}>No changes against the base.</p>
+  return (
+    <>
+      <div className="file-filter">
+        <input
+          ref={filterRef}
+          type="text"
+          value={filter}
+          placeholder="Filter files"
+          aria-label="Filter files"
+          aria-keyshortcuts="/"
+          title="Filter files (/). Enter opens the first match, Esc leaves the field."
+          spellCheck={false}
+          autoComplete="off"
+          onChange={(event) => onFilterChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' || !files[0]) return
+            onSelect(files[0].path)
+            event.currentTarget.blur()
+          }}
+        />
+        {filter && (
+          <span className="muted" aria-live="polite">
+            {files.length}/{total}
+          </span>
+        )}
+      </div>
+      {files.length === 0 ? (
+        <p className="muted" style={{ padding: '0 1rem' }}>No files match.</p>
+      ) : (
+        <FileRows {...props} />
+      )}
+    </>
+  )
+}
+
+function FileRows({ files, stats, selected, noteCounts, viewed, onSelect, onToggleViewed }: FileListProps) {
   return (
     <ul className="file-list">
       {files.map((file) => (

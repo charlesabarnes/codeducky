@@ -1,4 +1,7 @@
 import { Fragment, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
+import type { Cursor } from '../keys/diffNav'
+import type { LineActions } from '../keys/lineActions'
+import { useDiffNavigation } from '../keys/useDiffNavigation'
 import { CodeText } from './CodeText'
 import {
   buildSegments,
@@ -24,6 +27,8 @@ export interface LineAnnotations {
   pinned: ReadonlySet<string>
   render: (side: DiffSide, line: number) => ReactNode
   onSelect?: (side: DiffSide, line: number) => void
+  /** Note actions for the keyboard cursor (c, e, r, a, d). */
+  actions?: LineActions
 }
 
 interface DiffTableProps {
@@ -33,22 +38,32 @@ interface DiffTableProps {
   annotations?: LineAnnotations
 }
 
+type SelectLine = (side: DiffSide, line: number) => void
+
 interface RowsProps {
   lines: DiffLine[]
   tokens: SideTokens
   annotations?: LineAnnotations
+  focus: Cursor | null
+  onSelect: SelectLine
 }
 
-function selectHandler(annotations: LineAnnotations | undefined, side: DiffSide, line: DiffLine | null) {
+function selectHandler(annotations: LineAnnotations | undefined, onSelect: SelectLine, side: DiffSide, line: DiffLine | null) {
   const number = line ? lineOn(line, side) : null
-  const onSelect = annotations?.onSelect
-  if (!onSelect || number === null) return undefined
+  if (!annotations?.onSelect || number === null) return undefined
   return (event: MouseEvent) => {
     const selection = window.getSelection()
     if ((event.target as HTMLElement).closest('.code') && selection && !selection.isCollapsed) return
     onSelect(side, number)
   }
 }
+
+const isFocused = (focus: Cursor | null, side: DiffSide, line: DiffLine | null) =>
+  focus !== null && line !== null && focus.side === side && lineOn(line, side) === focus.line
+
+/** Props for the focused row: the visible ring, a hook for scrolling, and its state for assistive tech. */
+const focusProps = (focused: boolean) =>
+  focused ? { 'data-kbd-focus': '', 'aria-current': 'location' as const } : {}
 
 function annotationFor(annotations: LineAnnotations | undefined, side: DiffSide, line: DiffLine | null): ReactNode {
   const number = line ? lineOn(line, side) : null
@@ -65,8 +80,21 @@ export function DiffTable({ lines, mode, tokens, annotations }: DiffTableProps) 
     [segments, expanded, renderLimit],
   )
   const columns = mode === 'split' ? 6 : 4
+  const { focus, tableRef, select } = useDiffNavigation({
+    blocks,
+    mode,
+    remaining,
+    onExpandGap: (id) => expand(id, 'all'),
+    onShowMore: () => setRenderLimit((n) => n + RENDER_STEP),
+    actions: annotations?.actions,
+  })
+  const selectLine: SelectLine = (side, line) => {
+    select(side, line)
+    annotations?.onSelect?.(side, line)
+  }
+  const rowProps = { tokens, annotations, focus, onSelect: selectLine }
 
-  const expand = (id: number, change: Partial<GapExpansion> | 'all') => {
+  function expand(id: number, change: Partial<GapExpansion> | 'all') {
     setExpanded((current) => {
       const next = new Map(current)
       const previous = next.get(id) ?? { top: 0, bottom: 0 }
@@ -81,7 +109,7 @@ export function DiffTable({ lines, mode, tokens, annotations }: DiffTableProps) 
   }
 
   return (
-    <table className={annotations?.onSelect ? 'diff-table selectable' : 'diff-table'}>
+    <table ref={tableRef} className={annotations?.onSelect ? 'diff-table selectable' : 'diff-table'}>
       {mode === 'split' ? (
         <colgroup>
           <col className="ln" style={{ width: '3.5rem' }} />
@@ -113,9 +141,9 @@ export function DiffTable({ lines, mode, tokens, annotations }: DiffTableProps) 
           ) : (
             <Fragment key={`lines-${index}`}>
               {mode === 'split' ? (
-                <SplitRows lines={block.lines} tokens={tokens} annotations={annotations} />
+                <SplitRows lines={block.lines} {...rowProps} />
               ) : (
-                <UnifiedRows lines={block.lines} tokens={tokens} annotations={annotations} />
+                <UnifiedRows lines={block.lines} {...rowProps} />
               )}
             </Fragment>
           ),
@@ -139,22 +167,23 @@ export function DiffTable({ lines, mode, tokens, annotations }: DiffTableProps) 
   )
 }
 
-function UnifiedRows({ lines, tokens, annotations }: RowsProps) {
+function UnifiedRows({ lines, tokens, annotations, focus, onSelect }: RowsProps) {
   return lines.map((line, index) => {
     const oldNote = annotationFor(annotations, 'old', line)
     const newNote = annotationFor(annotations, 'new', line)
     const codeSide = line.kind === 'del' ? 'old' : 'new'
+    const focused = isFocused(focus, codeSide, line)
     return (
       <Fragment key={index}>
-        <tr className={line.kind}>
-          <td className="ln" onClick={selectHandler(annotations, 'old', line)}>
+        <tr className={focused ? `${line.kind} kbd-focus` : line.kind} {...focusProps(focused)}>
+          <td className="ln" onClick={selectHandler(annotations, onSelect, 'old', line)}>
             {line.oldNo}
           </td>
-          <td className="ln" onClick={selectHandler(annotations, 'new', line)}>
+          <td className="ln" onClick={selectHandler(annotations, onSelect, 'new', line)}>
             {line.newNo}
           </td>
           <td className="marker">{MARKERS[line.kind]}</td>
-          <td className="code" onClick={selectHandler(annotations, codeSide, line)}>
+          <td className="code" onClick={selectHandler(annotations, onSelect, codeSide, line)}>
             <CodeText line={line} tokens={tokens} />
           </td>
         </tr>
@@ -171,15 +200,18 @@ function UnifiedRows({ lines, tokens, annotations }: RowsProps) {
   })
 }
 
-function SplitRows({ lines, tokens, annotations }: RowsProps) {
+function SplitRows({ lines, tokens, annotations, focus, onSelect }: RowsProps) {
   return toSplitRows(lines).map(({ left, right }, index) => {
     const oldNote = annotationFor(annotations, 'old', left)
     const newNote = annotationFor(annotations, 'new', right)
+    const focusedOld = isFocused(focus, 'old', left)
+    const focusedNew = isFocused(focus, 'new', right)
+    const cells = { tokens, annotations, onSelect }
     return (
       <Fragment key={index}>
-        <tr>
-          <SplitCells line={left} side="old" tokens={tokens} annotations={annotations} />
-          <SplitCells line={right} side="new" tokens={tokens} annotations={annotations} divider />
+        <tr className={focusedOld || focusedNew ? 'kbd-focus' : undefined} {...focusProps(focusedOld || focusedNew)}>
+          <SplitCells line={left} side="old" focused={focusedOld} {...cells} />
+          <SplitCells line={right} side="new" focused={focusedNew} {...cells} divider />
         </tr>
         {(oldNote || newNote) && (
           <tr className="annotation">
@@ -199,20 +231,22 @@ interface SplitCellsProps {
   side: DiffSide
   tokens: SideTokens
   annotations?: LineAnnotations
+  onSelect: SelectLine
+  focused: boolean
   divider?: boolean
 }
 
-function SplitCells({ line, side, tokens, annotations, divider }: SplitCellsProps) {
+function SplitCells({ line, side, tokens, annotations, onSelect, focused, divider }: SplitCellsProps) {
   const kind = line ? line.kind : 'empty'
-  const edge = divider ? ' split-divider' : ''
-  const onSelect = selectHandler(annotations, side, line)
+  const edge = `${divider ? ' split-divider' : ''}${focused ? ' kbd-side' : ''}`
+  const select = selectHandler(annotations, onSelect, side, line)
   return (
     <>
-      <td className={`ln ${kind}${edge}`} onClick={onSelect}>
+      <td className={`ln ${kind}${edge}`} onClick={select}>
         {line ? (side === 'old' ? line.oldNo : line.newNo) : null}
       </td>
-      <td className={`marker ${kind}`}>{line ? MARKERS[line.kind] : null}</td>
-      <td className={`code ${kind}`} onClick={onSelect}>
+      <td className={`marker ${kind}${focused ? ' kbd-side' : ''}`}>{line ? MARKERS[line.kind] : null}</td>
+      <td className={`code ${kind}${focused ? ' kbd-side' : ''}`} onClick={select}>
         {line && <CodeText line={line} tokens={tokens} />}
       </td>
     </>

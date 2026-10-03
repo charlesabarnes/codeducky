@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { db } from '../../db/db'
 import { setViewed } from '../../db/fileViews'
@@ -16,8 +16,12 @@ import { useBaseFreshness } from '../github/useBaseFreshness'
 import { repoRef } from '../../github/connect'
 import { ClaudePass } from '../claude/ClaudePass'
 import { exportSessionReport } from '../history/exportReport'
+import { useKeys, useShortcuts } from '../../keys/context'
+import type { NavRequest } from '../../keys/diffNavContext'
+import { withShortcut } from '../../keys/help'
 import { NotesPanel } from '../notes/NotesPanel'
 import { FileList, type FileNoteCount } from './FileList'
+import { filterFiles, nextUnviewed, stepFile } from './fileNav'
 import { FilePane, OrphanPane, type NoteFocus } from './FilePane'
 import { useReanchor } from './useReanchor'
 import { useSessionScan } from './useSessionScan'
@@ -26,6 +30,7 @@ const VIEW_MODE_KEY = 'skelbert.viewMode'
 const EMPTY_NOTES: Note[] = []
 
 type Tab = 'files' | 'notes' | 'checklists'
+const TAB_SHORTCUTS = { files: 'tab.files', notes: 'tab.notes', checklists: 'tab.checklists' } as const
 
 function countByFile(notes: Note[]): Map<string, FileNoteCount> {
   const counts = new Map<string, FileNoteCount>()
@@ -52,6 +57,10 @@ export function SessionView({ session, repo }: { session: Session; repo: Repo })
   const [focus, setFocus] = useState<NoteFocus | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
   const [pushOpen, setPushOpen] = useState(false)
+  const [filter, setFilter] = useState('')
+  const [navRequest, setNavRequest] = useState<NavRequest | null>(null)
+  const filterRef = useRef<HTMLInputElement>(null)
+  const { announce } = useKeys()
   const freshness = useBaseFreshness(repo, scan.files !== null, generation)
 
   const notes = useLiveQuery(() => db.notes.where({ sessionId }).toArray(), [sessionId]) ?? EMPTY_NOTES
@@ -66,6 +75,8 @@ export function SessionView({ session, repo }: { session: Session; repo: Repo })
     [scan.files, selectedPath],
   )
   const fileNotes = useMemo(() => notes.filter((note) => note.path === selectedPath), [notes, selectedPath])
+  const shownFiles = useMemo(() => filterFiles(scan.files ?? [], filter), [scan.files, filter])
+  const shownPaths = shownFiles.map((file) => file.path)
 
   const changeMode = (next: ViewMode) => {
     setMode(next)
@@ -76,6 +87,17 @@ export function SessionView({ session, repo }: { session: Session; repo: Repo })
     setGeneration((n) => n + 1)
   }
   const selectFile = (path: string) => setParams({ file: path }, { replace: true })
+  const goToFile = (path: string, target?: NavRequest['target']) => {
+    selectFile(path)
+    setNavRequest(target ? { at: Date.now(), target } : null)
+    announce(`File ${path}`)
+  }
+  const onBoundary = (direction: 1 | -1) => {
+    const target = stepFile(shownPaths, selectedPath, direction, (path) => viewed.has(path))
+    if (!target) return false
+    goToFile(target, direction > 0 ? 'first-change' : 'last-change')
+    return true
+  }
   const toggleViewed = (file: FileChange) =>
     setViewed(db, { sessionId, path: file.path, contentHash: contentHash(file), viewed: !viewed.has(file.path) })
   const jumpTo = (note: Note) => {
@@ -90,6 +112,42 @@ export function SessionView({ session, repo }: { session: Session; repo: Repo })
       setExportError(error instanceof Error ? error.message : String(error))
     }
   }
+
+  const stepFiles = (delta: 1 | -1) => {
+    const target = stepFile(shownPaths, selectedPath, delta)
+    if (target) goToFile(target)
+    else announce(delta > 0 ? 'This is the last file' : 'This is the first file', { visible: true })
+  }
+  const switchTab = (next: Tab) => {
+    setTab(next)
+    announce(`${next[0]!.toUpperCase()}${next.slice(1)} tab`)
+  }
+  useShortcuts('session', {
+    'file.next': () => stepFiles(1),
+    'file.prev': () => stepFiles(-1),
+    'file.viewed': () => {
+      if (!selected) return false
+      const nowViewed = !viewed.has(selected.path)
+      void toggleViewed(selected)
+      if (!nowViewed) return announce('Marked as not viewed', { visible: true })
+      const next = nextUnviewed(shownPaths, selected.path, viewed)
+      if (!next) return announce('Viewed. Every file is viewed', { visible: true })
+      goToFile(next, 'first-change')
+      announce(`Viewed. Next: ${next}`, { visible: true })
+    },
+    'view.mode': () => {
+      const next = mode === 'split' ? 'unified' : 'split'
+      changeMode(next)
+      announce(next === 'split' ? 'Split view' : 'Unified view', { visible: true })
+    },
+    'files.filter': () => {
+      setTab('files')
+      requestAnimationFrame(() => filterRef.current?.select())
+    },
+    'tab.files': () => switchTab('files'),
+    'tab.notes': () => switchTab('notes'),
+    'tab.checklists': () => switchTab('checklists'),
+  })
 
   const openNotes = notes.filter((note) => note.status === 'open').length
   const suggested = notes.filter((note) => note.status === 'suggested').length
@@ -137,12 +195,16 @@ export function SessionView({ session, repo }: { session: Session; repo: Repo })
         {scan.error && <p className="error" style={{ padding: '0 1rem' }}>{scan.error}</p>}
         {tab === 'files' && scan.files && (
           <FileList
-            files={scan.files}
+            files={shownFiles}
+            total={scan.files.length}
+            filter={filter}
+            onFilterChange={setFilter}
+            filterRef={filterRef}
             stats={scan.stats}
             selected={selected?.path ?? null}
             noteCounts={noteCounts}
             viewed={viewed}
-            onSelect={selectFile}
+            onSelect={(path) => goToFile(path)}
             onToggleViewed={toggleViewed}
           />
         )}
@@ -163,6 +225,8 @@ export function SessionView({ session, repo }: { session: Session; repo: Repo })
             viewed={viewed.has(selected.path)}
             onToggleViewed={() => toggleViewed(selected)}
             focus={focus}
+            navRequest={navRequest}
+            onBoundary={onBoundary}
           />
         ) : selectedPath && fileNotes.length > 0 && scan.files ? (
           <OrphanPane path={selectedPath} notes={fileNotes} focus={focus} />
@@ -177,7 +241,13 @@ export function SessionView({ session, repo }: { session: Session; repo: Repo })
 
 function TabButton({ tab, current, onSelect, label }: { tab: Tab; current: Tab; onSelect: (tab: Tab) => void; label: string }) {
   return (
-    <button type="button" role="tab" aria-selected={tab === current} onClick={() => onSelect(tab)}>
+    <button
+      type="button"
+      role="tab"
+      aria-selected={tab === current}
+      onClick={() => onSelect(tab)}
+      title={withShortcut(`${tab[0]!.toUpperCase()}${tab.slice(1)} tab`, TAB_SHORTCUTS[tab])}
+    >
       {label}
     </button>
   )
