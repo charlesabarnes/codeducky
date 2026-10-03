@@ -1,9 +1,12 @@
 import { HandleFs } from '../fs/handleFs'
 import git from 'isomorphic-git'
+import { analyzeChanges } from './analysis'
 import { listChanges, listChangesAgainstOids } from './changes'
 import { missingBlobs, readFileContents, readFileStats } from './contents'
 import { createContext, type GitContext } from './context'
 import { listPackIndexes, warmPacks } from './packs'
+import { readNewBytes, readOldBytes } from './contents'
+import { detectRenames } from './renames'
 import { readRepoInfo, resolveBase } from './repo'
 import type { FileChange } from './types'
 
@@ -21,6 +24,11 @@ export function createGitService() {
       packs = current
       await warmPacks(ctx)
     }
+    return ctx
+  }
+
+  const opened = (): GitContext => {
+    if (!ctx) throw new Error('No repository is open.')
     return ctx
   }
 
@@ -65,6 +73,31 @@ export function createGitService() {
     async contents(change: FileChange, maxBytes?: number) {
       if (!ctx) throw new Error('No repository is open.')
       return readFileContents(ctx, change, maxBytes)
+    },
+    /** Pairs deleted and added files into renames (base blobs from GitHub must be supplied first). */
+    async detectRenames(changes: FileChange[]) {
+      const current = opened()
+      return detectRenames(changes, {
+        readOld: (change) => readOldBytes(current, change.oldOid!),
+        readNew: (change) => readNewBytes(current, change.path),
+      })
+    },
+    /** Line counts per file plus moved blocks across the change set. */
+    async analyze(changes: FileChange[], maxBytes?: number) {
+      return analyzeChanges(opened(), changes, maxBytes)
+    },
+    /** The blob oid of each path in a commit, or null where the path is not in it. */
+    async oidsAt(commit: string, paths: string[]) {
+      const { fs, dir, gitdir, cache } = opened()
+      const result: Record<string, string | null> = {}
+      for (const filepath of paths) {
+        try {
+          result[filepath] = (await git.readBlob({ fs, dir, gitdir, cache, oid: commit, filepath })).oid
+        } catch {
+          result[filepath] = null
+        }
+      }
+      return result
     },
   }
 }

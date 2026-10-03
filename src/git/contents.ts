@@ -19,14 +19,14 @@ function toSide(bytes: Uint8Array, maxBytes: number): FileSide {
   return { kind: 'text', text: new TextDecoder().decode(bytes), size }
 }
 
-async function readOld(ctx: GitContext, oid: string): Promise<Uint8Array> {
+export async function readOldBytes(ctx: GitContext, oid: string): Promise<Uint8Array> {
   const { fs, dir, gitdir, cache, blobs } = ctx
   const supplied = blobs.get(oid)
   if (supplied) return supplied
   return (await git.readBlob({ fs, dir, gitdir, cache, oid })).blob
 }
 
-async function readNew({ fs }: GitContext, path: string): Promise<Uint8Array> {
+export async function readNewBytes({ fs }: GitContext, path: string): Promise<Uint8Array> {
   return (await fs.promises.readFile(`/${path}`)) as Uint8Array
 }
 
@@ -36,8 +36,8 @@ export async function readFileContents(
   maxBytes = DEFAULT_MAX_BYTES,
 ): Promise<FileContents> {
   const [oldBytes, newBytes] = await Promise.all([
-    change.oldOid ? readOld(ctx, change.oldOid) : null,
-    change.status === 'deleted' ? null : readNew(ctx, change.path),
+    change.oldOid ? readOldBytes(ctx, change.oldOid) : null,
+    change.status === 'deleted' ? null : readNewBytes(ctx, change.path),
   ])
   return {
     path: change.path,
@@ -71,7 +71,7 @@ export async function missingBlobs(ctx: GitContext, oids: string[]): Promise<str
   const missing: string[] = []
   for (const oid of new Set(oids)) {
     try {
-      await readOld(ctx, oid)
+      await readOldBytes(ctx, oid)
     } catch {
       missing.push(oid)
     }

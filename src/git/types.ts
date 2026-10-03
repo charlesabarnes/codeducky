@@ -5,6 +5,22 @@ export interface FileChange {
   status: ChangeStatus
   oldOid: string | null
   newOid: string | null
+  /** Set for renames (status 'modified'): the path on the base side. */
+  oldPath?: string
+  /** For renames: content similarity, 50–100. */
+  similarity?: number
+}
+
+/** How a change reads in the UI: a rename is a modification whose path changed. */
+export type ChangeKind = ChangeStatus | 'renamed'
+
+export const changeKind = (change: Pick<FileChange, 'status' | 'oldPath'>): ChangeKind =>
+  change.oldPath !== undefined ? 'renamed' : change.status
+
+export interface RenameResult {
+  changes: FileChange[]
+  /** Only exact renames were looked for, because the change set is too large to compare contents. */
+  limited: boolean
 }
 
 export interface RepoInfo {
