@@ -61,7 +61,7 @@ describe('migration to string ids', () => {
 
     const db = new SkelbertDb('migrate-full')
     await db.open()
-    expect(db.verno).toBe(4)
+    expect(db.verno).toBe(5)
     expect(db.tables.map((t) => t.name).sort()).toEqual(
       ['checklistState', 'checklists', 'fileViews', 'notes', 'outbox', 'rejected', 'repoHandles', 'repos', 'sessions', 'settings', 'syncMeta'].sort(),
     )
@@ -101,7 +101,7 @@ describe('migration to string ids', () => {
     expect(await db.fileViews.get([current.id!, 'a.ts'])).toMatchObject({ contentHash: 'c1' })
     expect(await db.fileViews.where({ sessionId: old.id }).count()).toBe(1)
 
-    expect(await db.settings.get('app')).toMatchObject({ githubPat: 'ghp', anthropicKey: 'sk' })
+    expect(await db.settings.get('app')).toEqual({ id: 'app', githubPat: 'ghp' })
     expect(await db.outbox.count()).toBe(0)
     db.close()
   })
@@ -135,7 +135,7 @@ describe('migration to string ids', () => {
     names.push('migrate-fresh')
     const db = new SkelbertDb('migrate-fresh')
     await db.open()
-    expect(db.verno).toBe(4)
+    expect(db.verno).toBe(5)
     expect(await db.repos.count()).toBe(0)
     db.close()
   })
@@ -151,6 +151,59 @@ describe('migration to string ids', () => {
     const repos = await db.repos.toArray()
     expect(repos.find((r) => r.folderName === 'b')!.id).toBe('gh:o/r')
     expect(repos.find((r) => r.folderName === 'a')!.id).not.toBe('gh:o/r')
+    db.close()
+  })
+})
+
+/** The schema as v2 (phases 7-10) shipped it, with Claude-pass settings and repo instructions. */
+function v4Db(name: string) {
+  names.push(name)
+  const db = new Dexie(name)
+  db.version(4).stores({
+    repos: 'id, [owner+name], lastOpenedAt',
+    repoHandles: 'repoId',
+    sessions: 'id, repoId, [repoId+branch], startedAt, status',
+    fileViews: '[sessionId+path], sessionId',
+    notes: 'id, sessionId, [sessionId+path], status',
+    checklists: 'id, scope',
+    checklistState: '[sessionId+itemId], sessionId',
+    settings: 'id',
+    outbox: 'key, changedAt',
+    rejected: 'key, at',
+    syncMeta: 'key',
+  })
+  return db
+}
+
+describe('migration away from the in-app Claude pass', () => {
+  it('drops the Anthropic settings, renames repo instructions and queues them for sync', async () => {
+    const old = v4Db('migrate-v5')
+    const repo = { owner: 'o', name: 'r', folderName: 'r', baseBranch: 'main', checklistIds: [], lastOpenedAt: 1 }
+    await old.table('repos').bulkAdd([
+      { ...repo, id: 'gh:o/r', changedAt: 10, claudeInstructions: '  skip generated code ' },
+      { ...repo, id: 'gh:o/empty', name: 'empty', changedAt: 10, claudeInstructions: '' },
+      { ...repo, id: 'gh:o/plain', name: 'plain', changedAt: 10 },
+    ])
+    await old.table('notes').add({ id: 'n1', sessionId: 's', path: 'a', anchor, body: 'old', severity: 'nit', status: 'suggested', source: 'claude', createdAt: 1, updatedAt: 1 })
+    await old.table('settings').put({ id: 'app', githubPat: 'ghp', anthropicKey: 'sk-ant', claudeModel: 'claude-opus-5-5' })
+    old.close()
+
+    const db = new SkelbertDb('migrate-v5')
+    await db.open()
+    expect(db.verno).toBe(5)
+    expect(await db.settings.get('app')).toEqual({ id: 'app', githubPat: 'ghp' })
+
+    const renamed = (await db.repos.get('gh:o/r'))!
+    expect(renamed.instructions).toBe('skip generated code')
+    expect(renamed).not.toHaveProperty('claudeInstructions')
+    expect(renamed.changedAt).toBeGreaterThan(10)
+    expect(await db.repos.get('gh:o/empty')).not.toHaveProperty('claudeInstructions')
+    expect((await db.repos.get('gh:o/plain'))!.changedAt).toBe(10)
+    expect(await db.outbox.toArray()).toEqual([
+      { key: 'repos:gh:o/r', kind: 'repos', id: 'gh:o/r', changedAt: renamed.changedAt, deleted: false },
+    ])
+
+    expect(await db.notes.get('n1')).toMatchObject({ source: 'claude', status: 'suggested' })
     db.close()
   })
 })

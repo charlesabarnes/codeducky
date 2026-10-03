@@ -10,6 +10,9 @@ export interface RepoRecord {
   folderName: string
   baseBranch: string
   lastOpenedAt: number
+  instructions?: string
+  /** Legacy name of `instructions`; read through `repoInstructions` from shared/instructions. */
+  claudeInstructions?: string
 }
 
 export interface SessionRecord {
@@ -20,10 +23,13 @@ export interface SessionRecord {
   baseSha: string
   startedAt: number
   status: 'active' | 'archived'
+  /** The changed files as the PWA's last scan saw them. */
+  files?: { path: string; status: string; additions?: number; deletions?: number; binary?: boolean }[]
 }
 
 export type Severity = 'nit' | 'suggestion' | 'issue' | 'blocker'
 export type NoteStatus = 'open' | 'resolved' | 'suggested' | 'dismissed'
+/** 'claude' is only on notes from the removed in-app Claude pass. */
 export type NoteSource = 'me' | 'claude' | 'mcp'
 
 export interface NoteAnchor {
@@ -56,6 +62,7 @@ export interface ChecklistRecord {
   scope: string
   title: string
   items: { id: string; text: string }[]
+  required?: boolean
 }
 
 export function listRecords<T>(db: Database, kind: SyncKind): T[] {
@@ -91,6 +98,13 @@ export function repoMatches(repo: RepoRecord, query: string): boolean {
   return repo.id === query || repoLabel(repo).toLowerCase() === wanted || (!repo.owner && repo.name.toLowerCase() === wanted)
 }
 
+/** The checklists that apply to a session: global ones first, then the repo's, each by title. */
+export function sessionChecklists(lists: ChecklistRecord[], session: SessionRecord): ChecklistRecord[] {
+  return lists
+    .filter((list) => list.scope === 'global' || list.scope === session.repoId)
+    .sort((a, b) => (a.scope === b.scope ? a.title.localeCompare(b.title) : a.scope === 'global' ? -1 : 1))
+}
+
 const byNewest = (a: SessionRecord, b: SessionRecord) => b.startedAt - a.startedAt
 
 /** The session the PWA resumes for a repo and branch: the newest active one, else the newest. */
@@ -116,3 +130,11 @@ export function loadData(db: Database) {
 }
 
 export type DataSnapshot = ReturnType<typeof loadData>
+
+/** The repos matching a query and the current session for the branch, if Skelbert has one. */
+export function findBranchSession(data: DataSnapshot, repoQuery: string, branch: string) {
+  const repos = data.repos.filter((repo) => repoMatches(repo, repoQuery))
+  const repoIds = new Set(repos.map((repo) => repo.id))
+  const session = currentSession(data.sessions.filter((s) => repoIds.has(s.repoId) && s.branch === branch))
+  return { repos, session }
+}

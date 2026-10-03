@@ -790,44 +790,10 @@ button.link.danger {
   max-width: 60rem;
 }
 
-.claude-pass {
-  gap: 0.4rem;
-}
-.claude-panel {
-  gap: 0.5rem;
-  padding: 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-}
-.claude-scope {
-  border: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-.claude-instructions textarea {
+.repo-instructions textarea {
   width: 100%;
-  margin-top: 0.35rem;
   box-sizing: border-box;
-}
-.claude-running,
-.claude-failures {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  font-size: 12px;
-}
-.claude-running li {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.claude-progress p {
-  margin: 0;
-  font-size: 12px;
+  font-family: inherit;
 }
 .note-card.suggested {
   border-style: dashed;

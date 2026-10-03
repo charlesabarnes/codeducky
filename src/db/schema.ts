@@ -3,6 +3,7 @@ export type SessionStatus = 'active' | 'archived'
 export type NoteSide = 'old' | 'new'
 export type NoteSeverity = 'nit' | 'suggestion' | 'issue' | 'blocker'
 export type NoteStatus = 'open' | 'resolved' | 'suggested' | 'dismissed'
+/** 'claude' marks notes from the removed in-app Claude pass; they stay readable but none are created. */
 export type NoteSource = 'me' | 'claude' | 'mcp'
 
 /** Last-write-wins clock, stamped on every local write by the sync middleware (src/sync/middleware.ts). */
@@ -19,6 +20,9 @@ export interface Repo extends Synced {
   baseBranch: string
   checklistIds: string[]
   lastOpenedAt: number
+  /** Review instructions for this repo, served to Claude over MCP. */
+  instructions?: string
+  /** Legacy name of `instructions`, still read from records synced before the rename. */
   claudeInstructions?: string
 }
 
@@ -33,6 +37,15 @@ export interface RepoHandle {
   dirHandle: FileSystemDirectoryHandle
 }
 
+/** One changed file as the last scan saw it; synced so MCP clients get the shape of the diff. */
+export interface SessionFile {
+  path: string
+  status: string
+  additions?: number
+  deletions?: number
+  binary?: boolean
+}
+
 export interface Session extends Synced {
   id?: string
   repoId: string
@@ -44,6 +57,7 @@ export interface Session extends Synced {
   githubBase?: { branch: string; tipSha: string }
   startedAt: number
   status: SessionStatus
+  files?: SessionFile[]
 }
 
 export interface FileView extends Synced {
@@ -101,6 +115,8 @@ export interface Checklist extends Synced {
   scope: ChecklistScope
   title: string
   items: ChecklistItem[]
+  /** Unticked items block a push through the pre-push gate. */
+  required?: boolean
 }
 
 export interface ChecklistState extends Synced {
@@ -112,6 +128,4 @@ export interface ChecklistState extends Synced {
 export interface Settings {
   id: 'app'
   githubPat: string
-  anthropicKey: string
-  claudeModel: string
 }

@@ -16,17 +16,20 @@ import {
   type RepoRecord,
   type SessionRecord,
 } from './records'
+import { reviewContext } from '../review/context'
+import { registerPrompts } from './prompts'
+import { checklistView, compareNotes, iso, noteView } from './views'
 
 export const SERVER_INSTRUCTIONS = `Skelbert holds the owner's self-review of their git branches: review sessions per repo and branch, line notes, and checklists.
-To work on the checkout you are in, call list_sessions with repo "owner/name" (from the git remote) and the current branch; the session marked current is the one Skelbert shows.
-Tools that take a session also accept repo + branch instead. Notes you add arrive as suggestions the owner accepts or dismisses; resolve_note closes a note with your reply.`
+To work on the checkout you are in, use repo "owner/name" (from the git remote) and the current branch; get_review_context returns the repo's review instructions, checklists, changed files, open notes and recurring past findings in one call.
+Tools that take a session also accept repo + branch instead. Notes you add arrive as suggestions the owner accepts or dismisses; resolve_note closes a note with your reply.
+The review prompt reviews a branch and adds notes; the fix prompt fixes open notes and resolves them.`
 
 const SEVERITIES = ['nit', 'suggestion', 'issue', 'blocker'] as const
 const STATUSES = ['open', 'resolved', 'suggested', 'dismissed'] as const
 const SOURCES = ['me', 'claude', 'mcp'] as const
 const MAX_CONTEXT = 10
 
-const iso = (ms: number) => new Date(ms).toISOString()
 const json = (value: unknown): CallToolResult => ({ content: [{ type: 'text', text: JSON.stringify(value, null, 2) }] })
 const fail = (message: string): CallToolResult => ({ isError: true, content: [{ type: 'text', text: message }] })
 
@@ -84,31 +87,6 @@ function noteCounts(notes: NoteRecord[]) {
   return counts
 }
 
-function noteView(note: NoteRecord, data: DataSnapshot) {
-  const session = data.sessions.find((s) => s.id === note.sessionId)
-  const repo = session ? data.repoById.get(session.repoId) : undefined
-  return {
-    id: note.id,
-    repo: repo ? repoLabel(repo) : null,
-    branch: session?.branch ?? null,
-    session: note.sessionId,
-    path: note.path,
-    line: note.anchor.line,
-    side: note.anchor.side,
-    severity: note.severity,
-    status: note.status,
-    source: note.source,
-    ...(note.title ? { title: note.title } : {}),
-    body: note.body,
-    anchor: { text: note.anchor.text, before: note.anchor.before, after: note.anchor.after },
-    anchorLost: Boolean(note.anchorLost),
-    ...(note.resolution ? { resolution: { ...note.resolution, at: iso(note.resolution.at) } } : {}),
-  }
-}
-
-const compareNotes = (a: NoteRecord, b: NoteRecord) =>
-  a.path.localeCompare(b.path) || a.anchor.line - b.anchor.line || a.createdAt - b.createdAt
-
 const pathMatches = (notePath: string, filter: string) => {
   const prefix = filter.replace(/\/+$/, '')
   return notePath === prefix || notePath.startsWith(`${prefix}/`)
@@ -124,6 +102,24 @@ export interface ToolContext {
 export function createMcpServer({ db, actor, now = Date.now }: ToolContext): McpServer {
   const server = new McpServer({ name: 'skelbert', version: '1.0.0' }, { instructions: SERVER_INSTRUCTIONS })
   const read = { readOnlyHint: true, openWorldHint: false }
+  registerPrompts(server, () => loadData(db))
+
+  server.registerTool(
+    'get_review_context',
+    {
+      title: 'Get review context',
+      description:
+        'Everything to read before reviewing or fixing a branch: the repo\'s review instructions (follow them), the checklists that ' +
+        'apply, the changed files Skelbert last scanned (path, status, +/-), open notes and pending suggestions on the branch, and ' +
+        'recurring findings from past resolved notes in this repo.',
+      inputSchema: sessionTarget,
+      annotations: read,
+    },
+    guarded((target) => {
+      const data = loadData(db)
+      return json(reviewContext(data, resolveSession(data, target)))
+    }),
+  )
 
   server.registerTool(
     'list_repos',
@@ -209,7 +205,7 @@ export function createMcpServer({ db, actor, now = Date.now }: ToolContext): Mcp
         path: z.string().optional().describe('A file path, or a directory prefix such as "src/api".'),
         severity: z.enum(SEVERITIES).optional(),
         status: z.enum([...STATUSES, 'all']).default('open').describe('Note status; "all" for every status.'),
-        source: z.enum(SOURCES).optional().describe('Who wrote it: me (the owner), claude (the in-app Claude pass) or mcp.'),
+        source: z.enum(SOURCES).optional().describe('Who wrote it: me (the owner), mcp (an MCP client), or claude (old notes from a since-removed in-app pass).'),
         allSessions: z.boolean().default(false).describe('Include archived and superseded sessions of the branch too.'),
         limit: z.number().int().min(1).max(500).default(100),
       },
@@ -338,29 +334,6 @@ export function createMcpServer({ db, actor, now = Date.now }: ToolContext): Mcp
       return json({ added: noteView(note, data) })
     }),
   )
-
-  const checklistView = (data: DataSnapshot, session: SessionRecord) => {
-    const lists = data
-      .checklists()
-      .filter((list) => list.scope === 'global' || list.scope === session.repoId)
-      .sort((a, b) => (a.scope === b.scope ? a.title.localeCompare(b.title) : a.scope === 'global' ? -1 : 1))
-    const repo = data.repoById.get(session.repoId)
-    return {
-      session: session.id,
-      repo: repo ? repoLabel(repo) : session.repoId,
-      branch: session.branch,
-      checklists: lists.map((list) => {
-        const items = list.items.map((item) => ({ id: item.id, text: item.text, checked: data.checked(session.id, item.id) }))
-        return {
-          id: list.id,
-          title: list.title,
-          scope: list.scope === 'global' ? 'global' : 'repo',
-          done: `${items.filter((item) => item.checked).length}/${items.length}`,
-          items,
-        }
-      }),
-    }
-  }
 
   server.registerTool(
     'get_checklist',

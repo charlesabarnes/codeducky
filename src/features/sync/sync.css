@@ -111,3 +111,9 @@
   overflow-wrap: anywhere;
   user-select: all;
 }
+
+.copy-value.block {
+  white-space: pre;
+  overflow-x: auto;
+  overflow-wrap: normal;
+}

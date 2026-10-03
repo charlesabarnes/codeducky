@@ -1,26 +1,7 @@
 import { useState } from 'react'
+import { CopyField } from './CopyField'
 import { syncController } from '../../sync/client'
 import { claudeAddCommand, mcpUrl } from '../../sync/mcp'
-
-function CopyField({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false)
-  const copy = async () => {
-    await navigator.clipboard.writeText(value)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
-  return (
-    <div className="copy-field">
-      <span className="copy-label">{label}</span>
-      <div className="row">
-        <code className="mono copy-value">{value}</code>
-        <button type="button" className="secondary" onClick={() => void copy()}>
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-      </div>
-    </div>
-  )
-}
 
 interface ConnectClaudeCodeProps {
   signedIn: boolean
@@ -74,6 +55,23 @@ export function ConnectClaudeCode({ signedIn, onMinted }: ConnectClaudeCodeProps
           {error && <span className="error">{error}</span>}
         </div>
       )}
+      <div className="stack" style={{ gap: '0.25rem' }}>
+        <h3>Slash commands</h3>
+        <p className="muted">
+          Once connected, Claude Code offers two prompts from this server. Run them in the repo's checkout; repo and branch
+          default to the current checkout, or pass them as <code className="mono">owner/name branch</code>.
+        </p>
+        <ul className="muted">
+          <li>
+            <code className="mono">/mcp__skelbert__review</code> reviews the branch against its merge base, following this
+            repo's review instructions (on the repo page), and adds findings here as suggestions to accept or dismiss.
+          </li>
+          <li>
+            <code className="mono">/mcp__skelbert__fix</code> fixes open and accepted notes, runs the relevant tests and resolves
+            each note with a reply. It asks before large refactors and never pushes.
+          </li>
+        </ul>
+      </div>
       <p className="muted">
         claude.ai custom connectors use OAuth with the same URL: add a custom connector with <code className="mono">{url}</code>{' '}
         and approve it with your passphrase. Connected clients are listed under Access tokens as OAuth.

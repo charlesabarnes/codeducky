@@ -1,6 +1,8 @@
 export interface ChecklistDraft {
   title: string
   items: string[]
+  /** Unticked items block a push through the pre-push gate. JSON files keep it; markdown does not. */
+  required?: boolean
 }
 
 interface ChecklistFile {
@@ -31,7 +33,11 @@ export function parseChecklistJson(text: string): ChecklistDraft[] {
   const parsed: unknown = JSON.parse(text)
   const list = Array.isArray(parsed) ? parsed : (parsed as Partial<ChecklistFile> | null)?.checklists
   if (!Array.isArray(list) || !list.every(isDraft)) throw new Error('Not a Skelbert checklist file.')
-  return list.map(({ title, items }) => ({ title: title.trim() || 'Untitled', items: items.map((item) => item.trim()).filter(Boolean) }))
+  return list.map(({ title, items, required }) => ({
+    title: title.trim() || 'Untitled',
+    items: items.map((item) => item.trim()).filter(Boolean),
+    ...(required === true ? { required } : {}),
+  }))
 }
 
 const HEADING = /^#{1,6}\s+(.+?)\s*#*\s*$/

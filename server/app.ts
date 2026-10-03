@@ -8,6 +8,7 @@ import { createOAuthStore } from './auth/oauth/store'
 import { createFailureLimiter, type FailureLimiter } from './auth/passphrase'
 import { authRoutes } from './auth/routes'
 import { createTokenStore } from './auth/tokens'
+import { gateApi, gateScripts } from './gate/routes'
 import { logErrors, requestLog, stdoutSink, type LogSink } from './log'
 import { mcpRoutes } from './mcp/route'
 import { serveWeb } from './static'
@@ -59,13 +60,16 @@ export function createApp({
     },
   )
 
+  api.route('/gate', gateApi({ db, tokens, publicUrl }))
+
   api.all('*', (c) => c.json({ error: 'not_found' }, 404))
 
   const server = new Hono()
-  for (const path of ['/mcp', '/oauth/*', '/.well-known/*']) server.use(path, requestLog(log))
+  for (const path of ['/mcp', '/oauth/*', '/.well-known/*', '/gate/*']) server.use(path, requestLog(log))
   server.onError(logErrors(log))
   server.route('/', oauthRoutes({ store: oauth, passphrase, limiter, registrationLimiter, publicUrl }))
   server.route('/', mcpRoutes({ db, tokens, publicUrl }))
+  server.route('/', gateScripts(publicUrl))
 
   app.route('/api', api)
   app.route('/', server)

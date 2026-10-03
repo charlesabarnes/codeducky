@@ -105,6 +105,11 @@ export function ChecklistsPage() {
               <article key={list.id} className="card stack" style={{ gap: '0.5rem' }}>
                 <div className="row">
                   <strong>{list.title}</strong>
+                  {list.required && (
+                    <span className="badge" title="Unticked items block a push through the pre-push gate">
+                      required
+                    </span>
+                  )}
                   <span className="muted">{list.items.length} items</span>
                   <span className="spacer" />
                   <button type="button" className="link" onClick={() => setEditing(list.id!)}>

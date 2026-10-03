@@ -6,6 +6,7 @@ import type { SignInResult, TokenSummary } from '../../sync/controller'
 import { listRejected } from '../../sync/rejected'
 import { syncSummary } from '../../sync/summary'
 import { ConnectClaudeCode } from './ConnectClaudeCode'
+import { PrePushGate } from './PrePushGate'
 import './sync.css'
 
 const SIGN_IN_ERRORS: Record<Exclude<SignInResult, 'ok'>, string> = {
@@ -33,7 +34,7 @@ export function ServerSection() {
           <h2>Sync server</h2>
           <p className="muted">
             Repos, sessions, notes, checklists and viewed files sync between your devices through the Skelbert server. The
-            GitHub token, Anthropic key and these settings never leave this browser.
+            GitHub token and these settings never leave this browser.
           </p>
         </div>
         {signedIn ? <SignedIn /> : <SignInForm expired={state.auth === 'expired'} />}
@@ -41,6 +42,7 @@ export function ServerSection() {
         {signedIn && <Tokens version={tokensVersion} />}
       </section>
       <ConnectClaudeCode signedIn={signedIn} onMinted={() => setTokensVersion((v) => v + 1)} />
+      <PrePushGate signedIn={signedIn} onMinted={() => setTokensVersion((v) => v + 1)} />
     </>
   )
 }

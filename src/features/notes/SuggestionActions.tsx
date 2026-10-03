@@ -2,7 +2,7 @@ import { db } from '../../db/db'
 import type { Note } from '../../db/schema'
 import { acceptSuggestion, dismissSuggestion, restoreSuggestion } from '../../db/suggestions'
 
-/** Accept and dismiss controls for suggested notes (from the Claude pass or MCP); renders nothing for other notes. */
+/** Accept and dismiss controls for suggested notes (added over MCP); renders nothing for other notes. */
 export function SuggestionActions({ note }: { note: Note }) {
   const id = note.id
   if (id === undefined) return null

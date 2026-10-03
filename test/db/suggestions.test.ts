@@ -1,12 +1,13 @@
 import 'fake-indexeddb/auto'
 import { Dexie } from 'dexie'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { SuggestionDraft } from '../../src/claude/findings'
 import { SkelbertDb } from '../../src/db/db'
-import { addNote } from '../../src/db/notes'
+import { saveRepoInstructions } from '../../src/db/repos'
+import type { Note, NoteSource } from '../../src/db/schema'
 import { startNewSession, startOrResumeSession } from '../../src/db/sessions'
-import { acceptSuggestion, addSuggestions, dismissSuggestion, restoreSuggestion, saveRepoInstructions } from '../../src/db/suggestions'
+import { acceptSuggestion, dismissSuggestion, restoreSuggestion } from '../../src/db/suggestions'
 import { buildReport } from '../../src/review/report'
+import { repoInstructions } from '../../shared/instructions'
 
 const opened: Dexie[] = []
 const open = (name: string) => {
@@ -21,82 +22,45 @@ afterEach(async () => {
 
 const start = { repoId: 'r1', branch: 'feature', headSha: 'h1', baseSha: 'b1' }
 const anchor = { line: 3, side: 'new' as const, text: '  console.log(sum)', before: ['a'], after: ['b'] }
-const draft = (overrides: Partial<SuggestionDraft> = {}): SuggestionDraft => ({
-  path: 'src/cart.ts',
-  anchor,
-  severity: 'suggestion',
-  title: 'Leftover debug log',
-  body: '**Leftover debug log**\n\nRemove it.',
-  ...overrides,
-})
+
+/** A suggested note as add_note (MCP) or, for old data, the removed Claude pass left it. */
+async function suggest(db: SkelbertDb, sessionId: string, title: string, source: NoteSource = 'mcp'): Promise<string> {
+  const note: Note = { sessionId, path: 'src/cart.ts', anchor, title, body: `**${title}**`, severity: 'suggestion', status: 'suggested', source, createdAt: 1, updatedAt: 1 }
+  return (await db.notes.add(note)) as string
+}
 
 describe('suggestions', () => {
-  it('saves findings as suggested Claude notes', async () => {
-    const db = open('suggest-save')
-    const sessionId = await startOrResumeSession(db, start)
-    expect(await addSuggestions(db, sessionId, [draft()])).toEqual({ added: 1, duplicates: 0 })
-    const [note] = await db.notes.where({ sessionId }).toArray()
-    expect(note).toMatchObject({ status: 'suggested', source: 'claude', title: 'Leftover debug log', anchor, path: 'src/cart.ts' })
-  })
-
-  it('skips findings with the same anchor and title on a re-run, whatever their status', async () => {
-    const db = open('suggest-dedupe')
-    const sessionId = await startOrResumeSession(db, start)
-    await addSuggestions(db, sessionId, [draft(), draft({ title: 'Missing test', body: 'Add one.' })])
-    const [first, second] = await db.notes.where({ sessionId }).toArray()
-    await acceptSuggestion(db, first!.id!)
-    await dismissSuggestion(db, second!.id!)
-
-    const rerun = await addSuggestions(db, sessionId, [
-      draft({ title: 'leftover debug LOG' }),
-      draft({ title: 'Missing test' }),
-      draft({ title: 'Missing test' }),
-      draft({ anchor: { ...anchor, line: 4 } }),
-      draft({ path: 'src/other.ts' }),
-    ])
-    expect(rerun).toEqual({ added: 2, duplicates: 3 })
-    expect(await db.notes.where({ sessionId }).count()).toBe(4)
-  })
-
-  it('does not treat my own notes on the same line as duplicates', async () => {
-    const db = open('suggest-mine')
-    const sessionId = await startOrResumeSession(db, start)
-    await addNote(db, { sessionId, path: 'src/cart.ts', anchor, body: 'Leftover debug log', severity: 'nit' })
-    expect(await addSuggestions(db, sessionId, [draft()])).toEqual({ added: 1, duplicates: 0 })
-  })
-
-  it('accepts into an open Claude note, dismisses, and restores', async () => {
+  it('accepts into an open note, dismisses, and restores', async () => {
     const db = open('suggest-status')
     const sessionId = await startOrResumeSession(db, start)
-    await addSuggestions(db, sessionId, [draft(), draft({ title: 'Other' })])
-    const [a, b] = await db.notes.where({ sessionId }).toArray()
-    await acceptSuggestion(db, a!.id!)
-    await dismissSuggestion(db, b!.id!)
-    expect(await db.notes.get(a!.id!)).toMatchObject({ status: 'open', source: 'claude' })
-    expect(await db.notes.get(b!.id!)).toMatchObject({ status: 'dismissed', source: 'claude' })
-    await restoreSuggestion(db, b!.id!)
-    expect((await db.notes.get(b!.id!))?.status).toBe('suggested')
+    const a = await suggest(db, sessionId, 'Leftover debug log')
+    const b = await suggest(db, sessionId, 'Other')
+    await acceptSuggestion(db, a)
+    await dismissSuggestion(db, b)
+    expect(await db.notes.get(a)).toMatchObject({ status: 'open', source: 'mcp' })
+    expect(await db.notes.get(b)).toMatchObject({ status: 'dismissed', source: 'mcp' })
+    await restoreSuggestion(db, b)
+    expect((await db.notes.get(b))?.status).toBe('suggested')
   })
 
   it('carries accepted suggestions into a new session but not pending or dismissed ones', async () => {
     const db = open('suggest-carry')
     const first = await startOrResumeSession(db, start)
-    await addSuggestions(db, first, [draft(), draft({ title: 'Pending' }), draft({ title: 'Dismissed' })])
-    const [accepted, , dismissed] = await db.notes.where({ sessionId: first }).toArray()
-    await acceptSuggestion(db, accepted!.id!)
-    await dismissSuggestion(db, dismissed!.id!)
+    const accepted = await suggest(db, first, 'Leftover debug log')
+    await suggest(db, first, 'Pending')
+    await dismissSuggestion(db, await suggest(db, first, 'Dismissed'))
+    await acceptSuggestion(db, accepted)
     const second = await startNewSession(db, { ...start, headSha: 'h2' })
     const carried = await db.notes.where({ sessionId: second }).toArray()
-    expect(carried.map((note) => [note.title, note.status, note.source])).toEqual([['Leftover debug log', 'open', 'claude']])
+    expect(carried.map((note) => [note.title, note.status, note.source])).toEqual([['Leftover debug log', 'open', 'mcp']])
   })
 
-  it('exports accepted Claude notes only', async () => {
+  it('exports accepted suggestions only, and still labels old Claude-pass notes', async () => {
     const db = open('suggest-report')
     const sessionId = await startOrResumeSession(db, start)
-    await addSuggestions(db, sessionId, [draft(), draft({ title: 'Pending', body: '**Pending**' }), draft({ title: 'Nope', body: '**Nope**' })])
-    const [accepted, , dismissed] = await db.notes.where({ sessionId }).toArray()
-    await acceptSuggestion(db, accepted!.id!)
-    await dismissSuggestion(db, dismissed!.id!)
+    await acceptSuggestion(db, await suggest(db, sessionId, 'Leftover debug log', 'claude'))
+    await suggest(db, sessionId, 'Pending')
+    await dismissSuggestion(db, await suggest(db, sessionId, 'Nope'))
     const markdown = buildReport({
       repoName: 'me/repo',
       baseBranch: 'main',
@@ -110,9 +74,11 @@ describe('suggestions', () => {
     expect(markdown).not.toContain('Pending')
     expect(markdown).not.toContain('Nope')
   })
+})
 
-  it('stores trimmed repo instructions on the repo', async () => {
-    const db = open('suggest-instructions')
+describe('repo instructions', () => {
+  it('stores trimmed instructions and drops the legacy field', async () => {
+    const db = open('repo-instructions')
     const repoId = (await db.repos.add({
       owner: 'me',
       name: 'repo',
@@ -120,8 +86,18 @@ describe('suggestions', () => {
       baseBranch: 'main',
       checklistIds: [],
       lastOpenedAt: 0,
+      claudeInstructions: 'old text',
     })) as string
+    expect(repoInstructions((await db.repos.get(repoId))!)).toBe('old text')
     await saveRepoInstructions(db, repoId, '  never flag onboarding code \n')
-    expect((await db.repos.get(repoId))?.claudeInstructions).toBe('never flag onboarding code')
+    const repo = (await db.repos.get(repoId))!
+    expect(repo.instructions).toBe('never flag onboarding code')
+    expect('claudeInstructions' in repo).toBe(false)
+    expect(repoInstructions(repo)).toBe('never flag onboarding code')
+  })
+
+  it('lets an explicitly empty value win over a legacy one', () => {
+    expect(repoInstructions({ instructions: '', claudeInstructions: 'old' })).toBe('')
+    expect(repoInstructions({})).toBe('')
   })
 })

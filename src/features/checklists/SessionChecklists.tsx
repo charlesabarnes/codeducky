@@ -26,6 +26,11 @@ export function SessionChecklists({ sessionId, repoId, readOnly }: SessionCheckl
         <section key={list.id}>
           <h3>
             {list.title}{' '}
+            {list.required && (
+              <span className="badge" title="Unticked items block a push through the pre-push gate">
+                required
+              </span>
+            )}{' '}
             <span className="muted">
               {list.items.filter((item) => checked.has(item.id)).length}/{list.items.length}
             </span>
