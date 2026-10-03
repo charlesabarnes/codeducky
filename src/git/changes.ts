@@ -9,11 +9,9 @@ type EntryType = Awaited<ReturnType<WalkerEntry['type']>>
 
 const typeOf = async (entry: WalkerEntry | null): Promise<EntryType | null> => (entry ? entry.type() : null)
 
-/** Files that differ between `baseCommit` and the working tree, including untracked, non-ignored files. */
-export async function listChanges(ctx: GitContext, baseCommit: string): Promise<FileChange[]> {
-  const { dir, gitdir, cache } = ctx
+async function prepareWalk(ctx: GitContext) {
   const ignoreRules = new IgnoreRules((path) => readText(ctx, path))
-  const tracked = trackedPaths(await git.listFiles({ fs: ctx.fs, dir, gitdir, cache }))
+  const tracked = trackedPaths(await git.listFiles({ fs: ctx.fs, dir: ctx.dir, gitdir: ctx.gitdir, cache: ctx.cache }))
   const fs = workdirView(ctx.fs, tracked, ignoreRules)
   const indexMtimeSeconds = await indexMtime(ctx)
 
@@ -29,6 +27,16 @@ export async function listChanges(ctx: GitContext, baseCommit: string): Promise<
     const content = await work.content()
     return content ? hashBlob(content) : null
   }
+
+  return { fs, workdirOid }
+}
+
+const byPath = (a: FileChange, b: FileChange) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
+
+/** Files that differ between `baseCommit` and the working tree, including untracked, non-ignored files. */
+export async function listChanges(ctx: GitContext, baseCommit: string): Promise<FileChange[]> {
+  const { dir, gitdir, cache } = ctx
+  const { fs, workdirOid } = await prepareWalk(ctx)
 
   const changes = (await git.walk({
     fs,
@@ -60,7 +68,41 @@ export async function listChanges(ctx: GitContext, baseCommit: string): Promise<
     },
   })) as FileChange[]
 
-  return changes.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+  return changes.sort(byPath)
+}
+
+/**
+ * Like `listChanges`, but the base is a path → blob oid map (a tree listed by the GitHub API)
+ * rather than a commit, for when the base commit is not in the local object store.
+ */
+export async function listChangesAgainstOids(ctx: GitContext, base: Record<string, string>): Promise<FileChange[]> {
+  const { dir, gitdir, cache } = ctx
+  const { fs, workdirOid } = await prepareWalk(ctx)
+  const seen = new Set<string>()
+
+  const changes = (await git.walk({
+    fs,
+    dir,
+    gitdir,
+    cache,
+    trees: [git.WORKDIR({ refresh: false }), git.STAGE()],
+    map: async (path, [work, stage]) => {
+      if (path === '.') return undefined
+      const [rawWorkType, stageType] = await Promise.all([typeOf(work ?? null), typeOf(stage ?? null)])
+      if (stageType === 'commit') return null
+      if (rawWorkType !== 'blob' || !work) return undefined
+      seen.add(path)
+      const newOid = await workdirOid(work, stage ?? null, stageType)
+      const oldOid = base[path] ?? null
+      if (!oldOid) return { path, status: 'added', oldOid: null, newOid } satisfies FileChange
+      return oldOid === newOid ? undefined : ({ path, status: 'modified', oldOid, newOid } satisfies FileChange)
+    },
+  })) as FileChange[]
+
+  for (const [path, oldOid] of Object.entries(base)) {
+    if (!seen.has(path)) changes.push({ path, status: 'deleted', oldOid, newOid: null })
+  }
+  return changes.sort(byPath)
 }
 
 async function readText({ fs }: GitContext, path: string): Promise<string | null> {

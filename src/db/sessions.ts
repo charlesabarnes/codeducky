@@ -18,7 +18,12 @@ export async function startOrResumeSession(db: SkelbertDb, start: SessionStart):
   return db.transaction('rw', db.sessions, db.notes, async () => {
     const current = await activeSession(db, start.repoId, start.branch)
     if (current?.id !== undefined) {
-      await db.sessions.update(current.id, { headSha: start.headSha, baseSha: start.baseSha })
+      await db.sessions.update(current.id, {
+        headSha: start.headSha,
+        baseSha: start.baseSha,
+        baseSource: 'local',
+        githubBase: undefined,
+      })
       return current.id
     }
     return createSession(db, start)

@@ -6,6 +6,7 @@ import type { Repo } from '../../db/schema'
 import { activeSession, startNewSession, startOrResumeSession } from '../../db/sessions'
 import { gitService } from '../../git/client'
 import type { RepoInfo } from '../../git/types'
+import { githubDefaultBase } from '../github/defaultBase'
 import { PermissionGate } from './PermissionGate'
 
 export function RepoPage() {
@@ -37,6 +38,14 @@ function RepoDetails({ repo }: { repo: Repo }) {
       cancelled = true
     }
   }, [repo.dirHandle])
+
+  const savedBaseMissing = info !== null && !info.baseBranches.includes(repo.baseBranch)
+  useEffect(() => {
+    if (!info || !savedBaseMissing) return
+    githubDefaultBase(info, info.baseBranches).then((base) => {
+      if (base) db.repos.update(repoId, { baseBranch: base })
+    })
+  }, [info, savedBaseMissing, repoId])
 
   const branch = info?.branch ?? null
   const existing = useLiveQuery(

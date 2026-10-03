@@ -20,7 +20,9 @@ function toSide(bytes: Uint8Array, maxBytes: number): FileSide {
 }
 
 async function readOld(ctx: GitContext, oid: string): Promise<Uint8Array> {
-  const { fs, dir, gitdir, cache } = ctx
+  const { fs, dir, gitdir, cache, blobs } = ctx
+  const supplied = blobs.get(oid)
+  if (supplied) return supplied
   return (await git.readBlob({ fs, dir, gitdir, cache, oid })).blob
 }
 
@@ -62,4 +64,17 @@ export async function readFileStats(
     stats[change.path] = statsFor(await readFileContents(ctx, change, maxBytes))
   }
   return stats
+}
+
+/** The oids that neither the local object store nor the supplied blobs can provide. */
+export async function missingBlobs(ctx: GitContext, oids: string[]): Promise<string[]> {
+  const missing: string[] = []
+  for (const oid of new Set(oids)) {
+    try {
+      await readOld(ctx, oid)
+    } catch {
+      missing.push(oid)
+    }
+  }
+  return missing
 }

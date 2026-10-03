@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { db } from '../../db/db'
 import { DEFAULT_CLAUDE_MODEL, loadSettings, saveSettings, type SettingsInput } from '../../db/settings'
+import { TokenTest } from '../github/TokenTest'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -43,6 +44,7 @@ export function SettingsPage() {
           value={form.githubPat}
           onChange={update('githubPat')}
         />
+        <TokenTest token={form.githubPat} />
         <SecretField
           label="Anthropic API key"
           hint="Used for the optional Claude review pass."

@@ -23,6 +23,8 @@ export interface Session {
   headSha: string
   baseSha: string
   baseSource: BaseSource
+  /** Set when baseSource is 'github': the GitHub base branch tip the merge base was computed from. */
+  githubBase?: { branch: string; tipSha: string }
   startedAt: number
   status: SessionStatus
 }

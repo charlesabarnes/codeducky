@@ -5,8 +5,10 @@ export interface GitContext {
   dir: string
   gitdir: string
   cache: object
+  /** Base blobs supplied from outside the repository (the GitHub API), keyed by oid. */
+  blobs: Map<string, Uint8Array>
 }
 
-export function createContext(fs: HandleFs): GitContext {
-  return { fs, dir: '/', gitdir: '/.git', cache: {} }
+export function createContext(fs: HandleFs, blobs = new Map<string, Uint8Array>()): GitContext {
+  return { fs, dir: '/', gitdir: '/.git', cache: {}, blobs }
 }

@@ -10,6 +10,10 @@ import type { FileChange, FileStats } from '../../git/types'
 import { contentHash, viewedPaths } from '../../review/viewed'
 import { SessionChecklists } from '../checklists/SessionChecklists'
 import { useChecklistProgress } from '../checklists/useChecklistProgress'
+import { BaseBanner } from '../github/BaseBanner'
+import { PushDialog } from '../github/PushDialog'
+import { useBaseFreshness } from '../github/useBaseFreshness'
+import { repoRef } from '../../github/connect'
 import { exportSessionReport } from '../history/exportReport'
 import { NotesPanel } from '../notes/NotesPanel'
 import { FileList, type FileNoteCount } from './FileList'
@@ -36,7 +40,7 @@ function countByFile(notes: Note[]): Map<string, FileNoteCount> {
 
 export function SessionView({ session, repo }: { session: Session; repo: Repo }) {
   const sessionId = session.id!
-  const scan = useSessionScan(repo.dirHandle, session.baseSha)
+  const scan = useSessionScan(repo.dirHandle, session.baseSha, session.baseSource === 'github' ? repoRef(repo) : null)
   useReanchor(sessionId, scan.files)
   const [params, setParams] = useSearchParams()
   const [mode, setMode] = useState<ViewMode>(() =>
@@ -46,6 +50,8 @@ export function SessionView({ session, repo }: { session: Session; repo: Repo })
   const [tab, setTab] = useState<Tab>('files')
   const [focus, setFocus] = useState<NoteFocus | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [pushOpen, setPushOpen] = useState(false)
+  const freshness = useBaseFreshness(repo, scan.files !== null, generation)
 
   const notes = useLiveQuery(() => db.notes.where({ sessionId }).toArray(), [sessionId]) ?? EMPTY_NOTES
   const views = useLiveQuery(() => db.fileViews.where({ sessionId }).toArray(), [sessionId])
@@ -96,13 +102,19 @@ export function SessionView({ session, repo }: { session: Session; repo: Repo })
           <div className="mono">
             {session.branch} vs origin/{repo.baseBranch}
           </div>
-          <div className="muted mono">merge base {session.baseSha.slice(0, 7)}</div>
+          <div className="muted mono">
+            merge base {session.baseSha.slice(0, 7)}
+            {session.baseSource === 'github' && ' (from GitHub)'}
+          </div>
           <div className="row">
             <button type="button" className="secondary" onClick={rescan} disabled={scan.scanning}>
               {scan.scanning ? 'Scanning…' : 'Rescan'}
             </button>
             <button type="button" className="secondary" onClick={exportReport} disabled={!scan.files}>
               Export
+            </button>
+            <button type="button" className="secondary" onClick={() => setPushOpen(true)} disabled={!repo.owner}>
+              Push
             </button>
             {scan.files && <Totals files={scan.files} stats={scan.stats} />}
           </div>
@@ -135,6 +147,7 @@ export function SessionView({ session, repo }: { session: Session; repo: Repo })
         {tab === 'checklists' && <SessionChecklists sessionId={sessionId} repoId={repo.id!} />}
       </aside>
       <section className="session-content">
+        <BaseBanner state={freshness} session={session} repo={repo} />
         {selected ? (
           <FilePane
             key={selected.path}
@@ -154,6 +167,7 @@ export function SessionView({ session, repo }: { session: Session; repo: Repo })
           !scan.scanning && <p className="diff-notice muted">Select a file.</p>
         )}
       </section>
+      {pushOpen && <PushDialog session={session} repo={repo} notes={notes} onClose={() => setPushOpen(false)} />}
     </div>
   )
 }

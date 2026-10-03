@@ -1,0 +1,46 @@
+import { useState } from 'react'
+import { createGitHubClient } from '../../github/client'
+import { errorMessage } from '../../github/errors'
+import type { Viewer } from '../../github/types'
+import './github.css'
+
+type State = { status: 'idle' } | { status: 'testing' } | { status: 'ok'; viewer: Viewer } | { status: 'error'; message: string }
+
+export function TokenTest({ token }: { token: string }) {
+  const [state, setState] = useState<State>({ status: 'idle' })
+  const [testedToken, setTestedToken] = useState(token)
+  const current = testedToken === token ? state : { status: 'idle' as const }
+
+  const test = async () => {
+    setTestedToken(token)
+    setState({ status: 'testing' })
+    try {
+      setState({ status: 'ok', viewer: await createGitHubClient({ token: token.trim() }).viewer() })
+    } catch (error) {
+      setState({ status: 'error', message: errorMessage(error) })
+    }
+  }
+
+  return (
+    <div className="token-test">
+      <div className="row">
+        <button type="button" className="secondary" disabled={!token.trim() || current.status === 'testing'} onClick={test}>
+          {current.status === 'testing' ? 'Testing…' : 'Test token'}
+        </button>
+        {current.status === 'ok' && (
+          <span className="ok">
+            Signed in as <strong>{current.viewer.login}</strong>
+            {current.viewer.name ? ` (${current.viewer.name})` : ''}
+          </span>
+        )}
+      </div>
+      {current.status === 'ok' && (
+        <small className="muted">
+          {current.viewer.tokenExpiresAt ? `Token expires ${current.viewer.tokenExpiresAt}.` : 'GitHub reports no expiry for this token.'}
+          {current.viewer.scopes && ` Scopes: ${current.viewer.scopes.join(', ') || 'none'}.`}
+        </small>
+      )}
+      {current.status === 'error' && <small className="error">{current.message}</small>}
+    </div>
+  )
+}

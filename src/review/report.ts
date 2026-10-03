@@ -19,7 +19,7 @@ export const formatTimestamp = (ms: number) => `${new Date(ms).toISOString().sli
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
 
-function fenceFor(text: string): string {
+export function fenceFor(text: string): string {
   const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length))
   return '`'.repeat(Math.max(3, longest + 1))
 }

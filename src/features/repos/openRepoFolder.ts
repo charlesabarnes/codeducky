@@ -1,6 +1,7 @@
 import { db } from '../../db/db'
 import { saveOpenedRepo } from '../../db/repos'
 import { gitService } from '../../git/client'
+import { githubDefaultBase } from '../github/defaultBase'
 
 export async function openRepoFolder(): Promise<number | null> {
   let handle: FileSystemDirectoryHandle
@@ -11,5 +12,6 @@ export async function openRepoFolder(): Promise<number | null> {
     throw error
   }
   const info = await gitService().open(handle)
-  return saveOpenedRepo(db, handle, info)
+  const defaultBase = (await githubDefaultBase(info, info.baseBranches)) ?? info.defaultBase
+  return saveOpenedRepo(db, handle, { ...info, defaultBase })
 }
