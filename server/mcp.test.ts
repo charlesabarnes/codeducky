@@ -89,6 +89,7 @@ describe('mcp tools', () => {
       'check_item',
       'get_checklist',
       'get_note',
+      'get_review_context',
       'list_notes',
       'list_repos',
       'list_sessions',

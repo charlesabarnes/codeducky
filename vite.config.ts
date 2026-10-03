@@ -27,13 +27,13 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: 'index.html',
         // Server-rendered routes (API, MCP, OAuth consent) must reach the network.
-        navigateFallbackDenylist: [/^\/api\//, /^\/mcp/, /^\/oauth/, /^\/\.well-known\//],
+        navigateFallbackDenylist: [/^\/api\//, /^\/mcp/, /^\/oauth/, /^\/\.well-known\//, /^\/gate\//],
       },
     }),
   ],
   server: {
     proxy: Object.fromEntries(
-      ['/api', '/mcp', '/oauth', '/.well-known'].map((path) => [path, `http://localhost:${process.env.SKELBERT_SERVER_PORT ?? 8787}`]),
+      ['/api', '/mcp', '/oauth', '/.well-known', '/gate'].map((path) => [path, `http://localhost:${process.env.SKELBERT_SERVER_PORT ?? 8787}`]),
     ),
   },
   build: {
