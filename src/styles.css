@@ -652,10 +652,12 @@ button.link.danger {
 
 .file-list li > input {
   margin: 0;
+  flex-shrink: 0;
 }
 
 .file-list li button {
   padding-left: 0.5rem;
+  min-width: 0;
 }
 
 .file-list li.viewed .file-path {

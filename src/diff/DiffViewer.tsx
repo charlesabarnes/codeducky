@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { FileContents, FileSide } from '../git/types'
 import { DiffTable, type LineAnnotations, type ViewMode } from './DiffTable'
 import { buildLines } from './hunks'
+import { lineEndingChange, type LineEndingChange } from './lineEndings'
 import { useHighlight } from './useHighlight'
 
 interface DiffViewerProps {
@@ -66,10 +67,25 @@ interface TextDiffProps {
 
 function TextDiff({ path, oldText, newText, mode, annotations }: TextDiffProps) {
   const lines = useMemo(() => buildLines(oldText, newText), [oldText, newText])
+  const endings = useMemo(() => lineEndingChange(oldText, newText), [oldText, newText])
   const tokens = useHighlight(path, oldText, newText)
   if (lines.length === 0) return <p className="diff-notice muted">Empty file.</p>
+  if (endings?.only) return <p className="diff-notice muted">{describeEndings(endings)} Nothing else changed.</p>
   if (lines.every((line) => line.kind === 'context')) {
     return <p className="diff-notice muted">No line changes (whitespace, line endings or mode only).</p>
   }
-  return <DiffTable key={path} lines={lines} mode={mode} tokens={tokens} annotations={annotations} />
+  return (
+    <>
+      {endings && (
+        <p className="diff-notice muted">
+          {describeEndings(endings)} Lines that differ only by their ending show as removed and added.
+        </p>
+      )}
+      <DiffTable key={path} lines={lines} mode={mode} tokens={tokens} annotations={annotations} />
+    </>
+  )
+}
+
+function describeEndings({ from, to }: LineEndingChange): string {
+  return `Line endings changed from ${from} to ${to}.`
 }

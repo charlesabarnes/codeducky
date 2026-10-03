@@ -132,7 +132,7 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
       void toggleViewed(selected)
       if (!nowViewed) return announce('Marked as not viewed', { visible: true })
       const next = nextUnviewed(shownPaths, selected.path, viewed)
-      if (!next) return announce('Viewed. Every file is viewed', { visible: true })
+      if (!next) return announce(filter.trim() ? 'Viewed. Every matching file is viewed' : 'Viewed. Every file is viewed', { visible: true })
       goToFile(next, 'first-change')
       announce(`Viewed. Next: ${next}`, { visible: true })
     },
