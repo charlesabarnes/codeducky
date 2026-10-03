@@ -1,0 +1,16 @@
+.git
+.claude
+**/node_modules
+dist
+dev-dist
+data
+**/*.db
+**/*.db-shm
+**/*.db-wal
+.env
+.env.*
+**/*.log
+.DS_Store
+Dockerfile
+compose.yaml
+.dockerignore

@@ -1,0 +1,26 @@
+# Deployed on gangway: preview secrets reach compose as .env, so they are interpolated here.
+services:
+  web:
+    build: .
+    environment:
+      NODE_ENV: production
+      PORT: '8787'
+      DATA_DIR: /data
+      SKELBERT_PASSPHRASE: ${SKELBERT_PASSPHRASE:?set the SKELBERT_PASSPHRASE secret}
+      SKELBERT_PUBLIC_URL: ${SKELBERT_PUBLIC_URL:-}
+    expose:
+      - '8787'
+    volumes:
+      - type: volume
+        source: data
+        target: /data
+    x-gangway:
+      expose: true
+      port: 8787
+      health: /api/health
+
+volumes:
+  data:
+
+x-gangway:
+  idle: never
