@@ -1,14 +1,23 @@
 import { useMemo } from 'react'
 import type { FileContents, FileSide } from '../git/types'
-import { DiffTable, type LineAnnotations, type ViewMode } from './DiffTable'
+import { DiffTable, type LineAnnotations, type MovedLines, type ViewMode } from './DiffTable'
 import { buildLines } from './hunks'
+import { movedAt } from './moved'
 import { lineEndingChange, type LineEndingChange } from './lineEndings'
 import { useHighlight } from './useHighlight'
+import { createWordDiffer } from './wordDiff'
 
-interface DiffViewerProps {
-  contents: FileContents
+export interface DiffOptions {
   mode: ViewMode
+  ignoreWhitespace: boolean
+  /** Turns whitespace changes back on, from the "only whitespace changed" notice. */
+  onShowWhitespace: () => void
+}
+
+interface DiffViewerProps extends DiffOptions {
+  contents: FileContents
   onLoadLarge: () => void
+  moved?: MovedLines
   annotations?: LineAnnotations
 }
 
@@ -20,7 +29,7 @@ function formatBytes(bytes: number): string {
 
 const textOf = (side: FileSide | null) => (side?.kind === 'text' ? side.text : '')
 
-export function DiffViewer({ contents, mode, onLoadLarge, annotations }: DiffViewerProps) {
+export function DiffViewer({ contents, onLoadLarge, ...rest }: DiffViewerProps) {
   const sides = [contents.old, contents.new]
 
   if (sides.some((side) => side?.kind === 'binary')) {
@@ -41,13 +50,7 @@ export function DiffViewer({ contents, mode, onLoadLarge, annotations }: DiffVie
     )
   }
   return (
-    <TextDiff
-      path={contents.path}
-      oldText={textOf(contents.old)}
-      newText={textOf(contents.new)}
-      mode={mode}
-      annotations={annotations}
-    />
+    <TextDiff path={contents.path} oldText={textOf(contents.old)} newText={textOf(contents.new)} {...rest} />
   )
 }
 
@@ -57,31 +60,56 @@ function sizeSummary({ old, new: next }: FileContents): string {
   return old ? `${formatBytes(old.size)} deleted` : ''
 }
 
-interface TextDiffProps {
+interface TextDiffProps extends DiffOptions {
   path: string
   oldText: string
   newText: string
-  mode: ViewMode
+  moved?: MovedLines
   annotations?: LineAnnotations
 }
 
-function TextDiff({ path, oldText, newText, mode, annotations }: TextDiffProps) {
-  const lines = useMemo(() => buildLines(oldText, newText), [oldText, newText])
+function TextDiff({ path, oldText, newText, mode, ignoreWhitespace, onShowWhitespace, moved, annotations }: TextDiffProps) {
+  const lines = useMemo(() => buildLines(oldText, newText, { ignoreWhitespace }), [oldText, newText, ignoreWhitespace])
+  const ranges = moved?.ranges
+  const words = useMemo(
+    () =>
+      createWordDiffer(lines, (line) =>
+        line.kind === 'del' ? movedAt(ranges, 'old', line.oldNo!) !== null : movedAt(ranges, 'new', line.newNo!) !== null,
+      ),
+    [lines, ranges],
+  )
   const endings = useMemo(() => lineEndingChange(oldText, newText), [oldText, newText])
   const tokens = useHighlight(path, oldText, newText)
   if (lines.length === 0) return <p className="diff-notice muted">Empty file.</p>
-  if (endings?.only) return <p className="diff-notice muted">{describeEndings(endings)} Nothing else changed.</p>
+  if (endings?.only && !ignoreWhitespace) return <p className="diff-notice muted">{describeEndings(endings)} Nothing else changed.</p>
+  const table = <DiffTable key={path} lines={lines} mode={mode} tokens={tokens} words={words} moved={moved} annotations={annotations} />
   if (lines.every((line) => line.kind === 'context')) {
-    return <p className="diff-notice muted">No line changes (whitespace, line endings or mode only).</p>
+    // Notes on a file whose only changes are hidden still need their lines.
+    const pinned = (annotations?.pinned.size ?? 0) > 0
+    return (
+      <>
+        {ignoreWhitespace ? (
+          <p className="diff-notice muted">
+            Only whitespace changed.{' '}
+            <button type="button" className="link" onClick={onShowWhitespace}>
+              Show whitespace changes
+            </button>
+          </p>
+        ) : (
+          <p className="diff-notice muted">No line changes (whitespace, line endings or mode only).</p>
+        )}
+        {pinned && table}
+      </>
+    )
   }
   return (
     <>
-      {endings && (
+      {endings && !ignoreWhitespace && (
         <p className="diff-notice muted">
           {describeEndings(endings)} Lines that differ only by their ending show as removed and added.
         </p>
       )}
-      <DiffTable key={path} lines={lines} mode={mode} tokens={tokens} annotations={annotations} />
+      {table}
     </>
   )
 }

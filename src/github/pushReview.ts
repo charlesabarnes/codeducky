@@ -21,11 +21,12 @@ export async function preparePush(
   branch: string,
   localHead: string,
   notes: readonly Note[],
+  renames: ReadonlyMap<string, string> = new Map(),
 ): Promise<PushLookup> {
   const pr = await gh.openPullForBranch(ref, branch)
   if (!pr) return { kind: 'no-pr' }
   const files = await gh.pullFiles(ref, pr.number)
-  return { kind: 'ready', preview: { pr, localHead, placement: placeNotes(pushableNotes(notes), files) } }
+  return { kind: 'ready', preview: { pr, localHead, placement: placeNotes(pushableNotes(notes), files, renames) } }
 }
 
 export interface PushSelection {

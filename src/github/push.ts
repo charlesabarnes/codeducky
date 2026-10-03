@@ -28,9 +28,21 @@ export function commentBody(note: Note): string {
   return `**${note.severity}:** ${note.body.trim() || '_No text._'}`
 }
 
-/** Maps each note onto the PR's patch for its file, using the same matcher as local re-anchoring. */
-export function placeNotes(notes: readonly Note[], files: readonly PullFile[]): Placement {
+/**
+ * The PR file a note belongs to: by its path, or by the path before a rename (a note left on a
+ * file that the PR, or a later local scan, shows under its new name).
+ */
+export function fileForNote(note: Pick<Note, 'path'>, byPath: ReadonlyMap<string, PullFile>, byPrevious: ReadonlyMap<string, PullFile>) {
+  return byPath.get(note.path) ?? byPrevious.get(note.path)
+}
+
+/**
+ * Maps each note onto the PR's patch for its file, using the same matcher as local re-anchoring.
+ * `renames` holds the local renames (new path → old path).
+ */
+export function placeNotes(notes: readonly Note[], files: readonly PullFile[], renames: ReadonlyMap<string, string> = new Map()): Placement {
   const byPath = new Map(files.map((file) => [file.path, file]))
+  const byPrevious = new Map(files.flatMap((file) => (file.previousPath ? [[file.previousPath, file] as const] : [])))
   const sides = new Map<string, NumberedLine[]>()
   const linesFor = (file: PullFile, side: ReviewSide) => {
     const key = `${side}:${file.path}`
@@ -44,7 +56,13 @@ export function placeNotes(notes: readonly Note[], files: readonly PullFile[]): 
 
   const placement: Placement = { placed: [], unplaced: [] }
   for (const note of [...notes].sort(compareNotes)) {
-    const file = byPath.get(note.path)
+    const side = sideOf(note)
+    // A local rename the PR shows as a delete and an add: base-side notes belong to the deleted path.
+    const oldPath = renames.get(note.path)
+    const file =
+      side === 'LEFT' && oldPath && !byPath.get(note.path)?.previousPath && byPath.has(oldPath)
+        ? byPath.get(oldPath)
+        : fileForNote(note, byPath, byPrevious)
     if (!file) {
       placement.unplaced.push({ note, reason: 'File is not changed in the pull request' })
       continue
@@ -53,7 +71,6 @@ export function placeNotes(notes: readonly Note[], files: readonly PullFile[]): 
       placement.unplaced.push({ note, reason: 'GitHub shows no diff for this file (binary or too large)' })
       continue
     }
-    const side = sideOf(note)
     const match = matchAnchor(note.anchor, linesFor(file, side))
     if (!match) {
       placement.unplaced.push({ note, reason: 'Line is not in the pull request diff' })

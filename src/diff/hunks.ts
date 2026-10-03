@@ -1,4 +1,4 @@
-import { diffLines } from 'diff'
+import { diffArrays } from 'diff'
 
 export type LineKind = 'context' | 'add' | 'del'
 export type DiffSide = 'old' | 'new'
@@ -9,6 +9,13 @@ export interface DiffLine {
   oldNo: number | null
   newNo: number | null
   noNewline?: boolean
+  /** The base text of a context line that matched only when whitespace was ignored. */
+  oldText?: string
+}
+
+export interface LineOptions {
+  /** Treat lines that differ only in whitespace as unchanged, like `git diff -w`. */
+  ignoreWhitespace?: boolean
 }
 
 export type DiffSegment =
@@ -24,43 +31,76 @@ export const DEFAULT_CONTEXT = 3
 const MIN_GAP = 4
 const DIFF_TIMEOUT_MS = 2000
 
-function splitValue(value: string): { text: string; noNewline: boolean }[] {
+interface RawLine {
+  /** The line as stored, carriage return included, so line-ending changes still show. */
+  raw: string
+  text: string
+  noNewline: boolean
+}
+
+function splitRaw(value: string): RawLine[] {
   if (value === '') return []
   const parts = value.split('\n')
   const endsWithNewline = parts[parts.length - 1] === ''
   if (endsWithNewline) parts.pop()
-  return parts.map((text, index) => ({
-    text: text.endsWith('\r') ? text.slice(0, -1) : text,
+  return parts.map((raw, index) => ({
+    raw,
+    text: raw.endsWith('\r') ? raw.slice(0, -1) : raw,
     noNewline: !endsWithNewline && index === parts.length - 1,
   }))
 }
 
-function wholeFileChange(oldText: string, newText: string) {
-  return [
-    { value: oldText, removed: true, added: false },
-    { value: newText, removed: false, added: true },
-  ]
+const exactKey = (line: RawLine) => (line.noNewline ? `${line.raw}\u0000` : line.raw)
+const whitespaceKey = (line: RawLine) => line.raw.replace(/\s+/g, '')
+
+function diffKeys(oldLines: RawLine[], newLines: RawLine[], key: (line: RawLine) => string) {
+  const oldKeys = oldLines.map(key)
+  const newKeys = newLines.map(key)
+  const changes = diffArrays(oldKeys, newKeys, { timeout: DIFF_TIMEOUT_MS })
+  return (
+    changes ?? [
+      { value: oldKeys, removed: true, added: false, count: oldKeys.length },
+      { value: newKeys, removed: false, added: true, count: newKeys.length },
+    ]
+  )
 }
 
-export function buildLines(oldText: string, newText: string): DiffLine[] {
-  const changes = diffLines(oldText, newText, { timeout: DIFF_TIMEOUT_MS }) ?? wholeFileChange(oldText, newText)
+export function buildLines(oldText: string, newText: string, options: LineOptions = {}): DiffLine[] {
+  const oldLines = splitRaw(oldText)
+  const newLines = splitRaw(newText)
+  const changes = diffKeys(oldLines, newLines, options.ignoreWhitespace ? whitespaceKey : exactKey)
   const lines: DiffLine[] = []
-  let oldNo = 1
-  let newNo = 1
+  let oldIndex = 0
+  let newIndex = 0
+  const flag = (line: RawLine) => (line.noNewline ? { noNewline: true } : {})
   for (const change of changes) {
-    const kind: LineKind = change.added ? 'add' : change.removed ? 'del' : 'context'
-    for (const { text, noNewline } of splitValue(change.value)) {
-      lines.push({
-        kind,
-        text,
-        oldNo: kind === 'add' ? null : oldNo++,
-        newNo: kind === 'del' ? null : newNo++,
-        ...(noNewline ? { noNewline } : {}),
-      })
+    const count = change.value.length
+    for (let i = 0; i < count; i++) {
+      if (change.removed) {
+        const line = oldLines[oldIndex++]!
+        lines.push({ kind: 'del', text: line.text, oldNo: oldIndex, newNo: null, ...flag(line) })
+      } else if (change.added) {
+        const line = newLines[newIndex++]!
+        lines.push({ kind: 'add', text: line.text, oldNo: null, newNo: newIndex, ...flag(line) })
+      } else {
+        const before = oldLines[oldIndex++]!
+        const after = newLines[newIndex++]!
+        lines.push({
+          kind: 'context',
+          text: after.text,
+          oldNo: oldIndex,
+          newNo: newIndex,
+          ...flag(after),
+          ...(before.text !== after.text ? { oldText: before.text } : {}),
+        })
+      }
     }
   }
   return lines
 }
+
+/** The text of a line as it reads on one side (context lines can differ in whitespace). */
+export const textOn = (line: DiffLine, side: DiffSide) => (side === 'old' && line.oldText !== undefined ? line.oldText : line.text)
 
 export function countChanges(oldText: string, newText: string): { additions: number; deletions: number } {
   let additions = 0

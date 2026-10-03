@@ -95,3 +95,39 @@ export interface ReviewComment {
   side: ReviewSide | null
   body: string
 }
+
+export type CheckStatus = 'queued' | 'in_progress' | 'completed' | 'waiting' | 'requested' | 'pending'
+export type CheckConclusion =
+  | 'success'
+  | 'failure'
+  | 'neutral'
+  | 'cancelled'
+  | 'skipped'
+  | 'timed_out'
+  | 'action_required'
+  | 'stale'
+
+export interface CheckRun {
+  id: number
+  name: string
+  status: CheckStatus
+  conclusion: CheckConclusion | null
+  htmlUrl: string | null
+  detailsUrl: string | null
+  title: string | null
+  annotationsCount: number
+  app: string | null
+}
+
+export type AnnotationLevel = 'notice' | 'warning' | 'failure'
+
+export interface CheckAnnotation {
+  checkRunId: number
+  path: string
+  startLine: number
+  endLine: number
+  level: AnnotationLevel
+  title: string | null
+  message: string
+  rawDetails: string | null
+}

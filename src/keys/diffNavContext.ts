@@ -1,10 +1,13 @@
 import { createContext, useContext } from 'react'
 import type { Cursor } from './diffNav'
+import type { ScrollMode } from './scroll'
 
-/** Where a freshly shown diff should put its cursor: after n/p crossed files, or a note jump. */
+/** Where a freshly shown diff should put its cursor: after n/p crossed files, a note jump or a moved-block link. */
 export interface NavRequest {
   at: number
   target: 'first-change' | 'last-change' | Cursor
+  /** How to bring a line target into view; note jumps scroll to the note themselves. */
+  scroll?: ScrollMode
 }
 
 export interface DiffNavApi {

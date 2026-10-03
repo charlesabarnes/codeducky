@@ -3,6 +3,8 @@ import type { Cursor } from '../keys/diffNav'
 import type { LineActions } from '../keys/lineActions'
 import { useDiffNavigation } from '../keys/useDiffNavigation'
 import { CodeText } from './CodeText'
+import './diff.css'
+import { movedAt, type MoveTarget, type MovedRange } from './moved'
 import {
   buildSegments,
   DEFAULT_CONTEXT,
@@ -15,6 +17,7 @@ import {
   type GapExpansion,
 } from './hunks'
 import type { SideTokens } from './useHighlight'
+import type { WordDiffer } from './wordDiff'
 
 export type ViewMode = 'unified' | 'split'
 
@@ -31,10 +34,18 @@ export interface LineAnnotations {
   actions?: LineActions
 }
 
+/** Blocks of this file that moved, and how to follow one to its other half. */
+export interface MovedLines {
+  ranges: readonly MovedRange[]
+  onOpen: (target: MoveTarget) => void
+}
+
 interface DiffTableProps {
   lines: DiffLine[]
   mode: ViewMode
   tokens: SideTokens
+  words?: WordDiffer
+  moved?: MovedLines
   annotations?: LineAnnotations
 }
 
@@ -43,9 +54,38 @@ type SelectLine = (side: DiffSide, line: number) => void
 interface RowsProps {
   lines: DiffLine[]
   tokens: SideTokens
+  words?: WordDiffer
+  moved?: MovedLines
   annotations?: LineAnnotations
   focus: Cursor | null
   onSelect: SelectLine
+}
+
+/** The moved block a changed line belongs to, if any. */
+function movedRange(moved: MovedLines | undefined, line: DiffLine | null): MovedRange | null {
+  if (!moved || !line || line.kind === 'context') return null
+  return line.kind === 'del' ? movedAt(moved.ranges, 'old', line.oldNo!) : movedAt(moved.ranges, 'new', line.newNo!)
+}
+
+function MovedLink({ range, line, onOpen }: { range: MovedRange; line: DiffLine; onOpen: MovedLines['onOpen'] }) {
+  const number = range.side === 'old' ? line.oldNo : line.newNo
+  if (number !== range.start) return null
+  const { other } = range
+  const label = `${range.side === 'old' ? 'moved to' : 'moved from'} ${other.path}:${other.line}`
+  const count = range.end - range.start + 1
+  return (
+    <button
+      type="button"
+      className="moved-link"
+      title={`${count} ${count === 1 ? 'line' : 'lines'} ${label}`}
+      onClick={(event) => {
+        event.stopPropagation()
+        onOpen(other)
+      }}
+    >
+      {range.side === 'old' ? '↘' : '↗'} {label}
+    </button>
+  )
 }
 
 function selectHandler(annotations: LineAnnotations | undefined, onSelect: SelectLine, side: DiffSide, line: DiffLine | null) {
@@ -70,7 +110,7 @@ function annotationFor(annotations: LineAnnotations | undefined, side: DiffSide,
   return annotations && number !== null ? annotations.render(side, number) : null
 }
 
-export function DiffTable({ lines, mode, tokens, annotations }: DiffTableProps) {
+export function DiffTable({ lines, mode, tokens, words, moved, annotations }: DiffTableProps) {
   const pinned = annotations?.pinned ?? NO_PINS
   const segments = useMemo(() => buildSegments(lines, DEFAULT_CONTEXT, pinned), [lines, pinned])
   const [expanded, setExpanded] = useState<Map<number, GapExpansion>>(new Map())
@@ -92,7 +132,7 @@ export function DiffTable({ lines, mode, tokens, annotations }: DiffTableProps) 
     select(side, line)
     annotations?.onSelect?.(side, line)
   }
-  const rowProps = { tokens, annotations, focus, onSelect: selectLine }
+  const rowProps = { tokens, words, moved, annotations, focus, onSelect: selectLine }
 
   function expand(id: number, change: Partial<GapExpansion> | 'all') {
     setExpanded((current) => {
@@ -167,15 +207,17 @@ export function DiffTable({ lines, mode, tokens, annotations }: DiffTableProps) 
   )
 }
 
-function UnifiedRows({ lines, tokens, annotations, focus, onSelect }: RowsProps) {
+function UnifiedRows({ lines, tokens, words, moved, annotations, focus, onSelect }: RowsProps) {
   return lines.map((line, index) => {
     const oldNote = annotationFor(annotations, 'old', line)
     const newNote = annotationFor(annotations, 'new', line)
     const codeSide = line.kind === 'del' ? 'old' : 'new'
     const focused = isFocused(focus, codeSide, line)
+    const range = movedRange(moved, line)
+    const className = `${line.kind}${range ? ' moved' : ''}${focused ? ' kbd-focus' : ''}`
     return (
       <Fragment key={index}>
-        <tr className={focused ? `${line.kind} kbd-focus` : line.kind} {...focusProps(focused)}>
+        <tr className={className} {...focusProps(focused)}>
           <td className="ln" onClick={selectHandler(annotations, onSelect, 'old', line)}>
             {line.oldNo}
           </td>
@@ -184,7 +226,8 @@ function UnifiedRows({ lines, tokens, annotations, focus, onSelect }: RowsProps)
           </td>
           <td className="marker">{MARKERS[line.kind]}</td>
           <td className="code" onClick={selectHandler(annotations, onSelect, codeSide, line)}>
-            <CodeText line={line} tokens={tokens} />
+            {range && <MovedLink range={range} line={line} onOpen={moved!.onOpen} />}
+            <CodeText line={line} side={codeSide} tokens={tokens} words={words} />
           </td>
         </tr>
         {(oldNote || newNote) && (
@@ -200,13 +243,13 @@ function UnifiedRows({ lines, tokens, annotations, focus, onSelect }: RowsProps)
   })
 }
 
-function SplitRows({ lines, tokens, annotations, focus, onSelect }: RowsProps) {
+function SplitRows({ lines, tokens, words, moved, annotations, focus, onSelect }: RowsProps) {
   return toSplitRows(lines).map(({ left, right }, index) => {
     const oldNote = annotationFor(annotations, 'old', left)
     const newNote = annotationFor(annotations, 'new', right)
     const focusedOld = isFocused(focus, 'old', left)
     const focusedNew = isFocused(focus, 'new', right)
-    const cells = { tokens, annotations, onSelect }
+    const cells = { tokens, words, moved, annotations, onSelect }
     return (
       <Fragment key={index}>
         <tr className={focusedOld || focusedNew ? 'kbd-focus' : undefined} {...focusProps(focusedOld || focusedNew)}>
@@ -230,14 +273,17 @@ interface SplitCellsProps {
   line: DiffLine | null
   side: DiffSide
   tokens: SideTokens
+  words?: WordDiffer
+  moved?: MovedLines
   annotations?: LineAnnotations
   onSelect: SelectLine
   focused: boolean
   divider?: boolean
 }
 
-function SplitCells({ line, side, tokens, annotations, onSelect, focused, divider }: SplitCellsProps) {
-  const kind = line ? line.kind : 'empty'
+function SplitCells({ line, side, tokens, words, moved, annotations, onSelect, focused, divider }: SplitCellsProps) {
+  const range = movedRange(moved, line)
+  const kind = `${line ? line.kind : 'empty'}${range ? ' moved' : ''}`
   const edge = `${divider ? ' split-divider' : ''}${focused ? ' kbd-side' : ''}`
   const select = selectHandler(annotations, onSelect, side, line)
   return (
@@ -247,7 +293,8 @@ function SplitCells({ line, side, tokens, annotations, onSelect, focused, divide
       </td>
       <td className={`marker ${kind}${focused ? ' kbd-side' : ''}`}>{line ? MARKERS[line.kind] : null}</td>
       <td className={`code ${kind}${focused ? ' kbd-side' : ''}`} onClick={select}>
-        {line && <CodeText line={line} tokens={tokens} />}
+        {range && line && <MovedLink range={range} line={line} onOpen={moved!.onOpen} />}
+        {line && <CodeText line={line} side={side} tokens={tokens} words={words} />}
       </td>
     </>
   )

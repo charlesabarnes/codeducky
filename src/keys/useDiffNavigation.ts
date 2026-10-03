@@ -47,7 +47,7 @@ const NO_NOTE: Record<NoteAction, string> = {
 
 function fromRequest(request: NavRequest | null, rows: readonly NavRow[], mode: NavMode): CursorState | null {
   if (!request) return null
-  if (typeof request.target === 'object') return { cursor: request.target, at: request.at, scroll: 'none' }
+  if (typeof request.target === 'object') return { cursor: request.target, at: request.at, scroll: request.scroll ?? 'none' }
   const index = request.target === 'first-change' ? firstChange(rows) : lastChange(rows)
   const cursor = index === null ? null : cursorOn(rows[index]!, mode)
   return cursor && { cursor, at: request.at, scroll: 'center' }

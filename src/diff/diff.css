@@ -1,0 +1,78 @@
+/* Word-level changes inside a changed line, layered over the syntax colours. */
+.diff-table .word-del {
+  background: var(--del-word, var(--del-strong));
+  border-radius: 2px;
+}
+
+.diff-table .word-add {
+  background: var(--add-word, var(--add-strong));
+  border-radius: 2px;
+}
+
+:root {
+  --del-word: rgb(255 129 130 / 0.45);
+  --add-word: rgb(74 194 107 / 0.45);
+  --moved-del-bg: #f6efff;
+  --moved-del-strong: #e2d1ff;
+  --moved-add-bg: #e7f6fb;
+  --moved-add-strong: #bfe6f3;
+  --moved-fg: #8250df;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --del-word: rgb(248 81 73 / 0.4);
+    --add-word: rgb(46 160 67 / 0.4);
+    --moved-del-bg: #1f1830;
+    --moved-del-strong: #3b2a63;
+    --moved-add-bg: #0f2430;
+    --moved-add-strong: #19435a;
+    --moved-fg: #bc8cff;
+  }
+}
+
+/* Moved blocks, like git --color-moved: their own colours instead of red and green. */
+.diff-table tr.del.moved td,
+.diff-table td.del.moved {
+  background: var(--moved-del-bg);
+}
+
+.diff-table tr.add.moved td,
+.diff-table td.add.moved {
+  background: var(--moved-add-bg);
+}
+
+.diff-table tr.del.moved td.ln,
+.diff-table td.del.moved.ln {
+  background: var(--moved-del-strong);
+}
+
+.diff-table tr.add.moved td.ln,
+.diff-table td.add.moved.ln {
+  background: var(--moved-add-strong);
+}
+
+.diff-table tr.moved td.marker,
+.diff-table td.moved.marker {
+  color: var(--moved-fg);
+  font-weight: 700;
+}
+
+.moved-link {
+  float: right;
+  margin-left: 1rem;
+  padding: 0 0.4rem;
+  border: 1px solid var(--moved-fg);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--moved-fg);
+  font: inherit;
+  font-size: 11px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.moved-link:hover {
+  background: var(--moved-fg);
+  color: var(--bg);
+}
