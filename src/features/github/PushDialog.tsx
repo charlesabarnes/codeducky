@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { db } from '../../db/db'
 import type { Note, Repo, Session } from '../../db/schema'
 import { gitService } from '../../git/client'
+import type { FileChange } from '../../git/types'
 import { connect } from '../../github/connect'
 import { errorMessage } from '../../github/errors'
 import type { PlacedNote, UnplacedNote } from '../../github/push'
@@ -28,6 +29,8 @@ interface PushDialogProps {
   session: Session
   repo: Repo
   notes: Note[]
+  /** The scanned changes, for local renames. */
+  files: FileChange[] | null
   onClose: () => void
 }
 
@@ -41,13 +44,16 @@ function defaultSelection(preview: PushPreview): Set<string> {
   )
 }
 
-export function PushDialog({ session, repo, notes, onClose }: PushDialogProps) {
+export function PushDialog({ session, repo, notes, files, onClose }: PushDialogProps) {
   const dialog = useRef<HTMLDialogElement>(null)
   const [state, setState] = useState<State>({ status: 'loading' })
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [pushing, setPushing] = useState(false)
   const [pushError, setPushError] = useState<string | null>(null)
   const [initialNotes] = useState(notes)
+  const [renames] = useState(
+    () => new Map((files ?? []).flatMap((file) => (file.oldPath ? [[file.path, file.oldPath] as const] : []))),
+  )
 
   useEffect(() => {
     dialog.current?.showModal()
@@ -66,7 +72,7 @@ export function PushDialog({ session, repo, notes, onClose }: PushDialogProps) {
         }
       }
       const { headSha } = await gitService().info()
-      const lookup = await preparePush(conn.gh, conn.ref, session.branch, headSha, initialNotes)
+      const lookup = await preparePush(conn.gh, conn.ref, session.branch, headSha, initialNotes, renames)
       if (lookup.kind === 'no-pr') return { status: 'no-pr' }
       return { status: 'ready', preview: lookup.preview }
     }
@@ -80,7 +86,7 @@ export function PushDialog({ session, repo, notes, onClose }: PushDialogProps) {
     return () => {
       cancelled = true
     }
-  }, [repo, session.branch, initialNotes])
+  }, [repo, session.branch, initialNotes, renames])
 
   const toggle = (id: string) =>
     setSelected((current) => {

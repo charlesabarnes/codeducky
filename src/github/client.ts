@@ -1,5 +1,10 @@
 import { errorFromResponse, GitHubError, isGitHubError } from './errors'
 import type {
+  AnnotationLevel,
+  CheckAnnotation,
+  CheckConclusion,
+  CheckRun,
+  CheckStatus,
   ComparedFile,
   ComparedFileStatus,
   Comparison,
@@ -61,6 +66,50 @@ interface RawReviewComment {
   side?: ReviewSide | null
   body: string
 }
+
+interface RawCheckRun {
+  id: number
+  name: string
+  status: CheckStatus
+  conclusion: CheckConclusion | null
+  html_url?: string | null
+  details_url?: string | null
+  output?: { title?: string | null; annotations_count?: number }
+  app?: { name?: string } | null
+}
+
+interface RawAnnotation {
+  path: string
+  start_line: number
+  end_line?: number | null
+  annotation_level: AnnotationLevel
+  title?: string | null
+  message: string
+  raw_details?: string | null
+}
+
+const toCheckRun = (run: RawCheckRun): CheckRun => ({
+  id: run.id,
+  name: run.name,
+  status: run.status,
+  conclusion: run.conclusion,
+  htmlUrl: run.html_url ?? null,
+  detailsUrl: run.details_url ?? null,
+  title: run.output?.title ?? null,
+  annotationsCount: run.output?.annotations_count ?? 0,
+  app: run.app?.name ?? null,
+})
+
+const toAnnotation = (checkRunId: number, raw: RawAnnotation): CheckAnnotation => ({
+  checkRunId,
+  path: raw.path,
+  startLine: raw.start_line,
+  endLine: raw.end_line ?? raw.start_line,
+  level: raw.annotation_level,
+  title: raw.title || null,
+  message: raw.message,
+  rawDetails: raw.raw_details || null,
+})
 
 const encodePath = (path: string) => path.split('/').map(encodeURIComponent).join('/')
 const repoPath = ({ owner, name }: RepoRef) => `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`
@@ -146,13 +195,18 @@ export function createGitHubClient({ token, fetch: fetchImpl = globalThis.fetch,
     return { data: (await response.json()) as T, headers: response.headers }
   }
 
-  async function paginate<T>(path: string, query: Record<string, string | number> = {}): Promise<T[]> {
+  /** Follows `link: rel="next"`; `pick` takes the items out of each page (for wrapped lists). */
+  async function paginate<T, P = T[]>(
+    path: string,
+    query: Record<string, string | number> = {},
+    pick: (page: P) => T[] = (page) => page as unknown as T[],
+  ): Promise<T[]> {
     const items: T[] = []
     let next: string | null = path
     let first = true
     for (let page = 0; next && page < MAX_PAGES; page++) {
-      const response: Response<T[]> = await request<T[]>(next, first ? { query: { per_page: PAGE_SIZE, ...query } } : {})
-      items.push(...response.data)
+      const response: Response<P> = await request<P>(next, first ? { query: { per_page: PAGE_SIZE, ...query } } : {})
+      items.push(...pick(response.data))
       next = nextLink(response.headers)
       first = false
     }
@@ -248,6 +302,21 @@ export function createGitHubClient({ token, fetch: fetchImpl = globalThis.fetch,
         },
       )
       return { id: data.id, state: data.state, htmlUrl: data.html_url }
+    },
+
+    /** Check runs for a commit, or null when GitHub does not have the commit. */
+    async checkRuns(repo: RepoRef, sha: string): Promise<CheckRun[] | null> {
+      const runs = await orNull(
+        paginate<RawCheckRun, { check_runs: RawCheckRun[] }>(`${repoPath(repo)}/commits/${encodeURIComponent(sha)}/check-runs`, {}, (page) => page.check_runs),
+        404,
+        422,
+      )
+      return runs?.map(toCheckRun) ?? null
+    },
+
+    async checkRunAnnotations(repo: RepoRef, checkRunId: number): Promise<CheckAnnotation[]> {
+      const raw = await paginate<RawAnnotation>(`${repoPath(repo)}/check-runs/${checkRunId}/annotations`)
+      return raw.map((annotation) => toAnnotation(checkRunId, annotation))
     },
 
     async reviewComments(repo: RepoRef, number: number, reviewId: number): Promise<ReviewComment[]> {
