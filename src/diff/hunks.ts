@@ -150,7 +150,7 @@ export function buildSegments(
     if (!shown && run.length >= MIN_GAP) {
       segments.push({ type: 'gap', id: gapId++, lines: run })
     } else if (last?.type === 'lines') {
-      last.lines.push(...run)
+      for (const line of run) last.lines.push(line)
     } else {
       segments.push({ type: 'lines', lines: run })
     }

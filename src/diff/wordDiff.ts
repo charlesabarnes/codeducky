@@ -31,12 +31,10 @@ export function pairChangedLines(lines: readonly DiffLine[], skip?: (line: DiffL
     }
     const dels: DiffLine[] = []
     const adds: DiffLine[] = []
-    while (i < lines.length && lines[i]!.kind === 'del') dels.push(lines[i++]!)
-    while (i < lines.length && lines[i]!.kind === 'add') adds.push(lines[i++]!)
-    if (skip) {
-      dels.splice(0, dels.length, ...dels.filter((line) => !skip(line)))
-      adds.splice(0, adds.length, ...adds.filter((line) => !skip(line)))
-    }
+    // Filtered while collecting: spreading a huge run into splice() overflows the stack.
+    const keep = (line: DiffLine) => !skip?.(line)
+    for (; i < lines.length && lines[i]!.kind === 'del'; i++) if (keep(lines[i]!)) dels.push(lines[i]!)
+    for (; i < lines.length && lines[i]!.kind === 'add'; i++) if (keep(lines[i]!)) adds.push(lines[i]!)
     for (let k = 0; k < Math.min(dels.length, adds.length); k++) {
       partners.set(dels[k]!, adds[k]!)
       partners.set(adds[k]!, dels[k]!)
