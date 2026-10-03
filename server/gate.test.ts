@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { SyncResponse, WireChange } from '../shared/sync'
 import { checklist, note, repo, REPO, session, ticked } from './fixtures'
 import { renderScript } from './gate/scripts'
@@ -134,6 +137,68 @@ describe('hook scripts', () => {
     for (const name of ['pre-push.sh', 'claude-code-hook.sh'] as const) {
       const proc = Bun.spawnSync(['sh', '-n'], { stdin: new TextEncoder().encode(renderScript(name, 'http://localhost:8787')) })
       expect(proc.exitCode).toBe(0)
+    }
+  })
+})
+
+describe('hook scripts against a running server', () => {
+  async function serve(changes: WireChange[]) {
+    const made = await setup(changes)
+    const server = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: made.app.fetch })
+    const dir = mkdtempSync(join(tmpdir(), 'skelbert-hook-'))
+    cleanups.push(() => {
+      void server.stop(true)
+      rmSync(dir, { recursive: true, force: true })
+    })
+    const origin = `http://127.0.0.1:${server.port}`
+    const git = (...args: string[]) => Bun.spawnSync(['git', ...args], { cwd: dir, env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' } })
+    git('init', '-q', '-b', 'feature/tax')
+    git('remote', 'add', 'origin', 'git@github.com:charlesabarnes/invoice-service.git')
+    // Only the tools the scripts need: without `security`, a real Keychain item cannot shadow the test token.
+    const bin = join(dir, '.bin')
+    mkdirSync(bin)
+    for (const tool of ['sh', 'git', 'curl', 'sed', 'tr', 'awk', 'head', 'tail', 'cat']) symlinkSync(Bun.which(tool)!, join(bin, tool))
+    // Async: a blocking spawn would stall the in-process server the script calls.
+    const run = async (name: 'pre-push.sh' | 'claude-code-hook.sh', stdin: string, args: string[] = [], env: Record<string, string> = {}) => {
+      const script = join(dir, name)
+      writeFileSync(script, renderScript(name, origin), { mode: 0o755 })
+      const proc = Bun.spawn(['sh', script, ...args], {
+        cwd: dir,
+        stdin: new TextEncoder().encode(stdin),
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: { PATH: bin, HOME: dir, GIT_CONFIG_GLOBAL: '/dev/null', SKELBERT_TOKEN: made.token, ...env },
+      })
+      const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
+      return { code, out, err }
+    }
+    return { run, dir }
+  }
+  const hookInput = (cwd: string, command: string) => JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', cwd, tool_input: { command } })
+  const prePushArgs = ['origin', 'git@github.com:charlesabarnes/invoice-service.git']
+  const refs = (branch: string) => `refs/heads/${branch} ${'a'.repeat(40)} refs/heads/${branch} ${'0'.repeat(40)}\n`
+
+  it('pre-push blocks a failing branch and lets a clean one through', async () => {
+    const { run } = await serve([...BASE, note('n1', 's1', { severity: 'blocker', title: 'Broken' })])
+    const failed = await run('pre-push.sh', refs('feature/tax'), prePushArgs)
+    expect(failed.code).toBe(1)
+    expect(failed.err).toContain('blocker: src/invoice.ts:12 Broken')
+    expect(failed.err).toContain('/sessions/s1')
+    expect((await run('pre-push.sh', refs('clean'), prePushArgs)).code).toBe(0)
+    const noToken = await run('pre-push.sh', refs('feature/tax'), prePushArgs, { SKELBERT_TOKEN: '' })
+    expect(noToken.code).toBe(0)
+    expect(noToken.err).toContain('no token')
+  })
+
+  it('the Claude Code hook denies a failing git push with the reasons', async () => {
+    const { run, dir } = await serve([...BASE, note('n1', 's1', { severity: 'issue', title: 'Say "why"' })])
+    const denied = await run('claude-code-hook.sh', hookInput(dir, 'git push origin feature/tax'))
+    expect(denied.code).toBe(0)
+    const output = JSON.parse(denied.out) as { hookSpecificOutput: { hookEventName: string; permissionDecision: string; permissionDecisionReason: string } }
+    expect(output.hookSpecificOutput).toMatchObject({ hookEventName: 'PreToolUse', permissionDecision: 'deny' })
+    expect(output.hookSpecificOutput.permissionDecisionReason).toContain('issue: src/invoice.ts:12 Say "why"')
+    for (const command of ['git status', 'git push --no-verify', 'git push origin clean']) {
+      expect((await run('claude-code-hook.sh', hookInput(dir, command))).out).toBe('')
     }
   })
 })

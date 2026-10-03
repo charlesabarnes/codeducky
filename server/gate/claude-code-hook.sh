@@ -33,10 +33,21 @@ case $command in
 esac
 
 [ -n "$cwd" ] && [ -d "$cwd" ] && cd "$cwd" 2>/dev/null
+# "cd <dir> && git push" pushes from <dir>.
+case $command in
+  'cd '*)
+    dir=${command#cd }
+    dir=${dir%%[;&|]*}
+    dir=$(printf '%s' "$dir" | sed "s/^[[:space:]]*//; s/[[:space:]]*$//; s/^[\"']//; s/[\"']$//")
+    case $dir in "~"*) dir=$HOME${dir#\~} ;; esac
+    [ -d "$dir" ] && cd "$dir" 2>/dev/null
+    ;;
+esac
 git rev-parse --git-dir >/dev/null 2>&1 || exit 0
 
 # The arguments after "push": the first non-option is the remote, the next the refspec.
 args=${args%%[;&|]*}
+args=$(printf '%s' "$args" | tr -d "\"'")
 remote=''
 refspec=''
 for word in $args; do
@@ -74,6 +85,6 @@ reason=$(
   printf 'Review: %s\n' "$link"
   printf 'Fix the notes (and resolve them with resolve_note) or tick the required items, then push again. Do not bypass with --no-verify unless the user asks.'
 )
-escaped=$(printf '%s' "$reason" | tr '\t' ' ' | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }')
+escaped=$(printf '%s' "$reason" | tr '\t' ' ' | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'NR > 1 { printf "%s", "\\n" } { printf "%s", $0 }')
 printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$escaped"
 exit 0
