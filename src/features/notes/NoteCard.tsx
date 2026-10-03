@@ -12,10 +12,15 @@ interface NoteCardProps {
   note: Note
   readOnly?: boolean
   focused?: boolean
+  /** Controlled editing, so the e shortcut can open the editor; local state otherwise. */
+  editing?: boolean
+  onEditingChange?: (editing: boolean) => void
 }
 
-export function NoteCard({ note, readOnly, focused }: NoteCardProps) {
-  const [editing, setEditing] = useState(false)
+export function NoteCard({ note, readOnly, focused, ...controlled }: NoteCardProps) {
+  const [localEditing, setLocalEditing] = useState(false)
+  const editing = controlled.onEditingChange ? Boolean(controlled.editing) : localEditing
+  const setEditing = controlled.onEditingChange ?? setLocalEditing
   const id = note.id!
   const resolved = note.status === 'resolved'
   const pending = note.status === 'suggested' || note.status === 'dismissed'

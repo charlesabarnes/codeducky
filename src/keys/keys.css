@@ -1,0 +1,206 @@
+kbd {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0 0.35em;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 600 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: center;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Focus ring for the keyboard cursor. Box shadows draw a ring around a table row. */
+.diff-table tr.kbd-focus > td {
+  --ring: var(--accent);
+  box-shadow:
+    inset 0 2px 0 var(--ring),
+    inset 0 -2px 0 var(--ring);
+}
+
+.diff-table tr.kbd-focus > td:first-child {
+  box-shadow:
+    inset 2px 0 0 var(--ring),
+    inset 0 2px 0 var(--ring),
+    inset 0 -2px 0 var(--ring);
+}
+
+.diff-table tr.kbd-focus > td:last-child {
+  box-shadow:
+    inset -2px 0 0 var(--ring),
+    inset 0 2px 0 var(--ring),
+    inset 0 -2px 0 var(--ring);
+}
+
+.diff-table tr.kbd-focus > td.ln {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+/* Split view: a faint row marker, and the full ring on the chosen side. */
+.diff-table tr.kbd-focus > td:has(~ td.kbd-side),
+.diff-table tr.kbd-focus > td.kbd-side ~ td:not(.kbd-side) {
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--accent) 35%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.diff-table tr.kbd-focus > td.kbd-side {
+  box-shadow:
+    inset 0 2px 0 var(--ring),
+    inset 0 -2px 0 var(--ring);
+}
+
+.diff-table tr.kbd-focus > td.ln.kbd-side {
+  box-shadow:
+    inset 2px 0 0 var(--ring),
+    inset 0 2px 0 var(--ring),
+    inset 0 -2px 0 var(--ring);
+}
+
+.diff-table tr.kbd-focus > td.code.kbd-side {
+  box-shadow:
+    inset -2px 0 0 var(--ring),
+    inset 0 2px 0 var(--ring),
+    inset 0 -2px 0 var(--ring);
+}
+
+.diff-table tr.kbd-focus > td.ln:not(.kbd-side):has(~ td.kbd-side),
+.diff-table tr.kbd-focus > td.kbd-side ~ td.ln:not(.kbd-side) {
+  color: var(--fg-muted);
+  font-weight: normal;
+}
+
+.keys-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.4rem;
+  border: none;
+  background: none;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.keys-hint:hover {
+  background: var(--bg-muted);
+  color: var(--fg);
+}
+
+.keys-toast {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 20;
+  max-width: 28rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  color: var(--fg);
+  font-size: 13px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+  pointer-events: none;
+}
+
+.help-overlay {
+  width: min(58rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 4rem);
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.help-overlay::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+
+.help-overlay h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.help-overlay h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+}
+
+.help-groups {
+  columns: 2 22rem;
+  column-gap: 2rem;
+  margin: 1rem 0;
+}
+
+.help-groups section {
+  break-inside: avoid;
+  margin-bottom: 1rem;
+}
+
+.help-groups dl {
+  margin: 0;
+}
+
+.help-row {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  gap: 0.75rem;
+  padding: 0.2rem 0;
+  font-size: 13px;
+}
+
+.help-row dt {
+  white-space: nowrap;
+}
+
+.help-row dd {
+  margin: 0;
+}
+
+.help-overlay .notice {
+  margin: 0.75rem 0 0;
+  color: var(--mod-fg);
+}
+
+.help-overlay footer {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.file-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem 0.25rem;
+}
+
+.file-filter input {
+  flex: 1;
+  min-width: 0;
+}
+
+.editor-keys {
+  font-size: 11px;
+}
+
+.editor-keys kbd {
+  font-size: 10px;
+}

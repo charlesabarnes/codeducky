@@ -8,12 +8,12 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "typecheck": "tsc -b",
-    "test": "vitest run && bun test server",
+    "test": "vitest run && bun test ./server/",
     "preview": "vite preview",
     "test:integration": "INTEGRATION=1 vitest run",
     "dev:server": "bun --watch server/index.ts",
     "start": "NODE_ENV=production bun server/index.ts",
-    "test:server": "bun test server"
+    "test:server": "bun test ./server/"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
