@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { FileContents, FileSide } from '../git/types'
 import { DiffTable, type LineAnnotations, type MovedLines, type ViewMode } from './DiffTable'
 import { buildLines } from './hunks'
+import { movedAt } from './moved'
 import { lineEndingChange, type LineEndingChange } from './lineEndings'
 import { useHighlight } from './useHighlight'
 import { createWordDiffer } from './wordDiff'
@@ -69,7 +70,14 @@ interface TextDiffProps extends DiffOptions {
 
 function TextDiff({ path, oldText, newText, mode, ignoreWhitespace, onShowWhitespace, moved, annotations }: TextDiffProps) {
   const lines = useMemo(() => buildLines(oldText, newText, { ignoreWhitespace }), [oldText, newText, ignoreWhitespace])
-  const words = useMemo(() => createWordDiffer(lines), [lines])
+  const ranges = moved?.ranges
+  const words = useMemo(
+    () =>
+      createWordDiffer(lines, (line) =>
+        line.kind === 'del' ? movedAt(ranges, 'old', line.oldNo!) !== null : movedAt(ranges, 'new', line.newNo!) !== null,
+      ),
+    [lines, ranges],
+  )
   const endings = useMemo(() => lineEndingChange(oldText, newText), [oldText, newText])
   const tokens = useHighlight(path, oldText, newText)
   if (lines.length === 0) return <p className="diff-notice muted">Empty file.</p>

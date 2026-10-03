@@ -21,7 +21,7 @@ const MIN_UNCHANGED_SHARE = 0.3
  * Pairs removed lines with added lines the way GitHub does: within each run of changes, the n-th
  * removed line goes with the n-th added line. Split view puts the same pairs side by side.
  */
-export function pairChangedLines(lines: readonly DiffLine[]): Map<DiffLine, DiffLine> {
+export function pairChangedLines(lines: readonly DiffLine[], skip?: (line: DiffLine) => boolean): Map<DiffLine, DiffLine> {
   const partners = new Map<DiffLine, DiffLine>()
   let i = 0
   while (i < lines.length) {
@@ -33,6 +33,10 @@ export function pairChangedLines(lines: readonly DiffLine[]): Map<DiffLine, Diff
     const adds: DiffLine[] = []
     while (i < lines.length && lines[i]!.kind === 'del') dels.push(lines[i++]!)
     while (i < lines.length && lines[i]!.kind === 'add') adds.push(lines[i++]!)
+    if (skip) {
+      dels.splice(0, dels.length, ...dels.filter((line) => !skip(line)))
+      adds.splice(0, adds.length, ...adds.filter((line) => !skip(line)))
+    }
     for (let k = 0; k < Math.min(dels.length, adds.length); k++) {
       partners.set(dels[k]!, adds[k]!)
       partners.set(adds[k]!, dels[k]!)
@@ -86,10 +90,11 @@ function bridgeSpaces(text: string, ranges: CharRange[]): CharRange[] {
 
 /**
  * Word changes for a line's side of a pair, memoised per line object: lines are only diffed when
- * they render, so a huge file costs nothing for the lines that stay off screen.
+ * they render, so a huge file costs nothing for the lines that stay off screen. Lines that `skip`
+ * accepts (moved blocks) are never paired.
  */
-export function createWordDiffer(lines: readonly DiffLine[]) {
-  const partners = pairChangedLines(lines)
+export function createWordDiffer(lines: readonly DiffLine[], skip?: (line: DiffLine) => boolean) {
+  const partners = pairChangedLines(lines, skip)
   const cache = new WeakMap<DiffLine, CharRange[] | null>()
   return (line: DiffLine): CharRange[] | null => {
     if (cache.has(line)) return cache.get(line)!

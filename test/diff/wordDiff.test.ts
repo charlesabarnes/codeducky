@@ -94,3 +94,13 @@ describe('layerRanges', () => {
     ])
   })
 })
+
+describe('pairChangedLines with skipped lines', () => {
+  it('pairs around lines that moved', () => {
+    const lines = buildLines('keep\nmoved away\nold value 1\n', 'keep\nnew value 2\n')
+    const moved = lines.find((line) => line.text === 'moved away')!
+    const partners = pairChangedLines(lines, (line) => line === moved)
+    expect(partners.get(lines.find((line) => line.text === 'old value 1')!)?.text).toBe('new value 2')
+    expect(partners.has(moved)).toBe(false)
+  })
+})
