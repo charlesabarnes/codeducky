@@ -1,5 +1,5 @@
 import { errorMessage } from '../github/errors'
-import { carryOverNotes } from '../review/carryOver'
+import { carryOverNotes } from '../review/carryOverNotes'
 import type { SkelbertDb } from './db'
 import type { Session } from './schema'
 

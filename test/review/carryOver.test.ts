@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Note } from '../../src/db/schema'
-import { carryOverNotes } from '../../src/review/carryOver'
+import { carryOverNotes } from '../../src/review/carryOverNotes'
 
 const note = (id: number, status: Note['status']): Note => ({
   id: `n${id}`,

@@ -1,5 +1,8 @@
 import type { Note, Session } from '../db/schema'
+import { fenceFor } from './fence'
 import { compareNotes, countNotes } from './summary'
+
+export { fenceFor }
 
 export interface ReportChecklist {
   title: string
@@ -18,11 +21,6 @@ export interface ReportInput {
 export const formatTimestamp = (ms: number) => `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')} UTC`
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
-
-export function fenceFor(text: string): string {
-  const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length))
-  return '`'.repeat(Math.max(3, longest + 1))
-}
 
 export function noteExcerpt(note: Note): string {
   const { line, before, text, after } = note.anchor

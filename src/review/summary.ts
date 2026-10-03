@@ -22,6 +22,14 @@ export function countNotes(notes: readonly Note[]): NoteCounts {
   return counts
 }
 
+/** Open notes per severity, worst first, for the review summary. */
+export function openBySeverity(notes: readonly Note[]): [NoteSeverity, number][] {
+  const open = notes.filter((note) => note.status === 'open')
+  return (['blocker', 'issue', 'suggestion', 'nit'] as const)
+    .map((severity): [NoteSeverity, number] => [severity, open.filter((note) => note.severity === severity).length])
+    .filter(([, count]) => count > 0)
+}
+
 export type StatusFilter = 'all' | 'active' | NoteStatus | 'possibly-resolved'
 
 export function matchesStatus(note: Note, filter: StatusFilter): boolean {
@@ -31,7 +39,7 @@ export function matchesStatus(note: Note, filter: StatusFilter): boolean {
   return note.status === filter
 }
 
-const SEVERITY_RANK: Record<NoteSeverity, number> = { blocker: 0, issue: 1, suggestion: 2, nit: 3 }
+const SEVERITY_RANK: Record<NoteSeverity, number> = { blocker: 0, issue: 1, suggestion: 2, nit: 4 }
 
 export function compareNotes(a: Note, b: Note): number {
   if (a.path !== b.path) return a.path < b.path ? -1 : 1
