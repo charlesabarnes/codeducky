@@ -53,6 +53,7 @@ export const KEYMAP = [
 
   { id: 'file.viewed', keys: ['v'], label: 'Toggle viewed, then go to the next unviewed file', group: 'View' },
   { id: 'view.mode', keys: ['s'], label: 'Switch split and unified', group: 'View' },
+  { id: 'view.whitespace', keys: ['w'], label: 'Hide or show whitespace changes', group: 'View' },
   { id: 'files.filter', keys: ['/'], label: 'Filter files', group: 'View' },
   { id: 'tab.files', keys: ['g f'], label: 'Files tab', group: 'View' },
   { id: 'tab.notes', keys: ['g n'], label: 'Notes tab', group: 'View' },

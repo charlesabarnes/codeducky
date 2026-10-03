@@ -1,18 +1,22 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { db } from '../../db/db'
 import { setViewed } from '../../db/fileViews'
 import { repoLabel } from '../../db/repos'
 import type { Note, OpenedRepo, Session } from '../../db/schema'
 import type { ViewMode } from '../../diff/DiffTable'
+import type { MoveTarget } from '../../diff/moved'
 import type { FileChange, FileStats } from '../../git/types'
+import { orderFiles, riskOf, type Risk } from '../../review/order'
 import { contentHash, viewedPaths } from '../../review/viewed'
 import { SessionChecklists } from '../checklists/SessionChecklists'
 import { useChecklistProgress } from '../checklists/useChecklistProgress'
 import { BaseBanner } from '../github/BaseBanner'
 import { PushDialog } from '../github/PushDialog'
 import { useBaseFreshness } from '../github/useBaseFreshness'
+import { CiChip } from '../ci/CiChip'
+import { useCiStatus } from '../ci/useCiStatus'
 import { repoRef } from '../../github/connect'
 import { ClaudePass } from '../claude/ClaudePass'
 import { exportSessionReport } from '../history/exportReport'
@@ -23,24 +27,26 @@ import { NotesPanel } from '../notes/NotesPanel'
 import { FileList, type FileNoteCount } from './FileList'
 import { filterFiles, nextUnviewed, stepFile } from './fileNav'
 import { FilePane, OrphanPane, type NoteFocus } from './FilePane'
+import { currentPath, renamedPaths } from './renames'
 import { useReanchor } from './useReanchor'
 import { useSessionScan } from './useSessionScan'
+import { useViewPrefs } from './useViewPrefs'
 import { repoPath } from '../../app/paths'
 
-const VIEW_MODE_KEY = 'skelbert.viewMode'
 const EMPTY_NOTES: Note[] = []
 
 type Tab = 'files' | 'notes' | 'checklists'
 const TAB_SHORTCUTS = { files: 'tab.files', notes: 'tab.notes', checklists: 'tab.checklists' } as const
 
-function countByFile(notes: Note[]): Map<string, FileNoteCount> {
+function countByFile(notes: Note[], renamed: ReadonlyMap<string, string>): Map<string, FileNoteCount> {
   const counts = new Map<string, FileNoteCount>()
   for (const note of notes) {
     if (note.status !== 'open') continue
-    const count = counts.get(note.path) ?? { open: 0, lost: 0 }
+    const path = currentPath(note.path, renamed)
+    const count = counts.get(path) ?? { open: 0, lost: 0 }
     count.open++
     if (note.anchorLost) count.lost++
-    counts.set(note.path, count)
+    counts.set(path, count)
   }
   return counts
 }
@@ -50,9 +56,8 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
   const scan = useSessionScan(repo.dirHandle, session.baseSha, session.baseSource === 'github' ? repoRef(repo) : null)
   useReanchor(sessionId, scan.files)
   const [params, setParams] = useSearchParams()
-  const [mode, setMode] = useState<ViewMode>(() =>
-    localStorage.getItem(VIEW_MODE_KEY) === 'split' ? 'split' : 'unified',
-  )
+  const prefs = useViewPrefs()
+  const { mode, ignoreWhitespace, order } = prefs
   const [generation, setGeneration] = useState(0)
   const [tab, setTab] = useState<Tab>('files')
   const [focus, setFocus] = useState<NoteFocus | null>(null)
@@ -68,30 +73,57 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
   const views = useLiveQuery(() => db.fileViews.where({ sessionId }).toArray(), [sessionId])
   const checklists = useChecklistProgress(sessionId, repo.id!)
 
+  const ci = useCiStatus(repo, scan.files, generation)
+
   const viewed = useMemo(() => viewedPaths(scan.files ?? [], views ?? []), [scan.files, views])
-  const noteCounts = useMemo(() => countByFile(notes), [notes])
-  const selectedPath = params.get('file') ?? scan.files?.[0]?.path ?? null
+  const renamed = useMemo(() => renamedPaths(scan.files), [scan.files])
+  const noteCounts = useMemo(() => countByFile(notes, renamed), [notes, renamed])
+  const risks = useMemo(() => {
+    if (order !== 'risk' || !scan.files) return null
+    return new Map<string, Risk>(
+      scan.files.map((file) => [file.path, riskOf(file, { stats: scan.stats[file.path], openNotes: noteCounts.get(file.path)?.open })]),
+    )
+  }, [order, scan.files, scan.stats, noteCounts])
+  const orderedFiles = useMemo(
+    () =>
+      orderFiles(scan.files ?? [], order, (file) => ({ stats: scan.stats[file.path], openNotes: noteCounts.get(file.path)?.open })),
+    [scan.files, scan.stats, order, noteCounts],
+  )
+  const requestedPath = params.get('file')
+  const selectedPath = requestedPath === null ? (orderedFiles[0]?.path ?? null) : currentPath(requestedPath, renamed)
   const selected = useMemo(
     () => scan.files?.find((file) => file.path === selectedPath) ?? null,
     [scan.files, selectedPath],
   )
-  const fileNotes = useMemo(() => notes.filter((note) => note.path === selectedPath), [notes, selectedPath])
-  const shownFiles = useMemo(() => filterFiles(scan.files ?? [], filter), [scan.files, filter])
+  const fileNotes = useMemo(
+    () => notes.filter((note) => currentPath(note.path, renamed) === selectedPath),
+    [notes, selectedPath, renamed],
+  )
+  const shownFiles = useMemo(() => filterFiles(orderedFiles, filter), [orderedFiles, filter])
   const shownPaths = shownFiles.map((file) => file.path)
 
-  const changeMode = (next: ViewMode) => {
-    setMode(next)
-    localStorage.setItem(VIEW_MODE_KEY, next)
-  }
+  const changeMode = (next: ViewMode) => prefs.setMode(next)
   const rescan = () => {
     scan.rescan()
     setGeneration((n) => n + 1)
   }
   const selectFile = (path: string) => setParams({ file: path }, { replace: true })
-  const goToFile = (path: string, target?: NavRequest['target']) => {
+  const goToFile = (path: string, target?: NavRequest['target'], scroll?: NavRequest['scroll']) => {
     selectFile(path)
-    setNavRequest(target ? { at: Date.now(), target } : null)
+    setNavRequest(target ? { at: Date.now(), target, scroll } : null)
     announce(`File ${path}`)
+  }
+  const openMoved = useCallback(
+    (target: MoveTarget) => {
+      setParams({ file: target.path }, { replace: true })
+      setNavRequest({ at: Date.now(), target: { side: target.side, line: target.line }, scroll: 'center' })
+      announce(`Moved block in ${target.path}, line ${target.line}`)
+    },
+    [setParams, announce],
+  )
+  const toggleWhitespace = (ignore: boolean) => {
+    prefs.setIgnoreWhitespace(ignore)
+    announce(ignore ? 'Whitespace changes hidden' : 'Whitespace changes shown', { visible: true })
   }
   const onBoundary = (direction: 1 | -1) => {
     const target = stepFile(shownPaths, selectedPath, direction, (path) => viewed.has(path))
@@ -141,6 +173,7 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
       changeMode(next)
       announce(next === 'split' ? 'Split view' : 'Unified view', { visible: true })
     },
+    'view.whitespace': () => toggleWhitespace(!ignoreWhitespace),
     'files.filter': () => {
       setTab('files')
       requestAnimationFrame(() => filterRef.current?.select())
@@ -180,6 +213,12 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
             {scan.files && <Totals files={scan.files} stats={scan.stats} />}
           </div>
           {scan.files && scan.files.length > 0 && <ViewedProgress viewed={viewed.size} total={scan.files.length} />}
+          <CiChip view={ci} />
+          {scan.renamesLimited && (
+            <p className="muted" title="Too many added and deleted files to compare their contents">
+              Only identical renames were detected.
+            </p>
+          )}
           {exportError && <p className="error">{exportError}</p>}
           <ClaudePass sessionId={sessionId} repo={repo} files={scan.files} viewed={viewed} />
         </div>
@@ -207,6 +246,9 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
             viewed={viewed}
             onSelect={(path) => goToFile(path)}
             onToggleViewed={toggleViewed}
+            order={order}
+            onOrderChange={prefs.setOrder}
+            risks={risks}
           />
         )}
         {tab === 'notes' && <NotesPanel notes={notes} selectedId={focus?.id ?? null} onSelect={jumpTo} />}
@@ -222,6 +264,11 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
             notes={fileNotes}
             mode={mode}
             onModeChange={changeMode}
+            ignoreWhitespace={ignoreWhitespace}
+            onIgnoreWhitespaceChange={toggleWhitespace}
+            moved={scan.moved[selected.path]}
+            onOpenMoved={openMoved}
+            ci={ci}
             generation={generation}
             viewed={viewed.has(selected.path)}
             onToggleViewed={() => toggleViewed(selected)}
@@ -235,7 +282,7 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
           !scan.scanning && <p className="diff-notice muted">Select a file.</p>
         )}
       </section>
-      {pushOpen && <PushDialog session={session} repo={repo} notes={notes} onClose={() => setPushOpen(false)} />}
+      {pushOpen && <PushDialog session={session} repo={repo} notes={notes} files={scan.files} onClose={() => setPushOpen(false)} />}
     </div>
   )
 }
