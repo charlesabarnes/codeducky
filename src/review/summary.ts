@@ -39,7 +39,7 @@ export function matchesStatus(note: Note, filter: StatusFilter): boolean {
   return note.status === filter
 }
 
-const SEVERITY_RANK: Record<NoteSeverity, number> = { blocker: 0, issue: 1, suggestion: 2, nit: 4 }
+const SEVERITY_RANK: Record<NoteSeverity, number> = { blocker: 0, issue: 1, suggestion: 2, nit: 3 }
 
 export function compareNotes(a: Note, b: Note): number {
   if (a.path !== b.path) return a.path < b.path ? -1 : 1
