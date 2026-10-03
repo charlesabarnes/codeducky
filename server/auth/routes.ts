@@ -1,10 +1,12 @@
 import { Hono } from 'hono'
 import { clientIp, requireToken, type AuthEnv } from './middleware'
 import { createFailureLimiter, passphraseMatches, type FailureLimiter } from './passphrase'
+import type { OAuthStore } from './oauth/store'
 import type { TokenStore } from './tokens'
 
 export interface AuthRoutesOptions {
   tokens: TokenStore
+  oauth?: OAuthStore
   passphrase: string
   limiter?: FailureLimiter
 }
@@ -20,6 +22,7 @@ function tokenName(value: unknown, fallback: string): string | null {
 
 export function authRoutes({
   tokens,
+  oauth,
   passphrase,
   limiter = createFailureLimiter({ perClient: 10, global: 100, windowMs: 15 * 60_000 }),
 }: AuthRoutesOptions) {
@@ -63,9 +66,26 @@ export function authRoutes({
     return next()
   })
 
+  /** OAuth clients are listed once per grant (approval) rather than per short-lived access token. */
   ownerOnly.get('/', (c) => {
     const current = c.get('principal').id
-    return c.json({ tokens: tokens.list().map((info) => ({ ...info, current: info.id === current })) })
+    const own = tokens
+      .list()
+      .filter((info) => info.grantId === null)
+      .map((info) => ({ ...info, current: info.id === current }))
+    const grants = (oauth?.listGrants() ?? []).map((grant) => ({
+      id: grant.id,
+      name: grant.clientName,
+      kind: 'oauth' as const,
+      createdAt: grant.createdAt,
+      lastUsedAt: grant.lastUsedAt,
+      expiresAt: grant.expiresAt,
+      clientId: grant.clientId,
+      scope: grant.scope,
+      grantId: grant.id,
+      current: false,
+    }))
+    return c.json({ tokens: [...own, ...grants].sort((a, b) => b.createdAt - a.createdAt) })
   })
 
   ownerOnly.post('/', async (c) => {
@@ -77,7 +97,9 @@ export function authRoutes({
   })
 
   ownerOnly.delete('/:id', (c) => {
-    return tokens.revoke(c.req.param('id')) ? c.json({ ok: true }) : c.json({ error: 'not_found' }, 404)
+    const id = c.req.param('id')
+    const revoked = tokens.revoke(id) || (oauth?.revokeGrant(id) ?? false)
+    return revoked ? c.json({ ok: true }) : c.json({ error: 'not_found' }, 404)
   })
 
   routes.route('/tokens', ownerOnly)

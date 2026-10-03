@@ -34,6 +34,46 @@ export const MIGRATIONS: { name: string; sql: string }[] = [
       );
     `,
   },
+  {
+    name: '0002_oauth',
+    sql: `
+      CREATE TABLE oauth_clients (
+        id TEXT PRIMARY KEY,
+        secret_hash TEXT,
+        name TEXT NOT NULL,
+        redirect_uris TEXT NOT NULL,
+        auth_method TEXT NOT NULL,
+        grant_types TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE oauth_codes (
+        code_hash TEXT PRIMARY KEY,
+        client_id TEXT NOT NULL,
+        redirect_uri TEXT NOT NULL,
+        code_challenge TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        resource TEXT NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE oauth_grants (
+        id TEXT PRIMARY KEY,
+        client_id TEXT NOT NULL,
+        refresh_hash TEXT NOT NULL UNIQUE,
+        previous_refresh_hash TEXT,
+        scope TEXT NOT NULL,
+        resource TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        refreshed_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+      CREATE INDEX oauth_grants_previous ON oauth_grants (previous_refresh_hash);
+
+      ALTER TABLE tokens ADD COLUMN grant_id TEXT;
+      CREATE INDEX tokens_grant ON tokens (grant_id);
+    `,
+  },
 ]
 
 export function openDatabase(path: string): Database {

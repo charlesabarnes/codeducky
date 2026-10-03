@@ -4,7 +4,7 @@ import { hashToken, newToken } from './passphrase'
 
 /**
  * Every bearer credential lives in one table: PWA sign-ins (`session`), named tokens minted in
- * Settings (`api`), and later OAuth access tokens (`oauth`). Only hashes are stored, and every
+ * Settings (`api`), and OAuth access tokens (`oauth`, see oauth/store.ts). Only hashes are stored, and every
  * request is checked through `verify`, whatever issued the token.
  */
 export type TokenKind = 'session' | 'api' | 'oauth'
@@ -18,6 +18,8 @@ export interface TokenInfo {
   expiresAt: number | null
   clientId: string | null
   scope: string | null
+  /** The OAuth grant an access token belongs to; revoking the grant revokes its tokens. */
+  grantId: string | null
 }
 
 export interface IssueOptions {
@@ -26,6 +28,7 @@ export interface IssueOptions {
   expiresAt?: number | null
   clientId?: string | null
   scope?: string | null
+  grantId?: string | null
 }
 
 interface Row {
@@ -37,9 +40,10 @@ interface Row {
   expires_at: number | null
   client_id: string | null
   scope: string | null
+  grant_id: string | null
 }
 
-const COLUMNS = 'id, name, kind, created_at, last_used_at, expires_at, client_id, scope'
+const COLUMNS = 'id, name, kind, created_at, last_used_at, expires_at, client_id, scope, grant_id'
 /** last_used_at is only rewritten when it is older than this, to avoid a write per request. */
 const TOUCH_AFTER_MS = 60_000
 
@@ -52,6 +56,7 @@ const toInfo = (row: Row): TokenInfo => ({
   expiresAt: row.expires_at,
   clientId: row.client_id,
   scope: row.scope,
+  grantId: row.grant_id,
 })
 
 export function createTokenStore(db: Database, now: () => number = Date.now) {
@@ -68,10 +73,20 @@ export function createTokenStore(db: Database, now: () => number = Date.now) {
         expires_at: options.expiresAt ?? null,
         client_id: options.clientId ?? null,
         scope: options.scope ?? null,
+        grant_id: options.grantId ?? null,
       }
-      db.query(
-        `INSERT INTO tokens (token_hash, ${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(hashToken(token), row.id, row.name, row.kind, row.created_at, null, row.expires_at, row.client_id, row.scope)
+      db.query(`INSERT INTO tokens (token_hash, ${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        hashToken(token),
+        row.id,
+        row.name,
+        row.kind,
+        row.created_at,
+        null,
+        row.expires_at,
+        row.client_id,
+        row.scope,
+        row.grant_id,
+      )
       return { token, info: toInfo(row) }
     },
 
@@ -97,6 +112,18 @@ export function createTokenStore(db: Database, now: () => number = Date.now) {
 
     revoke(id: string): boolean {
       return db.query('DELETE FROM tokens WHERE id = ?').run(id).changes > 0
+    },
+
+    revokeGrant(grantId: string): number {
+      return db.query('DELETE FROM tokens WHERE grant_id = ?').run(grantId).changes
+    },
+
+    /** The most recent use of any access token issued under a grant. */
+    grantLastUsed(grantId: string): number | null {
+      return (
+        db.query<{ at: number | null }, [string]>('SELECT MAX(last_used_at) AS at FROM tokens WHERE grant_id = ?').get(grantId)?.at ??
+        null
+      )
     },
   }
 }

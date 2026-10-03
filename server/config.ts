@@ -8,6 +8,7 @@ export interface Config {
   webDist: string
   production: boolean
   passphrase: string
+  publicUrl?: string
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -25,5 +26,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     webDist: resolve(env.WEB_DIST ?? resolve(import.meta.dirname, '../dist')),
     production,
     passphrase,
+    publicUrl: env.SKELBERT_PUBLIC_URL || undefined,
   }
 }

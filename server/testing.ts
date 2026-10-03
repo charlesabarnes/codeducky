@@ -37,3 +37,26 @@ export async function login(app: App, name?: string): Promise<string> {
   if (res.status !== 200) throw new Error(`login failed: ${res.status}`)
   return ((await res.json()) as { token: string }).token
 }
+
+export const TEST_ORIGIN = 'http://skelbert.test'
+
+/** A fetch that answers from the app in process, for SDK clients. */
+export function appFetch(app: App): typeof fetch {
+  return ((input: string | URL | Request, init?: RequestInit) => {
+    const url = input instanceof Request ? input.url : input.toString()
+    return Promise.resolve(app.request(url, input instanceof Request ? input : init))
+  }) as typeof fetch
+}
+
+/** An MCP SDK client connected to the app's /mcp endpoint with a bearer token. */
+export async function mcpClient(app: App, token: string) {
+  const { Client } = await import('@modelcontextprotocol/sdk/client/index.js')
+  const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js')
+  const client = new Client({ name: 'skelbert-test', version: '1.0.0' })
+  const transport = new StreamableHTTPClientTransport(new URL(`${TEST_ORIGIN}/mcp`), {
+    fetch: appFetch(app),
+    requestInit: { headers: { Authorization: `Bearer ${token}` } },
+  })
+  await client.connect(transport)
+  return client
+}

@@ -6,7 +6,12 @@ import { openDatabase } from './db'
 const config = loadConfig()
 const db = openDatabase(config.dbPath)
 if (!existsSync(config.webDist)) console.warn(`No built app at ${config.webDist}; serving the API only`)
-const { app } = createApp({ db, passphrase: config.passphrase, webDist: existsSync(config.webDist) ? config.webDist : undefined })
+const { app } = createApp({
+  db,
+  passphrase: config.passphrase,
+  publicUrl: config.publicUrl,
+  webDist: existsSync(config.webDist) ? config.webDist : undefined,
+})
 
 const server = Bun.serve({ port: config.port, fetch: app.fetch })
 console.log(`skelbert listening on http://localhost:${server.port}`)
