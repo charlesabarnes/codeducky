@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router'
+import { SyncIndicator } from '../features/sync/SyncIndicator'
 
 export function Layout() {
   return (
@@ -15,6 +16,7 @@ export function Layout() {
           <NavLink to="/checklists">Checklists</NavLink>
           <NavLink to="/settings">Settings</NavLink>
         </nav>
+        <SyncIndicator />
       </header>
       <main className="app-main">
         <Outlet />

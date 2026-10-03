@@ -5,7 +5,7 @@ import { NoteCard } from './NoteCard'
 interface LostNotesProps {
   notes: Note[]
   heading: string
-  focusedId?: number | null
+  focusedId?: string | null
   readOnly?: boolean
 }
 

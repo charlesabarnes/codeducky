@@ -1,0 +1,90 @@
+.app-header .sync-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.app-header .sync-indicator:hover {
+  color: inherit;
+}
+
+.sync-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.sync-indicator.ok .sync-dot {
+  background: var(--add-fg);
+  opacity: 1;
+}
+
+.sync-indicator.busy .sync-dot {
+  background: var(--accent);
+  opacity: 1;
+  animation: sync-pulse 1s ease-in-out infinite alternate;
+}
+
+.sync-indicator.warn .sync-dot {
+  background: var(--mod-fg);
+  opacity: 1;
+}
+
+.app-header .sync-indicator.error {
+  color: var(--del-fg);
+}
+
+.sync-indicator.error .sync-dot {
+  background: var(--del-fg);
+  opacity: 1;
+}
+
+@keyframes sync-pulse {
+  from {
+    opacity: 0.35;
+  }
+}
+
+.sync-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.token-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.token-table th,
+.token-table td {
+  text-align: left;
+  padding: 0.35rem 0.5rem 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.minted-token {
+  word-break: break-all;
+  user-select: all;
+}
+
+.note-resolution {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-left: 3px solid var(--add-fg);
+  background: var(--add-bg);
+  font-size: 0.9rem;
+}
+
+.note-resolution header {
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+}

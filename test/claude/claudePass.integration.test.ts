@@ -75,7 +75,7 @@ describe('Claude pass on a real repository', () => {
   it('turns findings into anchored suggestions and skips them on re-runs after edits', async () => {
     const db = new SkelbertDb('claude-pass-checkpoint')
     try {
-      const sessionId = await startOrResumeSession(db, { repoId: 1, branch: 'feature/log', headSha: 'h', baseSha })
+      const sessionId = await startOrResumeSession(db, { repoId: 'r1', branch: 'feature/log', headSha: 'h', baseSha })
       const fake = fakeFetch(reviewer)
       const client = createClaudeClient({ apiKey: 'sk-test', fetch: fake.fetch, maxRetries: 0 })
       const deps: PassDeps = {

@@ -16,7 +16,7 @@ afterEach(async () => {
   await Promise.all(opened.splice(0).map((db) => db.delete()))
 })
 
-const start = { repoId: 1, branch: 'feature', headSha: 'h1', baseSha: 'b1' }
+const start = { repoId: 'r1', branch: 'feature', headSha: 'h1', baseSha: 'b1' }
 const anchor = { line: 3, side: 'new' as const, text: 'x', before: [], after: [] }
 
 describe('sessions', () => {
@@ -38,7 +38,7 @@ describe('sessions', () => {
     const other = await startOrResumeSession(db, { ...start, branch: 'other' })
     expect(await db.notes.where({ sessionId: other }).count()).toBe(0)
 
-    const history = await repoHistory(db, 1)
+    const history = await repoHistory(db, 'r1')
     expect(history.map((entry) => [entry.session.id, entry.counts.byStatus.open, entry.counts.byStatus.resolved])).toEqual([
       [other, 0, 0],
       [second, 1, 0],
@@ -58,9 +58,9 @@ describe('sessions', () => {
     const legacy = track(new Dexie('migrate'))
     legacy.version(1).stores({ notes: '++id, sessionId, [sessionId+path], status' })
     await legacy.table('notes').bulkAdd([
-      { sessionId: 1, path: 'a', severity: 'info' },
-      { sessionId: 1, path: 'b', severity: 'warning' },
-      { sessionId: 1, path: 'c', severity: 'blocker' },
+      { sessionId: 's1', path: 'a', severity: 'info' },
+      { sessionId: 's1', path: 'b', severity: 'warning' },
+      { sessionId: 's1', path: 'c', severity: 'blocker' },
     ])
     legacy.close()
 

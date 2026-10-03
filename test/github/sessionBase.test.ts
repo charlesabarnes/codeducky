@@ -12,7 +12,7 @@ describe('GitHub base on a session', () => {
   it('goes back to the local base when the session is resumed with a freshly resolved base', async () => {
     const db = new SkelbertDb('github-base')
     opened.push(db)
-    const start = { repoId: 1, branch: 'feature', headSha: 'h1', baseSha: 'local-mb' }
+    const start = { repoId: 'r1', branch: 'feature', headSha: 'h1', baseSha: 'local-mb' }
     const id = await startOrResumeSession(db, start)
     await db.sessions.update(id, { baseSha: 'gh-mb', baseSource: 'github', githubBase: { branch: 'main', tipSha: 't' } })
 

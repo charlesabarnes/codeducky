@@ -5,7 +5,7 @@ import { repoHistory } from '../../db/history'
 import { repoLabel } from '../../db/repos'
 
 export function HistoryPage() {
-  const repoId = Number(useParams().repoId)
+  const repoId = useParams().repoId ?? ''
   const data = useLiveQuery(async () => {
     const repo = await db.repos.get(repoId)
     return { repo, history: repo ? await repoHistory(db, repoId) : [] }

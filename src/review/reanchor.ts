@@ -17,7 +17,7 @@ export function reanchor(anchor: NoteAnchor, lines: readonly NumberedLine[] | nu
 export type LineSource = (path: string, side: NoteSide) => readonly NumberedLine[] | null
 
 export interface NoteUpdate extends Reanchored {
-  id: number
+  id: string
 }
 
 const sameAnchor = (a: NoteAnchor, b: NoteAnchor) =>

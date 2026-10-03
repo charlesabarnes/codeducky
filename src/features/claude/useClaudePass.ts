@@ -3,7 +3,7 @@ import type { PassProgress } from '../../claude/pass'
 import type { FileChange } from '../../git/types'
 
 interface RunOptions {
-  sessionId: number
+  sessionId: string
   apiKey: string
   model: string
   instructions?: string

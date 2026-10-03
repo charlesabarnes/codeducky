@@ -19,7 +19,7 @@ afterEach(async () => {
   await Promise.all(opened.splice(0).map((db) => db.delete()))
 })
 
-const start = { repoId: 1, branch: 'feature', headSha: 'h1', baseSha: 'b1' }
+const start = { repoId: 'r1', branch: 'feature', headSha: 'h1', baseSha: 'b1' }
 const anchor = { line: 3, side: 'new' as const, text: '  console.log(sum)', before: ['a'], after: ['b'] }
 const draft = (overrides: Partial<SuggestionDraft> = {}): SuggestionDraft => ({
   path: 'src/cart.ts',
@@ -114,14 +114,13 @@ describe('suggestions', () => {
   it('stores trimmed repo instructions on the repo', async () => {
     const db = open('suggest-instructions')
     const repoId = (await db.repos.add({
-      dirHandle: {} as FileSystemDirectoryHandle,
       owner: 'me',
       name: 'repo',
       folderName: 'repo',
       baseBranch: 'main',
       checklistIds: [],
       lastOpenedAt: 0,
-    })) as number
+    })) as string
     await saveRepoInstructions(db, repoId, '  never flag onboarding code \n')
     expect((await db.repos.get(repoId))?.claudeInstructions).toBe('never flag onboarding code')
   })

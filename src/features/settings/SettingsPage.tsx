@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { db } from '../../db/db'
 import { DEFAULT_CLAUDE_MODEL, loadSettings, saveSettings, type SettingsInput } from '../../db/settings'
 import { TokenTest } from '../github/TokenTest'
+import { ServerSection } from '../sync/ServerSection'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -69,6 +70,7 @@ export function SettingsPage() {
           {saveState === 'error' && <span className="error">Could not save settings</span>}
         </div>
       </form>
+      <ServerSection />
     </section>
   )
 }

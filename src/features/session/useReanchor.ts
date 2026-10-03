@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import type { FileChange } from '../../git/types'
 import { reanchorSession } from '../notes/reanchorSession'
 
-export function useReanchor(sessionId: number, files: FileChange[] | null): void {
+export function useReanchor(sessionId: string, files: FileChange[] | null): void {
   useEffect(() => {
     if (!files) return
     let cancelled = false

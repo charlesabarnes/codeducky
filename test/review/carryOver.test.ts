@@ -3,8 +3,8 @@ import type { Note } from '../../src/db/schema'
 import { carryOverNotes } from '../../src/review/carryOver'
 
 const note = (id: number, status: Note['status']): Note => ({
-  id,
-  sessionId: 1,
+  id: `n${id}`,
+  sessionId: 's1',
   path: 'a',
   anchor: { line: 1, side: 'new', text: 'x', before: [], after: [] },
   body: `note ${id}`,
@@ -18,10 +18,10 @@ const note = (id: number, status: Note['status']): Note => ({
 
 describe('carryOverNotes', () => {
   it('copies open notes into the new session without ids or GitHub links', () => {
-    const carried = carryOverNotes([note(1, 'open'), note(2, 'resolved'), note(3, 'dismissed')], 2, 100)
+    const carried = carryOverNotes([note(1, 'open'), note(2, 'resolved'), note(3, 'dismissed')], 's2', 100)
     expect(carried).toEqual([
       {
-        sessionId: 2,
+        sessionId: 's2',
         path: 'a',
         anchor: { line: 1, side: 'new', text: 'x', before: [], after: [] },
         body: 'note 1',
@@ -30,7 +30,7 @@ describe('carryOverNotes', () => {
         source: 'me',
         createdAt: 5,
         updatedAt: 100,
-        carriedFrom: 1,
+        carriedFrom: 'n1',
       },
     ])
   })

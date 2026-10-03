@@ -1,22 +1,30 @@
 import { Dexie, type EntityTable, type Table } from 'dexie'
+import { migrateToStringIds, restoreFromStaging } from '../sync/migrateIds'
+import { syncMiddleware } from '../sync/middleware'
+import type { MetaEntry, OutboxEntry, RejectedEntry } from '../sync/types'
 import type {
   Checklist,
   ChecklistState,
   FileView,
   Note,
   Repo,
+  RepoHandle,
   Session,
   Settings,
 } from './schema'
 
 export class SkelbertDb extends Dexie {
   repos!: EntityTable<Repo, 'id'>
+  repoHandles!: Table<RepoHandle, string>
   sessions!: EntityTable<Session, 'id'>
-  fileViews!: Table<FileView, [number, string]>
+  fileViews!: Table<FileView, [string, string]>
   notes!: EntityTable<Note, 'id'>
   checklists!: EntityTable<Checklist, 'id'>
-  checklistState!: Table<ChecklistState, [number, string]>
+  checklistState!: Table<ChecklistState, [string, string]>
   settings!: EntityTable<Settings, 'id'>
+  outbox!: Table<OutboxEntry, string>
+  rejected!: Table<RejectedEntry, string>
+  syncMeta!: Table<MetaEntry, string>
 
   constructor(name = 'skelbert') {
     super(name)
@@ -41,6 +49,38 @@ export class SkelbertDb extends Dexie {
           note.updatedAt ??= note.createdAt
         }),
     )
+    // Numeric auto-increment ids become global string ids. IndexedDB cannot change a primary key
+    // in place, so v3 copies into staging tables (rewriting references) and drops the originals,
+    // and v4 recreates them and copies back.
+    this.version(3)
+      .stores({
+        repos: null,
+        sessions: null,
+        notes: null,
+        checklists: null,
+        stagingRepos: 'id',
+        stagingSessions: 'id',
+        stagingNotes: 'id',
+        stagingChecklists: 'id',
+        repoHandles: 'repoId',
+        outbox: 'key, changedAt',
+        rejected: 'key, at',
+        syncMeta: 'key',
+      })
+      .upgrade(migrateToStringIds)
+    this.version(4)
+      .stores({
+        repos: 'id, [owner+name], lastOpenedAt',
+        sessions: 'id, repoId, [repoId+branch], startedAt, status',
+        notes: 'id, sessionId, [sessionId+path], status',
+        checklists: 'id, scope',
+        stagingRepos: null,
+        stagingSessions: null,
+        stagingNotes: null,
+        stagingChecklists: null,
+      })
+      .upgrade(restoreFromStaging)
+    this.use(syncMiddleware)
   }
 }
 

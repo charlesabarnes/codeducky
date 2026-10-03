@@ -36,8 +36,8 @@ const lineOf = (lines: NumberedLine[], text: string) => lines.find((entry) => en
 let nextId = 1
 function note(path: string, lines: NumberedLine[], line: number, extra: Partial<Note> = {}, side: 'old' | 'new' = 'new'): Note {
   return {
-    id: nextId++,
-    sessionId: 1,
+    id: String(nextId++),
+    sessionId: 's1',
     path,
     anchor: createAnchor(lines, line, side),
     body: 'Check this',
@@ -138,21 +138,21 @@ describe('pushing a pending review', () => {
     const db = new SkelbertDb('push')
     opened.push(db)
     const inline = await addNote(db, {
-      sessionId: 7,
+      sessionId: 's7',
       path: TLS,
       anchor: createAnchor(tlsHead, lineOf(tlsHead, 'export function dnsProvider'), 'new'),
       body: 'Exported only for tests?',
       severity: 'suggestion',
     })
     const outside = await addNote(db, {
-      sessionId: 7,
+      sessionId: 's7',
       path: TLS,
       anchor: createAnchor(tlsHead, lineOf(tlsHead, '      return acmeCertificates(d);'), 'new'),
       body: 'Unrelated',
       severity: 'nit',
     })
     const resolved = await addNote(db, {
-      sessionId: 7,
+      sessionId: 's7',
       path: TLS,
       anchor: createAnchor(tlsHead, 4, 'new'),
       body: 'Done already',

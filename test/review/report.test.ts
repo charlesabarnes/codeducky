@@ -3,8 +3,8 @@ import type { Note, Session } from '../../src/db/schema'
 import { buildReport, noteExcerpt, reportFileName } from '../../src/review/report'
 
 const session: Session = {
-  id: 7,
-  repoId: 1,
+  id: 's7',
+  repoId: 'r1',
   branch: 'feature/notes',
   headSha: 'abcdef1234567890',
   baseSha: '1234567abcdef',
@@ -14,8 +14,8 @@ const session: Session = {
 }
 
 const note = (overrides: Partial<Note>): Note => ({
-  id: 1,
-  sessionId: 7,
+  id: 'n1',
+  sessionId: 's7',
   path: 'src/a.ts',
   anchor: { line: 12, side: 'new', text: 'const x = 1', before: ['// a', '// b'], after: ['export { x }'] },
   body: 'Rename **x**.',
@@ -43,9 +43,9 @@ describe('report', () => {
       ],
       checklists: [{ title: 'Before push', items: [{ text: 'Tests pass', checked: true }, { text: 'No logs', checked: false }] }],
       notes: [
-        note({ id: 2, path: 'src/b.ts', severity: 'nit', status: 'resolved', body: 'Typo' }),
-        note({ id: 1 }),
-        note({ id: 3, severity: 'blocker', anchorLost: true, body: 'Null check', anchor: { line: 3, side: 'old', text: 'if (x) {', before: [], after: [] } }),
+        note({ id: 'n2', path: 'src/b.ts', severity: 'nit', status: 'resolved', body: 'Typo' }),
+        note({ id: 'n1' }),
+        note({ id: 'n3', severity: 'blocker', anchorLost: true, body: 'Null check', anchor: { line: 3, side: 'old', text: 'if (x) {', before: [], after: [] } }),
       ],
     })
     expect(markdown).toBe(

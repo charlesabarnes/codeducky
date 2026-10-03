@@ -7,7 +7,7 @@ export interface SessionSummary {
   counts: NoteCounts
 }
 
-export async function repoHistory(db: SkelbertDb, repoId: number): Promise<SessionSummary[]> {
+export async function repoHistory(db: SkelbertDb, repoId: string): Promise<SessionSummary[]> {
   const sessions = await db.sessions.where({ repoId }).toArray()
   sessions.sort((a, b) => b.startedAt - a.startedAt)
   return Promise.all(

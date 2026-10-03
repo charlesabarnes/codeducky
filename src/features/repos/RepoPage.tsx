@@ -2,28 +2,25 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { db } from '../../db/db'
-import type { Repo } from '../../db/schema'
+import type { OpenedRepo } from '../../db/schema'
 import { activeSession, startNewSession, startOrResumeSession } from '../../db/sessions'
 import { gitService } from '../../git/client'
 import type { RepoInfo } from '../../git/types'
 import { githubDefaultBase } from '../github/defaultBase'
-import { PermissionGate } from './PermissionGate'
+import { RepoFolderGate } from './RepoFolderGate'
 
 export function RepoPage() {
-  const repoId = Number(useParams().repoId)
-  const repo = useLiveQuery(() => db.repos.get(repoId), [repoId])
+  const repoId = useParams().repoId ?? ''
+  const repo = useLiveQuery(async () => (await db.repos.get(repoId)) ?? null, [repoId])
 
   if (repo === undefined) return <p className="page muted">Loading…</p>
-  return (
-    <PermissionGate handle={repo.dirHandle}>
-      <RepoDetails repo={repo} />
-    </PermissionGate>
-  )
+  if (repo === null) return <p className="page error">Repo not found.</p>
+  return <RepoFolderGate repo={{ ...repo, id: repoId }}>{(opened) => <RepoDetails repo={opened} />}</RepoFolderGate>
 }
 
-function RepoDetails({ repo }: { repo: Repo }) {
+function RepoDetails({ repo }: { repo: OpenedRepo }) {
   const navigate = useNavigate()
-  const repoId = repo.id!
+  const repoId = repo.id
   const [info, setInfo] = useState<RepoInfo | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)

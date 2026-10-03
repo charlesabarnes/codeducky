@@ -7,8 +7,8 @@ import { reanchor, reanchorNotes } from '../../src/review/reanchor'
 const base = numberLines('one\ntwo\nthree\nfour\nfive\nsix\nseven\n')
 
 const note = (id: number, line: number, extra: Partial<Note> = {}): Note => ({
-  id,
-  sessionId: 1,
+  id: String(id),
+  sessionId: 's1',
   path: 'a.txt',
   anchor: createAnchor(base, line, 'new'),
   body: 'body',
@@ -45,9 +45,9 @@ describe('reanchorNotes', () => {
     const edited = numberLines('one\ntwo\nthree\nNEW\nfour\nfive\nsix\nseven\n')
     const updates = reanchorNotes(notes, (path) => (path === 'a.txt' ? edited : null))
     expect(updates.map((update) => [update.id, update.anchor.line, update.anchorLost])).toEqual([
-      [1, 2, false],
-      [2, 5, false],
-      [3, 7, false],
+      ['1', 2, false],
+      ['2', 5, false],
+      ['3', 7, false],
     ])
     expect(updates[0]!.anchor.after).toEqual(['three', 'NEW', 'four'])
   })

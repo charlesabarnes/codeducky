@@ -46,7 +46,7 @@ export async function pushPendingReview(
   selection: PushSelection,
 ): Promise<PushResult> {
   const review = await gh.createPendingReview(ref, pr.number, pendingReview(pr.headSha, selection.placed, selection.bodyNotes))
-  let commentIds = new Map<number, number>()
+  let commentIds = new Map<string, number>()
   if (selection.placed.length > 0) {
     try {
       commentIds = commentIdsByNote(selection.placed, await gh.reviewComments(ref, pr.number, review.id))

@@ -34,7 +34,7 @@ interface PushDialogProps {
 const short = (sha: string) => sha.slice(0, 7)
 const alreadyPushed = (note: Note) => note.github?.reviewId !== undefined
 
-function defaultSelection(preview: PushPreview): Set<number> {
+function defaultSelection(preview: PushPreview): Set<string> {
   const { placed, unplaced } = preview.placement
   return new Set(
     [...placed, ...unplaced].flatMap(({ note }) => (note.id !== undefined && !alreadyPushed(note) ? [note.id] : [])),
@@ -44,7 +44,7 @@ function defaultSelection(preview: PushPreview): Set<number> {
 export function PushDialog({ session, repo, notes, onClose }: PushDialogProps) {
   const dialog = useRef<HTMLDialogElement>(null)
   const [state, setState] = useState<State>({ status: 'loading' })
-  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const [pushing, setPushing] = useState(false)
   const [pushError, setPushError] = useState<string | null>(null)
   const [initialNotes] = useState(notes)
@@ -82,7 +82,7 @@ export function PushDialog({ session, repo, notes, onClose }: PushDialogProps) {
     }
   }, [repo, session.branch, initialNotes])
 
-  const toggle = (id: number) =>
+  const toggle = (id: string) =>
     setSelected((current) => {
       const next = new Set(current)
       if (next.has(id)) next.delete(id)
@@ -139,8 +139,8 @@ export function PushDialog({ session, repo, notes, onClose }: PushDialogProps) {
 
 interface BodyProps {
   state: State
-  selected: Set<number>
-  onToggle: (id: number) => void
+  selected: Set<string>
+  onToggle: (id: string) => void
   branch: string
 }
 
@@ -178,7 +178,7 @@ function Body({ state, selected, onToggle, branch }: BodyProps) {
   }
 }
 
-function Preview({ preview, selected, onToggle }: { preview: PushPreview; selected: Set<number>; onToggle: (id: number) => void }) {
+function Preview({ preview, selected, onToggle }: { preview: PushPreview; selected: Set<string>; onToggle: (id: string) => void }) {
   const { pr, placement, localHead } = preview
   const total = placement.placed.length + placement.unplaced.length
   return (
@@ -226,8 +226,8 @@ function NoteSection({ title, hint, children }: { title: string; hint?: string; 
 
 interface RowProps<T> {
   entry: T
-  selected: Set<number>
-  onToggle: (id: number) => void
+  selected: Set<string>
+  onToggle: (id: string) => void
 }
 
 function NoteRow({ note, where, extra, selected, onToggle }: { note: Note; where: ReactNode; extra?: ReactNode } & Omit<RowProps<unknown>, 'entry'>) {

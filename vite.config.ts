@@ -26,9 +26,14 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: 'index.html',
+        // Server-rendered routes (API, MCP, OAuth consent) must reach the network.
+        navigateFallbackDenylist: [/^\/api\//, /^\/mcp/, /^\/oauth/, /^\/\.well-known\//],
       },
     }),
   ],
+  server: {
+    proxy: { '/api': `http://localhost:${process.env.SKELBERT_SERVER_PORT ?? 8787}` },
+  },
   build: {
     chunkSizeWarningLimit: 900,
   },

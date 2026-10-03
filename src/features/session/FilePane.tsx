@@ -9,12 +9,12 @@ import { useNoteAnnotations } from '../notes/useNoteAnnotations'
 import { useFileContents } from './useFileContents'
 
 export interface NoteFocus {
-  id: number
+  id: string
   at: number
 }
 
 interface FilePaneProps {
-  sessionId: number
+  sessionId: string
   change: FileChange
   notes: Note[]
   mode: ViewMode

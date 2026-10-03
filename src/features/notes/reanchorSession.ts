@@ -10,7 +10,7 @@ type Sides = Record<NoteSide, NumberedLine[] | null>
 
 const unreadable = (side: FileSide | null) => side !== null && side.kind !== 'text'
 
-export async function reanchorSession(sessionId: number, files: FileChange[], cancelled: () => boolean): Promise<void> {
+export async function reanchorSession(sessionId: string, files: FileChange[], cancelled: () => boolean): Promise<void> {
   const notes = await sessionNotes(db, sessionId)
   if (notes.length === 0) return
   const changes = new Map(files.map((file) => [file.path, file]))

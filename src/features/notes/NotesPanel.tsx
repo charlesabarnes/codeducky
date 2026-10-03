@@ -16,7 +16,7 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
 
 interface NotesPanelProps {
   notes: Note[]
-  selectedId: number | null
+  selectedId: string | null
   onSelect: (note: Note) => void
 }
 

@@ -9,7 +9,7 @@ import type { UsageTotals } from './pricing'
 import { systemPrompt } from './prompt'
 
 export interface StartPass {
-  sessionId: number
+  sessionId: string
   apiKey: string
   model: string
   instructions?: string

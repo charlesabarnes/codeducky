@@ -6,6 +6,7 @@ import { SuggestionActions } from '../claude/SuggestionActions'
 import { Markdown } from './Markdown'
 import { NoteEditor } from './NoteEditor'
 import { NoteBadges } from './NoteBadges'
+import { NoteResolution } from './NoteResolution'
 
 interface NoteCardProps {
   note: Note
@@ -66,6 +67,7 @@ export function NoteCard({ note, readOnly, focused }: NoteCardProps) {
         )}
       </header>
       <Markdown text={note.body} />
+      {note.resolution && <NoteResolution resolution={note.resolution} />}
     </article>
   )
 }

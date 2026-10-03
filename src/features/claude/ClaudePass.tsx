@@ -13,7 +13,7 @@ import { useClaudePass } from './useClaudePass'
 type Scope = 'all' | 'unviewed'
 
 interface ClaudePassProps {
-  sessionId: number
+  sessionId: string
   repo: Repo
   files: FileChange[] | null
   viewed: ReadonlySet<string>

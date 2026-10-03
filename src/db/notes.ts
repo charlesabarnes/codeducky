@@ -3,31 +3,31 @@ import type { SkelbertDb } from './db'
 import type { Note, NoteAnchor, NoteSeverity, NoteStatus } from './schema'
 
 export interface NewNote {
-  sessionId: number
+  sessionId: string
   path: string
   anchor: NoteAnchor
   body: string
   severity: NoteSeverity
 }
 
-export async function addNote(db: SkelbertDb, input: NewNote): Promise<number> {
+export async function addNote(db: SkelbertDb, input: NewNote): Promise<string> {
   const now = Date.now()
-  return db.notes.add({ ...input, status: 'open', source: 'me', createdAt: now, updatedAt: now }) as Promise<number>
+  return db.notes.add({ ...input, status: 'open', source: 'me', createdAt: now, updatedAt: now }) as Promise<string>
 }
 
-export async function editNote(db: SkelbertDb, id: number, changes: Pick<Note, 'body' | 'severity'>): Promise<void> {
+export async function editNote(db: SkelbertDb, id: string, changes: Pick<Note, 'body' | 'severity'>): Promise<void> {
   await db.notes.update(id, { ...changes, updatedAt: Date.now() })
 }
 
-export async function setNoteStatus(db: SkelbertDb, id: number, status: NoteStatus): Promise<void> {
+export async function setNoteStatus(db: SkelbertDb, id: string, status: NoteStatus): Promise<void> {
   await db.notes.update(id, { status, updatedAt: Date.now() })
 }
 
-export async function deleteNote(db: SkelbertDb, id: number): Promise<void> {
+export async function deleteNote(db: SkelbertDb, id: string): Promise<void> {
   await db.notes.delete(id)
 }
 
-export function sessionNotes(db: SkelbertDb, sessionId: number): Promise<Note[]> {
+export function sessionNotes(db: SkelbertDb, sessionId: string): Promise<Note[]> {
   return db.notes.where({ sessionId }).toArray()
 }
 

@@ -16,6 +16,7 @@ export function NoteBadges({ note }: { note: Note }) {
         </span>
       )}
       {note.source === 'claude' && <span className="badge">Claude</span>}
+      {note.source === 'mcp' && <span className="badge">MCP</span>}
     </>
   )
 }

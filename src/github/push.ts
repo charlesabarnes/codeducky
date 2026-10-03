@@ -95,9 +95,9 @@ export function pendingReview(commitId: string, placed: readonly PlacedNote[], b
 }
 
 /** Pairs the comments GitHub created with the notes they came from (the create call does not return comment ids). */
-export function commentIdsByNote(placed: readonly PlacedNote[], comments: readonly ReviewComment[]): Map<number, number> {
+export function commentIdsByNote(placed: readonly PlacedNote[], comments: readonly ReviewComment[]): Map<string, number> {
   const unused = [...comments]
-  const ids = new Map<number, number>()
+  const ids = new Map<string, number>()
   for (const { note, comment } of placed) {
     const index = unused.findIndex(
       (c) => c.path === comment.path && c.body === comment.body && (c.line === null || c.line === comment.line),

@@ -10,11 +10,11 @@ import { NoteCard } from './NoteCard'
 import { NoteEditor } from './NoteEditor'
 
 interface Options {
-  sessionId: number
+  sessionId: string
   path: string
   notes: Note[]
   lines: Record<NoteSide, NumberedLine[] | null>
-  focusedId: number | null
+  focusedId: string | null
 }
 
 export function useNoteAnnotations({ sessionId, path, notes, lines, focusedId }: Options): LineAnnotations {

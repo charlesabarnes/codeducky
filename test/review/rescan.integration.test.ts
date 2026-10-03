@@ -80,7 +80,7 @@ describe('notes across edits and rescans', () => {
       const equalityLine = lines.findIndex((entry) => entry.text.includes('== 0')) + 1
       expect([multiplyLine, equalityLine]).toEqual([8, 13])
 
-      const start = { repoId: 1, branch: 'feature/quantity', headSha: git(repo, 'rev-parse', 'HEAD'), baseSha }
+      const start = { repoId: 'r1', branch: 'feature/quantity', headSha: git(repo, 'rev-parse', 'HEAD'), baseSha }
       const sessionId = await startOrResumeSession(db, start)
       const moving = await addNote(db, {
         sessionId,

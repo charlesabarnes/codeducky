@@ -4,8 +4,8 @@ import { db } from '../../db/db'
 import { useChecklistProgress } from './useChecklistProgress'
 
 interface SessionChecklistsProps {
-  sessionId: number
-  repoId: number
+  sessionId: string
+  repoId: string
   readOnly?: boolean
 }
 

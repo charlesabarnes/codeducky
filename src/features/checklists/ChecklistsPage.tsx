@@ -9,7 +9,7 @@ import { ChecklistEditor } from './ChecklistEditor'
 import { exportChecklists, importChecklistFile } from './checklistFiles'
 
 const scopeValue = (scope: ChecklistScope) => String(scope)
-const parseScope = (value: string): ChecklistScope => (value === 'global' ? 'global' : Number(value))
+const parseScope = (value: string): ChecklistScope => (value === 'global' ? 'global' : value)
 
 export function ChecklistsPage() {
   const data = useLiveQuery(async () => ({
@@ -17,7 +17,7 @@ export function ChecklistsPage() {
     repos: await db.repos.toArray(),
   }))
   const [scope, setScope] = useState<ChecklistScope>('global')
-  const [editing, setEditing] = useState<number | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null)
 
   if (!data) return <p className="page muted">Loading…</p>

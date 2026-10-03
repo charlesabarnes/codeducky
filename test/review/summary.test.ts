@@ -3,7 +3,7 @@ import type { Note, NoteStatus } from '../../src/db/schema'
 import { matchesStatus } from '../../src/review/summary'
 
 const note = (status: NoteStatus): Note => ({
-  sessionId: 1,
+  sessionId: 's1',
   path: 'a.ts',
   anchor: { line: 1, side: 'new', text: 'x', before: [], after: [] },
   body: '',

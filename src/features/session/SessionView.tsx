@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router'
 import { db } from '../../db/db'
 import { setViewed } from '../../db/fileViews'
 import { repoLabel } from '../../db/repos'
-import type { Note, Repo, Session } from '../../db/schema'
+import type { Note, OpenedRepo, Session } from '../../db/schema'
 import type { ViewMode } from '../../diff/DiffTable'
 import type { FileChange, FileStats } from '../../git/types'
 import { contentHash, viewedPaths } from '../../review/viewed'
@@ -39,7 +39,7 @@ function countByFile(notes: Note[]): Map<string, FileNoteCount> {
   return counts
 }
 
-export function SessionView({ session, repo }: { session: Session; repo: Repo }) {
+export function SessionView({ session, repo }: { session: Session; repo: OpenedRepo }) {
   const sessionId = session.id!
   const scan = useSessionScan(repo.dirHandle, session.baseSha, session.baseSource === 'github' ? repoRef(repo) : null)
   useReanchor(sessionId, scan.files)

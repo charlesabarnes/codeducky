@@ -11,7 +11,7 @@ const change = (path: string, newOid: string | null): FileChange => ({
 
 describe('viewed', () => {
   it('is viewed only while the content hash matches', () => {
-    const view = { sessionId: 1, path: 'a', contentHash: contentHash(change('a', 'v1')), viewed: true }
+    const view = { sessionId: 's1', path: 'a', contentHash: contentHash(change('a', 'v1')), viewed: true }
     expect(isViewed(view, contentHash(change('a', 'v1')))).toBe(true)
     expect(isViewed(view, contentHash(change('a', 'v2')))).toBe(false)
     expect(isViewed({ ...view, viewed: false }, view.contentHash)).toBe(false)
@@ -21,9 +21,9 @@ describe('viewed', () => {
   it('collects viewed paths for the current files', () => {
     const files = [change('a', 'v1'), change('b', 'v2'), change('c', null)]
     const views = [
-      { sessionId: 1, path: 'a', contentHash: contentHash(change('a', 'v1')), viewed: true },
-      { sessionId: 1, path: 'b', contentHash: contentHash(change('b', 'old')), viewed: true },
-      { sessionId: 1, path: 'c', contentHash: contentHash(change('c', null)), viewed: true },
+      { sessionId: 's1', path: 'a', contentHash: contentHash(change('a', 'v1')), viewed: true },
+      { sessionId: 's1', path: 'b', contentHash: contentHash(change('b', 'old')), viewed: true },
+      { sessionId: 's1', path: 'c', contentHash: contentHash(change('c', null)), viewed: true },
     ]
     expect([...viewedPaths(files, views)]).toEqual(['a', 'c'])
   })
