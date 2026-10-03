@@ -1,8 +1,4 @@
 import 'fake-indexeddb/auto'
-import { spawn, type ChildProcess } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { checkedItems, createChecklist, setChecked } from '../../src/db/checklists'
 import { SkelbertDb } from '../../src/db/db'
@@ -10,44 +6,17 @@ import { addNote, deleteNote, editNote, setNoteStatus } from '../../src/db/notes
 import { saveOpenedRepo } from '../../src/db/repos'
 import { startOrResumeSession } from '../../src/db/sessions'
 import { SyncController } from '../../src/sync/controller'
+import { startServer } from '../support/realServer'
 
 const PASSPHRASE = 'integration passphrase'
-const PORT = 18000 + Math.floor(Math.random() * 1000)
-const BASE = `http://127.0.0.1:${PORT}`
-
-const bunPath = () => {
-  const local = join(homedir(), '.bun/bin/bun')
-  return process.env.BUN_PATH ?? (existsSync(local) ? local : 'bun')
-}
-
-let server: ChildProcess
-let dataDir: string
-
-async function waitForHealth() {
-  for (let i = 0; i < 100; i++) {
-    try {
-      if ((await fetch(`${BASE}/api/health`)).ok) return
-    } catch {
-      // not up yet
-    }
-    await new Promise((r) => setTimeout(r, 100))
-  }
-  throw new Error('server did not start')
-}
+let BASE = ''
+let stop = () => {}
 
 beforeAll(async () => {
-  dataDir = mkdtempSync(join(tmpdir(), 'skelbert-int-'))
-  server = spawn(bunPath(), [resolve('server/index.ts')], {
-    env: { ...process.env, PORT: String(PORT), SKELBERT_PASSPHRASE: PASSPHRASE, DATA_DIR: dataDir, WEB_DIST: join(dataDir, 'no-dist') },
-    stdio: 'ignore',
-  })
-  await waitForHealth()
+  ;({ base: BASE, stop } = await startServer(PASSPHRASE))
 })
 
-afterAll(() => {
-  server?.kill('SIGTERM')
-  rmSync(dataDir, { recursive: true, force: true })
-})
+afterAll(() => stop())
 
 /** A fetch that can be cut off, standing in for a device going offline. */
 function device(name: string) {

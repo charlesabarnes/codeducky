@@ -5,6 +5,7 @@ import { syncController, useSyncState } from '../../sync/client'
 import type { SignInResult, TokenSummary } from '../../sync/controller'
 import { listRejected } from '../../sync/rejected'
 import { syncSummary } from '../../sync/summary'
+import { ConnectClaudeCode } from './ConnectClaudeCode'
 import './sync.css'
 
 const SIGN_IN_ERRORS: Record<Exclude<SignInResult, 'ok'>, string> = {
@@ -24,19 +25,23 @@ const formatTime = (ms: number | null) => (ms ? new Date(ms).toLocaleString() : 
 export function ServerSection() {
   const state = useSyncState()
   const signedIn = state.auth === 'signedIn'
+  const [tokensVersion, setTokensVersion] = useState(0)
   return (
-    <section className="sync-section stack" id="sync">
-      <div>
-        <h2>Sync server</h2>
-        <p className="muted">
-          Repos, sessions, notes, checklists and viewed files sync between your devices through the Skelbert server. The
-          GitHub token, Anthropic key and these settings never leave this browser.
-        </p>
-      </div>
-      {signedIn ? <SignedIn /> : <SignInForm expired={state.auth === 'expired'} />}
-      {state.rejected > 0 && <RejectedList />}
-      {signedIn && <Tokens />}
-    </section>
+    <>
+      <section className="sync-section stack" id="sync">
+        <div>
+          <h2>Sync server</h2>
+          <p className="muted">
+            Repos, sessions, notes, checklists and viewed files sync between your devices through the Skelbert server. The
+            GitHub token, Anthropic key and these settings never leave this browser.
+          </p>
+        </div>
+        {signedIn ? <SignedIn /> : <SignInForm expired={state.auth === 'expired'} />}
+        {state.rejected > 0 && <RejectedList />}
+        {signedIn && <Tokens version={tokensVersion} />}
+      </section>
+      <ConnectClaudeCode signedIn={signedIn} onMinted={() => setTokensVersion((v) => v + 1)} />
+    </>
   )
 }
 
@@ -139,7 +144,9 @@ function RejectedList() {
   )
 }
 
-function Tokens() {
+const KIND_LABELS: Record<TokenSummary['kind'], string> = { session: 'device', api: 'API', oauth: 'OAuth' }
+
+function Tokens({ version: outside }: { version: number }) {
   const [tokens, setTokens] = useState<TokenSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [name, setName] = useState('Claude Code')
@@ -158,7 +165,7 @@ function Tokens() {
     return () => {
       cancelled = true
     }
-  }, [version])
+  }, [version, outside])
 
   const mint = async (event: FormEvent) => {
     event.preventDefault()
@@ -197,7 +204,7 @@ function Tokens() {
       <h3>Access tokens</h3>
       <p className="muted">
         Each signed-in device has one. Create a named token for tools such as Claude Code; it can read and write your
-        review data but cannot manage tokens.
+        review data but cannot manage tokens. OAuth entries are MCP clients you approved, such as claude.ai connectors.
       </p>
       {error && <p className="error">{error}</p>}
       {tokens && (
@@ -218,7 +225,7 @@ function Tokens() {
                   {token.name}
                   {token.current && <span className="muted"> (this device)</span>}
                 </td>
-                <td>{token.kind === 'session' ? 'device' : token.kind}</td>
+                <td>{KIND_LABELS[token.kind]}</td>
                 <td>{formatTime(token.createdAt)}</td>
                 <td>{formatTime(token.lastUsedAt)}</td>
                 <td>

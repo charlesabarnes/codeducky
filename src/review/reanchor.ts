@@ -1,6 +1,6 @@
 import type { Note, NoteAnchor, NoteSide } from '../db/schema'
 import { createAnchor } from './anchor'
-import type { NumberedLine } from './lines'
+import { indexOfLine, type NumberedLine } from './lines'
 import { matchAnchor } from './match'
 
 export interface Reanchored {
@@ -8,7 +8,13 @@ export interface Reanchored {
   anchorLost: boolean
 }
 
+/** A note added over MCP without the line's text: only the line number is known. */
+export const isLineOnly = (anchor: NoteAnchor) => anchor.text === '' && anchor.before.length === 0 && anchor.after.length === 0
+
 export function reanchor(anchor: NoteAnchor, lines: readonly NumberedLine[] | null): Reanchored {
+  if (lines && isLineOnly(anchor) && indexOfLine(lines, anchor.line) >= 0) {
+    return { anchor: createAnchor(lines, anchor.line, anchor.side), anchorLost: false }
+  }
   const match = lines ? matchAnchor(anchor, lines) : null
   if (!lines || !match) return { anchor, anchorLost: true }
   return { anchor: createAnchor(lines, match.line, anchor.side), anchorLost: false }

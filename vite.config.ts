@@ -32,7 +32,9 @@ export default defineConfig({
     }),
   ],
   server: {
-    proxy: { '/api': `http://localhost:${process.env.SKELBERT_SERVER_PORT ?? 8787}` },
+    proxy: Object.fromEntries(
+      ['/api', '/mcp', '/oauth', '/.well-known'].map((path) => [path, `http://localhost:${process.env.SKELBERT_SERVER_PORT ?? 8787}`]),
+    ),
   },
   build: {
     chunkSizeWarningLimit: 900,

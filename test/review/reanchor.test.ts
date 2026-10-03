@@ -34,6 +34,15 @@ describe('reanchor', () => {
     expect(reanchor(original, numberLines('one\ntwo\nthree\nfive\n'))).toEqual({ anchor: original, anchorLost: true })
   })
 
+  it('fills in a line-only anchor (from MCP) from the file', () => {
+    const lineOnly = { line: 2, side: 'new' as const, text: '', before: [], after: [] }
+    expect(reanchor(lineOnly, base)).toEqual({
+      anchorLost: false,
+      anchor: { line: 2, side: 'new', text: 'two', before: ['one'], after: ['three', 'four', 'five'] },
+    })
+    expect(reanchor({ ...lineOnly, line: 99 }, base).anchorLost).toBe(true)
+  })
+
   it('flags the anchor when the side no longer exists', () => {
     expect(reanchor(note(1, 4).anchor, null).anchorLost).toBe(true)
   })

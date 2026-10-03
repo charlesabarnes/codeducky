@@ -7,7 +7,7 @@ import { NoteBadges } from './NoteBadges'
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: 'active', label: 'Open and suggested' },
   { value: 'open', label: 'Open' },
-  { value: 'suggested', label: 'Claude suggestions' },
+  { value: 'suggested', label: 'Suggestions' },
   { value: 'resolved', label: 'Resolved' },
   { value: 'possibly-resolved', label: 'Possibly resolved' },
   { value: 'dismissed', label: 'Dismissed' },

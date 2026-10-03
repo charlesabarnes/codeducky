@@ -75,7 +75,17 @@ function noteHeading(note: Note): string {
     ? `last seen at line ${note.anchor.line}`
     : `line ${note.anchor.line}${note.anchor.side === 'old' ? ' (base)' : ''}`
   const status = note.anchorLost && note.status === 'open' ? 'open, possibly resolved' : note.status
-  return `**${note.severity}** · ${status} · ${where}${note.source === 'claude' ? ' · from Claude' : ''}`
+  return `**${note.severity}** · ${status} · ${where}${SOURCE_LABELS[note.source]}`
+}
+
+const SOURCE_LABELS: Record<Note['source'], string> = { me: '', claude: ' · from Claude', mcp: ' · from MCP' }
+
+/** The reply that closed a note, as a quote under it. */
+function resolutionLines(note: Note): string[] {
+  if (!note.resolution) return []
+  const { by, text, at } = note.resolution
+  const quoted = text.trim().split('\n').map((line) => (line ? `> ${line}` : '>'))
+  return ['', `> **Resolved by ${by}** · ${formatTimestamp(at)}`, '>', ...quoted]
 }
 
 function notesSection(notes: Note[]): string[] {
@@ -89,12 +99,12 @@ function notesSection(notes: Note[]): string[] {
     }
     const excerpt = noteExcerpt(note)
     const fence = fenceFor(excerpt)
-    lines.push('', noteHeading(note), '', note.body.trim() || '_No text._', '', fence, excerpt, fence)
+    lines.push('', noteHeading(note), '', note.body.trim() || '_No text._', '', fence, excerpt, fence, ...resolutionLines(note))
   }
   return lines
 }
 
-/** Claude suggestions count only once accepted; pending and dismissed ones stay out of the report. */
+/** Suggestions (from Claude or MCP) count only once accepted; pending and dismissed ones stay out of the report. */
 export const isReportable = (note: Note) => note.status !== 'suggested' && note.status !== 'dismissed'
 
 export function buildReport(report: ReportInput): string {

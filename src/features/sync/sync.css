@@ -87,3 +87,27 @@
   font-size: 0.8rem;
   color: var(--fg-muted);
 }
+
+.copy-field {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.copy-label {
+  font-weight: 500;
+}
+
+.copy-field .row {
+  align-items: flex-start;
+}
+
+.copy-value {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  word-break: break-all;
+  user-select: all;
+}

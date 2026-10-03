@@ -48,8 +48,8 @@ export const KEYMAP = [
   { id: 'note.comment', keys: ['c'], label: 'Comment on the focused line', group: 'Notes' },
   { id: 'note.edit', keys: ['e'], label: 'Edit the note at or near the focus', group: 'Notes' },
   { id: 'note.resolve', keys: ['r'], label: 'Resolve or reopen the note at or near the focus', group: 'Notes' },
-  { id: 'note.accept', keys: ['a'], label: 'Accept the Claude suggestion at or near the focus', group: 'Notes' },
-  { id: 'note.dismiss', keys: ['d'], label: 'Dismiss the Claude suggestion at or near the focus', group: 'Notes' },
+  { id: 'note.accept', keys: ['a'], label: 'Accept the suggestion at or near the focus', group: 'Notes' },
+  { id: 'note.dismiss', keys: ['d'], label: 'Dismiss the suggestion at or near the focus', group: 'Notes' },
 
   { id: 'file.viewed', keys: ['v'], label: 'Toggle viewed, then go to the next unviewed file', group: 'View' },
   { id: 'view.mode', keys: ['s'], label: 'Switch split and unified', group: 'View' },

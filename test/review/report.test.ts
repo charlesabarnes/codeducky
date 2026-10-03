@@ -118,6 +118,26 @@ describe('report', () => {
     expect(markdown).not.toContain('- Files:')
   })
 
+  it('quotes the resolution reply under a resolved note and marks MCP notes', () => {
+    const markdown = buildReport({
+      repoName: 'r',
+      baseBranch: 'main',
+      session,
+      checklists: [],
+      notes: [
+        note({
+          status: 'resolved',
+          source: 'mcp',
+          resolution: { by: 'mcp:Claude Code', text: 'Fixed in a1b2c3.\n\nAdded a test.', at: Date.UTC(2026, 9, 3, 15, 0) },
+        }),
+      ],
+    })
+    expect(markdown).toContain('**issue** · resolved · line 12 · from MCP')
+    expect(markdown).toContain(
+      ['```', '', '> **Resolved by mcp:Claude Code** · 2026-10-03 15:00 UTC', '>', '> Fixed in a1b2c3.', '>', '> Added a test.', ''].join('\n'),
+    )
+  })
+
   it('suggests a safe file name', () => {
     expect(reportFileName('me/repo', session)).toBe('review-me-repo-feature-notes-2026-10-03.md')
   })

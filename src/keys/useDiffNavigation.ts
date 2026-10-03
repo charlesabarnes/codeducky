@@ -41,8 +41,8 @@ const KIND_LABEL = { add: 'Added', del: 'Removed', context: 'Unchanged' } as con
 const NO_NOTE: Record<NoteAction, string> = {
   edit: 'No note near the focus',
   resolve: 'No open or resolved note near the focus',
-  accept: 'No Claude suggestion near the focus',
-  dismiss: 'No Claude suggestion near the focus',
+  accept: 'No suggestion near the focus',
+  dismiss: 'No suggestion near the focus',
 }
 
 function fromRequest(request: NavRequest | null, rows: readonly NavRow[], mode: NavMode): CursorState | null {
