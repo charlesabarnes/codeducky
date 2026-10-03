@@ -14,6 +14,7 @@ import { BaseBanner } from '../github/BaseBanner'
 import { PushDialog } from '../github/PushDialog'
 import { useBaseFreshness } from '../github/useBaseFreshness'
 import { repoRef } from '../../github/connect'
+import { ClaudePass } from '../claude/ClaudePass'
 import { exportSessionReport } from '../history/exportReport'
 import { NotesPanel } from '../notes/NotesPanel'
 import { FileList, type FileNoteCount } from './FileList'
@@ -91,6 +92,7 @@ export function SessionView({ session, repo }: { session: Session; repo: Repo })
   }
 
   const openNotes = notes.filter((note) => note.status === 'open').length
+  const suggested = notes.filter((note) => note.status === 'suggested').length
   const items = checklists?.lists.flatMap((list) => list.items) ?? []
   const ticked = items.filter((item) => checklists?.checked.has(item.id)).length
 
@@ -120,10 +122,11 @@ export function SessionView({ session, repo }: { session: Session; repo: Repo })
           </div>
           {scan.files && scan.files.length > 0 && <ViewedProgress viewed={viewed.size} total={scan.files.length} />}
           {exportError && <p className="error">{exportError}</p>}
+          <ClaudePass sessionId={sessionId} repo={repo} files={scan.files} viewed={viewed} />
         </div>
         <div className="tabs" role="tablist">
           <TabButton tab="files" current={tab} onSelect={setTab} label={`Files ${scan.files?.length ?? ''}`} />
-          <TabButton tab="notes" current={tab} onSelect={setTab} label={`Notes ${openNotes || ''}`} />
+          <TabButton tab="notes" current={tab} onSelect={setTab} label={`Notes ${openNotes || ''}${suggested ? ` +${suggested}` : ''}`} />
           <TabButton
             tab="checklists"
             current={tab}

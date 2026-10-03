@@ -94,7 +94,11 @@ function notesSection(notes: Note[]): string[] {
   return lines
 }
 
-export function buildReport(input: ReportInput): string {
+/** Claude suggestions count only once accepted; pending and dismissed ones stay out of the report. */
+export const isReportable = (note: Note) => note.status !== 'suggested' && note.status !== 'dismissed'
+
+export function buildReport(report: ReportInput): string {
+  const input = { ...report, notes: report.notes.filter(isReportable) }
   return [
     `# Review: ${input.repoName} · ${input.session.branch}`,
     '',

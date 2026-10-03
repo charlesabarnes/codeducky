@@ -24,7 +24,7 @@ export function useNoteAnnotations({ sessionId, path, notes, lines, focusedId }:
   const byLine = useMemo(() => {
     const map = new Map<string, Note[]>()
     for (const note of notes) {
-      if (note.anchorLost) continue
+      if (note.anchorLost || note.status === 'dismissed') continue
       const key = lineKey(note.anchor.side, note.anchor.line)
       map.set(key, [...(map.get(key) ?? []), note])
     }

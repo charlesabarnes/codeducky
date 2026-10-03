@@ -22,10 +22,11 @@ export function countNotes(notes: readonly Note[]): NoteCounts {
   return counts
 }
 
-export type StatusFilter = 'all' | NoteStatus | 'possibly-resolved'
+export type StatusFilter = 'all' | 'active' | NoteStatus | 'possibly-resolved'
 
 export function matchesStatus(note: Note, filter: StatusFilter): boolean {
   if (filter === 'all') return true
+  if (filter === 'active') return note.status === 'open' || note.status === 'suggested'
   if (filter === 'possibly-resolved') return note.status === 'open' && Boolean(note.anchorLost)
   return note.status === filter
 }

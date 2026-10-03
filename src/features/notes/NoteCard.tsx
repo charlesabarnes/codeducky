@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { db } from '../../db/db'
 import { deleteNote, editNote, setNoteStatus } from '../../db/notes'
 import type { Note } from '../../db/schema'
+import { SuggestionActions } from '../claude/SuggestionActions'
 import { Markdown } from './Markdown'
 import { NoteEditor } from './NoteEditor'
 import { NoteBadges } from './NoteBadges'
@@ -16,6 +17,7 @@ export function NoteCard({ note, readOnly, focused }: NoteCardProps) {
   const [editing, setEditing] = useState(false)
   const id = note.id!
   const resolved = note.status === 'resolved'
+  const pending = note.status === 'suggested' || note.status === 'dismissed'
 
   if (editing) {
     return (
@@ -39,7 +41,7 @@ export function NoteCard({ note, readOnly, focused }: NoteCardProps) {
 
   return (
     <article
-      className={`note-card severity-${note.severity}${resolved ? ' resolved' : ''}${focused ? ' focused' : ''}`}
+      className={`note-card severity-${note.severity}${resolved ? ' resolved' : ''}${pending ? ` ${note.status}` : ''}${focused ? ' focused' : ''}`}
       id={`note-${id}`}
     >
       <header className="row">
@@ -50,9 +52,13 @@ export function NoteCard({ note, readOnly, focused }: NoteCardProps) {
             <button type="button" className="link" onClick={() => setEditing(true)}>
               Edit
             </button>
-            <button type="button" className="link" onClick={() => setNoteStatus(db, id, resolved ? 'open' : 'resolved')}>
-              {resolved ? 'Reopen' : 'Resolve'}
-            </button>
+            {pending ? (
+              <SuggestionActions note={note} />
+            ) : (
+              <button type="button" className="link" onClick={() => setNoteStatus(db, id, resolved ? 'open' : 'resolved')}>
+                {resolved ? 'Reopen' : 'Resolve'}
+              </button>
+            )}
             <button type="button" className="link danger" onClick={remove}>
               Delete
             </button>

@@ -14,6 +14,7 @@ export interface Repo {
   baseBranch: string
   checklistIds: number[]
   lastOpenedAt: number
+  claudeInstructions?: string
 }
 
 export interface Session {
@@ -53,6 +54,7 @@ export interface Note {
   severity: NoteSeverity
   status: NoteStatus
   source: NoteSource
+  title?: string
   anchorLost?: boolean
   carriedFrom?: number
   createdAt: number

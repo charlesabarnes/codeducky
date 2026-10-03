@@ -37,7 +37,7 @@ export function FilePane(props: FilePaneProps) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const paneKey = `${change.path}:${change.oldOid}:${change.newOid}`
   const collapsed = viewed && expandedKey !== paneKey && focusedId === null
-  const lost = notes.filter((note) => note.anchorLost)
+  const lost = notes.filter((note) => note.anchorLost && note.status !== 'dismissed')
 
   const scrolled = useRef<NoteFocus | null>(null)
   useEffect(() => {
@@ -91,7 +91,11 @@ export function OrphanPane({ path, notes, focus }: { path: string; notes: Note[]
         <span className="path mono">{path}</span>
       </div>
       <p className="diff-notice muted">This file no longer differs from the base.</p>
-      <LostNotes notes={notes} heading="Notes on this file" focusedId={focus?.id ?? null} />
+      <LostNotes
+        notes={notes.filter((note) => note.status !== 'dismissed')}
+        heading="Notes on this file"
+        focusedId={focus?.id ?? null}
+      />
     </>
   )
 }
