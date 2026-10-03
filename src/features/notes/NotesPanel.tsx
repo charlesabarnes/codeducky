@@ -1,13 +1,17 @@
 import { useState } from 'react'
 import { NOTE_SEVERITIES, type Note, type NoteSeverity } from '../../db/schema'
 import { compareNotes, matchesStatus, type StatusFilter } from '../../review/summary'
+import { SuggestionActions } from '../claude/SuggestionActions'
 import { NoteBadges } from './NoteBadges'
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
-  { value: 'all', label: 'All statuses' },
+  { value: 'active', label: 'Open and suggested' },
   { value: 'open', label: 'Open' },
+  { value: 'suggested', label: 'Claude suggestions' },
   { value: 'resolved', label: 'Resolved' },
   { value: 'possibly-resolved', label: 'Possibly resolved' },
+  { value: 'dismissed', label: 'Dismissed' },
+  { value: 'all', label: 'All statuses' },
 ]
 
 interface NotesPanelProps {
@@ -17,7 +21,7 @@ interface NotesPanelProps {
 }
 
 export function NotesPanel({ notes, selectedId, onSelect }: NotesPanelProps) {
-  const [status, setStatus] = useState<StatusFilter>('open')
+  const [status, setStatus] = useState<StatusFilter>('active')
   const [severity, setSeverity] = useState<NoteSeverity | 'all'>('all')
   const shown = notes
     .filter((note) => matchesStatus(note, status) && (severity === 'all' || note.severity === severity))
@@ -53,7 +57,7 @@ export function NotesPanel({ notes, selectedId, onSelect }: NotesPanelProps) {
       ) : (
         <ul className="note-list">
           {shown.map((note) => (
-            <li key={note.id}>
+            <li key={note.id} className={note.status === 'suggested' ? 'suggested' : undefined}>
               <button type="button" aria-current={note.id === selectedId} onClick={() => onSelect(note)}>
                 <span className="row" style={{ gap: '0.25rem' }}>
                   <NoteBadges note={note} />
@@ -62,8 +66,9 @@ export function NotesPanel({ notes, selectedId, onSelect }: NotesPanelProps) {
                   {note.path}
                   {note.anchorLost ? '' : `:${note.anchor.line}${note.anchor.side === 'old' ? ' (base)' : ''}`}
                 </span>
-                <span className="note-snippet">{note.body.split('\n')[0]}</span>
+                <span className="note-snippet">{note.title ?? note.body.split('\n')[0]}</span>
               </button>
+              <SuggestionActions note={note} />
             </li>
           ))}
         </ul>

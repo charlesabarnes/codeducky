@@ -13,6 +13,7 @@
     "test:integration": "INTEGRATION=1 vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "@shikijs/langs": "^4.5.0",
     "@shikijs/themes": "^4.5.0",
     "buffer": "^6.0.3",
