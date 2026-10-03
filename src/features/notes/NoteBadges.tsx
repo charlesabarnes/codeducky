@@ -15,6 +15,11 @@ export function NoteBadges({ note }: { note: Note }) {
           carried over
         </span>
       )}
+      {note.github?.reviewId !== undefined && (
+        <span className="badge muted" title="Sent to GitHub in a review">
+          on GitHub
+        </span>
+      )}
       {note.source === 'claude' && <span className="badge">Claude</span>}
       {note.source === 'mcp' && <span className="badge">MCP</span>}
     </>

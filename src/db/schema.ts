@@ -1,4 +1,7 @@
 export type BaseSource = 'local' | 'github'
+/** Where a session's diff comes from: a local checkout, or a pull request read through the GitHub API. */
+export type SessionSource = 'local' | 'github-pr'
+export type SubmittedReviewState = 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED'
 export type SessionStatus = 'active' | 'archived'
 export type NoteSide = 'old' | 'new'
 export type NoteSeverity = 'nit' | 'suggestion' | 'issue' | 'blocker'
@@ -63,7 +66,25 @@ export interface Session extends Synced {
   startedAt: number
   status: SessionStatus
   files?: SessionFile[]
+  /** Absent on sessions made before pull request review; they are local. */
+  source?: SessionSource
+  /** Set when source is 'github-pr'. `branch` holds the head branch and `headSha` the head commit reviewed. */
+  pr?: SessionPullRequest
+  /** The review submitted from this session, which archived it. */
+  review?: { state: SubmittedReviewState; at: number; url?: string }
 }
+
+export interface SessionPullRequest {
+  owner: string
+  name: string
+  number: number
+  title?: string
+  url?: string
+  author?: string
+  baseRef?: string
+}
+
+export const isPrSession = (session: Pick<Session, 'source'>) => session.source === 'github-pr'
 
 export interface FileView extends Synced {
   sessionId: string
@@ -128,6 +149,35 @@ export interface ChecklistState extends Synced {
   sessionId: string
   itemId: string
   checked: boolean
+}
+
+export type InboxSection = 'requested' | 'mine' | 'reviewed'
+
+/** One pull request in the inbox, as synced for MCP clients (list_review_requests). */
+export interface InboxItem {
+  repo: string
+  number: number
+  title: string
+  author: string
+  url: string
+  updatedAt: string
+  section: InboxSection
+}
+
+/** The last inbox fetched on any device: one record, id INBOX_ID. */
+export interface InboxSnapshot extends Synced {
+  id: string
+  fetchedAt: number
+  items: InboxItem[]
+}
+
+export const INBOX_ID = 'inbox'
+
+/** Blob contents fetched from GitHub for pull request sessions; local only, pruned by age. */
+export interface CachedBlob {
+  oid: string
+  bytes: Uint8Array
+  at: number
 }
 
 export interface Settings {

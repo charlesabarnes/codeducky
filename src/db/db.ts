@@ -4,9 +4,11 @@ import { migrateToStringIds, restoreFromStaging } from '../sync/migrateIds'
 import { syncMiddleware } from '../sync/middleware'
 import type { MetaEntry, OutboxEntry, RejectedEntry } from '../sync/types'
 import type {
+  CachedBlob,
   Checklist,
   ChecklistState,
   FileView,
+  InboxSnapshot,
   Note,
   Repo,
   RepoHandle,
@@ -23,6 +25,8 @@ export class SkelbertDb extends Dexie {
   checklists!: EntityTable<Checklist, 'id'>
   checklistState!: Table<ChecklistState, [string, string]>
   settings!: EntityTable<Settings, 'id'>
+  inbox!: EntityTable<InboxSnapshot, 'id'>
+  githubBlobs!: Table<CachedBlob, string>
   outbox!: Table<OutboxEntry, string>
   rejected!: Table<RejectedEntry, string>
   syncMeta!: Table<MetaEntry, string>
@@ -82,6 +86,7 @@ export class SkelbertDb extends Dexie {
       })
       .upgrade(restoreFromStaging)
     this.version(5).upgrade(dropClaudePass)
+    this.version(6).stores({ inbox: 'id', githubBlobs: 'oid, at' })
     this.use(syncMiddleware)
   }
 }

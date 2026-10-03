@@ -1,0 +1,272 @@
+.pr-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.pr-header h1 {
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1.3;
+}
+
+.pr-title {
+  align-items: baseline;
+  flex-wrap: nowrap;
+}
+
+.pr-meta {
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 13px;
+}
+
+.branch-pair {
+  padding: 0 0.35rem;
+  border-radius: 4px;
+  background: var(--bg-muted);
+}
+
+.pr-state {
+  flex: none;
+  padding: 0.05rem 0.55rem;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: #ffffff;
+  background: #1a7f37;
+}
+
+.pr-state.state-draft {
+  background: #59636e;
+}
+
+.pr-state.state-closed {
+  background: #d1242f;
+}
+
+.pr-state.state-merged {
+  background: #8250df;
+}
+
+.pr-label {
+  font-weight: 500;
+}
+
+.pr-links {
+  gap: 0.6rem;
+  flex: none;
+  font-size: 13px;
+}
+
+.pr-reviewers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+}
+
+.reviewer.state-APPROVED span[aria-hidden] {
+  color: var(--add-fg);
+}
+
+.reviewer.state-CHANGES_REQUESTED span[aria-hidden] {
+  color: var(--del-fg);
+}
+
+.reviewer.state-REQUESTED span[aria-hidden] {
+  color: var(--mod-fg);
+}
+
+.pr-pending {
+  margin: 0;
+  padding: 0.3rem 0.6rem;
+  border-left: 3px solid var(--mod-fg);
+  background: var(--bg);
+  font-size: 13px;
+}
+
+.pr-description summary {
+  cursor: pointer;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.pr-description .markdown {
+  max-height: 24rem;
+  overflow: auto;
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.line-threads {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 52rem;
+  margin-bottom: 0.5rem;
+}
+
+.thread-card {
+  border: 1px solid var(--border);
+  border-left: 3px solid #8250df;
+  border-radius: 6px;
+  padding: 0.4rem 0.75rem;
+  background: var(--bg);
+}
+
+.thread-card.resolved {
+  border-left-color: var(--fg-muted);
+  opacity: 0.85;
+}
+
+.thread-card.outdated {
+  border-left-style: dashed;
+}
+
+.thread-card.focused {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.thread-card > header {
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.thread-toggle {
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.thread-snippet {
+  margin: 0.15rem 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.thread-comment {
+  padding: 0.35rem 0 0.15rem;
+  border-top: 1px solid var(--border);
+  margin-top: 0.35rem;
+}
+
+.thread-comment-meta {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.thread-comment .markdown,
+.conversation-entry .markdown {
+  overflow-wrap: anywhere;
+}
+
+.thread-comment .markdown pre,
+.conversation-entry .markdown pre {
+  overflow: auto;
+  max-width: 100%;
+}
+
+.thread-reply {
+  margin-top: 0.5rem;
+}
+
+.badge.pending-badge {
+  color: var(--mod-fg);
+  border-color: var(--mod-fg);
+}
+
+.badge.resolved-badge {
+  color: var(--add-fg);
+  border-color: var(--add-fg);
+}
+
+.listed-threads {
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.listed-threads h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.conversation {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  overflow: auto;
+}
+
+.conversation-entry {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  font-size: 13px;
+}
+
+.panel-pad {
+  padding: 0 1rem;
+}
+
+.branch-pull {
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.submit-review .review-events {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin: 0;
+}
+
+.submit-review .review-events label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.submit-review .review-events label.disabled {
+  opacity: 0.6;
+}
+
+.submit-review textarea {
+  width: 100%;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.submit-review .include-notes {
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.submit-review .include-notes {
+  justify-content: flex-start;
+}
+
+.submit-review .include-notes input {
+  flex: none;
+  width: auto;
+}

@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router'
 import { db } from '../../db/db'
 import { setViewed } from '../../db/fileViews'
 import { repoLabel } from '../../db/repos'
-import type { Note, OpenedRepo, Session } from '../../db/schema'
+import type { Note, Repo, Session } from '../../db/schema'
 import type { ViewMode } from '../../diff/DiffTable'
 import type { MoveTarget } from '../../diff/moved'
 import type { FileChange, FileStats } from '../../git/types'
@@ -14,10 +14,23 @@ import { SessionChecklists } from '../checklists/SessionChecklists'
 import { useChecklistProgress } from '../checklists/useChecklistProgress'
 import { BaseBanner } from '../github/BaseBanner'
 import { PushDialog } from '../github/PushDialog'
+import { localPushTarget } from '../github/pushTargets'
+import { useBranchPull } from '../github/useBranchPull'
+import { prPath } from '../../../shared/links'
+import type { GitHubClient } from '../../github/client'
+import type { PrSnapshot } from '../../github/prDiff'
+import { orderThreads, type ReviewThread } from '../../github/threads'
+import { ConversationPanel } from '../pr/ConversationPanel'
+import { PrHeader } from '../pr/PrHeader'
+import { prPushTarget } from '../pr/prPushTarget'
+import { SubmitReviewDialog } from '../pr/SubmitReviewDialog'
+import type { ThreadActions } from '../pr/ThreadCard'
+import type { ConversationState } from '../pr/usePrConversation'
+import type { PrThreadsApi } from '../pr/usePrThreads'
+import type { DiffSource } from './source'
 import { useBaseFreshness } from '../github/useBaseFreshness'
 import { CiChip } from '../ci/CiChip'
 import { useCiStatus } from '../ci/useCiStatus'
-import { repoRef } from '../../github/connect'
 import { exportSessionReport } from '../history/exportReport'
 import { useKeys, useShortcuts } from '../../keys/context'
 import type { NavRequest } from '../../keys/diffNavContext'
@@ -34,9 +47,29 @@ import { useViewPrefs } from './useViewPrefs'
 import { repoPath } from '../../app/paths'
 
 const EMPTY_NOTES: Note[] = []
+const NO_THREADS: ReviewThread[] = []
 
-type Tab = 'files' | 'notes' | 'checklists'
-const TAB_SHORTCUTS = { files: 'tab.files', notes: 'tab.notes', checklists: 'tab.checklists' } as const
+type Tab = 'files' | 'notes' | 'checklists' | 'conversation'
+const TAB_SHORTCUTS = { files: 'tab.files', notes: 'tab.notes', checklists: 'tab.checklists', conversation: 'tab.conversation' } as const
+
+/** What a pull request session adds: the PR, its threads and conversation, and a way to reload them. */
+export interface PrView {
+  gh: GitHubClient
+  snapshot: PrSnapshot
+  threads: PrThreadsApi
+  conversation: ConversationState
+  refresh: () => void
+  refreshing: boolean
+}
+
+interface SessionViewProps {
+  session: Session
+  repo: Repo
+  source: DiffSource
+  /** This device's checkout, for local sessions. */
+  dirHandle: FileSystemDirectoryHandle | null
+  pr: PrView | null
+}
 
 function countByFile(notes: Note[], renamed: ReadonlyMap<string, string>): Map<string, FileNoteCount> {
   const counts = new Map<string, FileNoteCount>()
@@ -51,10 +84,10 @@ function countByFile(notes: Note[], renamed: ReadonlyMap<string, string>): Map<s
   return counts
 }
 
-export function SessionView({ session, repo }: { session: Session; repo: OpenedRepo }) {
+export function SessionView({ session, repo, source, dirHandle, pr }: SessionViewProps) {
   const sessionId = session.id!
-  const scan = useSessionScan(repo.dirHandle, session.baseSha, session.baseSource === 'github' ? repoRef(repo) : null)
-  useReanchor(sessionId, scan.files)
+  const scan = useSessionScan(source)
+  useReanchor(sessionId, scan.files, source)
   useFileSummary(sessionId, scan.files, scan.stats, scan.scanning)
   const [params, setParams] = useSearchParams()
   const prefs = useViewPrefs()
@@ -64,17 +97,22 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
   const [focus, setFocus] = useState<NoteFocus | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
   const [pushOpen, setPushOpen] = useState(false)
+  const [submitOpen, setSubmitOpen] = useState(false)
+  const [threadFocus, setThreadFocus] = useState<{ id: string; at: number } | null>(null)
+  const [replyingId, setReplyingId] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const [navRequest, setNavRequest] = useState<NavRequest | null>(null)
   const filterRef = useRef<HTMLInputElement>(null)
   const { announce } = useKeys()
-  const freshness = useBaseFreshness(repo, scan.files !== null, generation)
+  const isLocal = dirHandle !== null
+  const freshness = useBaseFreshness(repo, isLocal && scan.files !== null, generation)
+  const branchPull = useBranchPull(session, repo, isLocal && scan.files !== null)
 
   const notes = useLiveQuery(() => db.notes.where({ sessionId }).toArray(), [sessionId]) ?? EMPTY_NOTES
   const views = useLiveQuery(() => db.fileViews.where({ sessionId }).toArray(), [sessionId])
   const checklists = useChecklistProgress(sessionId, repo.id!)
 
-  const ci = useCiStatus(repo, scan.files, generation)
+  const ci = useCiStatus(repo, source, scan.files, generation)
 
   const viewed = useMemo(() => viewedPaths(scan.files ?? [], views ?? []), [scan.files, views])
   const renamed = useMemo(() => renamedPaths(scan.files), [scan.files])
@@ -103,8 +141,36 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
   const shownFiles = useMemo(() => filterFiles(orderedFiles, filter), [orderedFiles, filter])
   const shownPaths = shownFiles.map((file) => file.path)
 
+  const allThreads = pr?.threads.data?.threads ?? NO_THREADS
+  const threadOrder = useMemo(() => orderThreads(allThreads, orderedFiles.map((file) => file.path)), [allThreads, orderedFiles])
+  const fileThreads = useMemo(
+    () => (pr && selectedPath ? allThreads.filter((thread) => thread.path === selectedPath) : null),
+    [pr, allThreads, selectedPath],
+  )
+  const focusedThread = threadFocus ? (allThreads.find((thread) => thread.id === threadFocus.id) ?? null) : null
+  const focusThread = (thread: ReviewThread) => setThreadFocus({ id: thread.id, at: Date.now() })
+  const threadActions = useMemo<ThreadActions | null>(
+    () =>
+      pr
+        ? {
+            focusedId: threadFocus?.id ?? null,
+            focusAt: threadFocus?.at ?? 0,
+            replyingId,
+            onReplyingChange: setReplyingId,
+            onFocus: (thread) => setThreadFocus((current) => (current?.id === thread.id ? current : { id: thread.id, at: Date.now() })),
+            reply: pr.threads.reply,
+            setResolved: pr.threads.setResolved,
+          }
+        : null,
+    [pr, threadFocus, replyingId],
+  )
+
   const changeMode = (next: ViewMode) => prefs.setMode(next)
   const rescan = () => {
+    if (pr) {
+      pr.refresh()
+      return
+    }
     scan.rescan()
     setGeneration((n) => n + 1)
   }
@@ -147,6 +213,42 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
     }
   }
 
+  const goToThread = (thread: ReviewThread, index: number) => {
+    setTab('files')
+    selectFile(thread.path)
+    setNavRequest(thread.line !== null && !thread.fileLevel ? { at: Date.now(), target: { side: thread.side, line: thread.line }, scroll: 'none' } : null)
+    focusThread(thread)
+    const where = thread.line !== null && !thread.fileLevel ? `line ${thread.line}` : thread.isOutdated ? 'outdated' : 'file comment'
+    announce(`Thread ${index + 1} of ${threadOrder.length}: ${thread.path}, ${where}${thread.isResolved ? ', resolved' : ''}`, { visible: true })
+  }
+  const stepThreads = (delta: 1 | -1) => {
+    if (threadOrder.length === 0) return announce('No review threads on this pull request', { visible: true })
+    const current = focusedThread ? threadOrder.findIndex((thread) => thread.id === focusedThread.id) : -1
+    const next = current < 0 ? (delta > 0 ? 0 : threadOrder.length - 1) : current + delta
+    const thread = threadOrder[next]
+    if (!thread) return announce(delta > 0 ? 'No more threads' : 'No earlier threads', { visible: true })
+    goToThread(thread, next)
+  }
+  const replyToFocused = () => {
+    if (!focusedThread) return announce('Jump to a thread with t first', { visible: true })
+    if (!focusedThread.canReply) return announce('You cannot reply to this thread', { visible: true })
+    setTab('files')
+    selectFile(focusedThread.path)
+    setReplyingId(focusedThread.id)
+    focusThread(focusedThread)
+  }
+  const resolveFocused = () => {
+    if (!focusedThread || !pr) return announce('Jump to a thread with t first', { visible: true })
+    const next = !focusedThread.isResolved
+    if (next ? !focusedThread.canResolve : !focusedThread.canUnresolve) {
+      return announce(`You cannot ${next ? 'resolve' : 'unresolve'} this thread`, { visible: true })
+    }
+    pr.threads
+      .setResolved(focusedThread, next)
+      .then(() => announce(next ? 'Thread resolved' : 'Thread unresolved', { visible: true }))
+      .catch((error: unknown) => announce(`Could not update the thread: ${error instanceof Error ? error.message : String(error)}`, { visible: true }))
+  }
+
   const stepFiles = (delta: 1 | -1) => {
     const target = stepFile(shownPaths, selectedPath, delta)
     if (target) goToFile(target)
@@ -183,6 +285,17 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
     'tab.notes': () => switchTab('notes'),
     'tab.checklists': () => switchTab('checklists'),
   })
+  useShortcuts(
+    'session',
+    {
+      'thread.next': () => stepThreads(1),
+      'thread.prev': () => stepThreads(-1),
+      'thread.reply': replyToFocused,
+      'thread.resolve': resolveFocused,
+      'tab.conversation': () => switchTab('conversation'),
+    },
+    pr !== null,
+  )
 
   const openNotes = notes.filter((note) => note.status === 'open').length
   const suggested = notes.filter((note) => note.status === 'suggested').length
@@ -193,24 +306,52 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
     <div className="session-layout">
       <aside className="session-sidebar">
         <div className="session-meta stack" style={{ gap: '0.25rem' }}>
-          <Link to={repoPath(repo.id!)}>← {repoLabel(repo)}</Link>
-          <div className="mono">
-            {session.branch} vs origin/{repo.baseBranch}
-          </div>
-          <div className="muted mono">
-            merge base {session.baseSha.slice(0, 7)}
-            {session.baseSource === 'github' && ' (from GitHub)'}
-          </div>
+          {pr ? (
+            <>
+              <Link to="/inbox">← Inbox</Link>
+              <div className="mono">
+                {repoLabel(repo)}#{pr.snapshot.pull.number}
+              </div>
+              <div className="muted mono">
+                {pr.snapshot.pull.baseRef} ← {pr.snapshot.pull.headRef} @ {session.headSha.slice(0, 7)}
+              </div>
+            </>
+          ) : (
+            <>
+              <Link to={repoPath(repo.id!)}>← {repoLabel(repo)}</Link>
+              <div className="mono">
+                {session.branch} vs origin/{repo.baseBranch}
+              </div>
+              <div className="muted mono">
+                merge base {session.baseSha.slice(0, 7)}
+                {session.baseSource === 'github' && ' (from GitHub)'}
+              </div>
+              {branchPull && repo.owner && (
+                <div className="row branch-pull">
+                  <span className="muted">PR #{branchPull.number}</span>
+                  <Link to={prPath({ owner: repo.owner, name: repo.name, number: branchPull.number })}>Open PR in Skelbert</Link>
+                  <a href={branchPull.htmlUrl} target="_blank" rel="noreferrer">
+                    Open on GitHub
+                  </a>
+                </div>
+              )}
+            </>
+          )}
           <div className="row">
-            <button type="button" className="secondary" onClick={rescan} disabled={scan.scanning}>
-              {scan.scanning ? 'Scanning…' : 'Rescan'}
+            <button type="button" className="secondary" onClick={rescan} disabled={scan.scanning || pr?.refreshing}>
+              {pr ? (pr.refreshing ? 'Refreshing…' : 'Refresh') : scan.scanning ? 'Scanning…' : 'Rescan'}
             </button>
             <button type="button" className="secondary" onClick={exportReport} disabled={!scan.files}>
               Export
             </button>
-            <button type="button" className="secondary" onClick={() => setPushOpen(true)} disabled={!repo.owner}>
+            <button type="button" className="secondary" onClick={() => setPushOpen(true)} disabled={!repo.owner} title="Push open notes as a pending review">
               Push
             </button>
+            {pr && (
+              <button type="button" onClick={() => setSubmitOpen(true)} title="Approve, request changes or comment">
+                Submit review
+              </button>
+            )}
             {scan.files && <Totals files={scan.files} stats={scan.stats} />}
           </div>
           {scan.files && scan.files.length > 0 && <ViewedProgress viewed={viewed.size} total={scan.files.length} />}
@@ -231,6 +372,7 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
             onSelect={setTab}
             label={items.length ? `Checklists ${ticked}/${items.length}` : 'Checklists'}
           />
+          {pr && <TabButton tab="conversation" current={tab} onSelect={setTab} label="Conversation" />}
         </div>
         {scan.error && <p className="error" style={{ padding: '0 1rem' }}>{scan.error}</p>}
         {tab === 'files' && scan.files && (
@@ -253,13 +395,19 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
         )}
         {tab === 'notes' && <NotesPanel notes={notes} selectedId={focus?.id ?? null} onSelect={jumpTo} />}
         {tab === 'checklists' && <SessionChecklists sessionId={sessionId} repoId={repo.id!} />}
+        {tab === 'conversation' && pr && <ConversationPanel pull={pr.snapshot.pull} state={pr.conversation} />}
       </aside>
       <section className="session-content">
-        <BaseBanner state={freshness} session={session} repo={repo} />
+        {isLocal && <BaseBanner state={freshness} session={session} repo={repo} />}
+        {pr && <PrHeader snapshot={pr.snapshot} conversation={pr.conversation} pendingReview={pr.threads.data?.pendingReview ?? null} />}
+        {pr?.threads.error && <p className="diff-notice error">Review threads: {pr.threads.error}</p>}
         {selected ? (
           <FilePane
             key={selected.path}
             sessionId={sessionId}
+            source={source}
+            threads={fileThreads}
+            threadActions={threadActions}
             change={selected}
             notes={fileNotes}
             mode={mode}
@@ -282,7 +430,25 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
           !scan.scanning && <p className="diff-notice muted">Select a file.</p>
         )}
       </section>
-      {pushOpen && <PushDialog session={session} repo={repo} notes={notes} files={scan.files} onClose={() => setPushOpen(false)} />}
+      {pushOpen && (
+        <PushDialog
+          session={session}
+          notes={notes}
+          target={pr ? prPushTarget(pr.gh, pr.snapshot, pr.threads.reload) : localPushTarget(session, repo, scan.files)}
+          onClose={() => setPushOpen(false)}
+        />
+      )}
+      {submitOpen && pr && (
+        <SubmitReviewDialog
+          sessionId={sessionId}
+          gh={pr.gh}
+          snapshot={pr.snapshot}
+          notes={notes}
+          pending={pr.threads.data?.pendingReview ?? null}
+          viewer={pr.threads.data?.viewer ?? null}
+          onClose={() => setSubmitOpen(false)}
+        />
+      )}
     </div>
   )
 }

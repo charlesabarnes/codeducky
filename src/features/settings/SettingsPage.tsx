@@ -39,7 +39,7 @@ export function SettingsPage() {
       <form className="stack" onSubmit={onSubmit}>
         <SecretField
           label="GitHub personal access token"
-          hint="Fine-grained, with read access to contents and read/write to pull requests."
+          hint="Fine-grained, with Contents: read and Pull requests: read and write (plus Commit statuses and Checks: read for CI). For organization repos the organization must be the token's resource owner, or the inbox and pull requests stay empty. Classic tokens need the repo scope."
           value={form.githubPat}
           onChange={update('githubPat')}
         />

@@ -11,6 +11,7 @@ import { githubDefaultBase } from '../github/defaultBase'
 import { RepoFolderGate } from './RepoFolderGate'
 import { RepoInstructions } from './RepoInstructions'
 import { repoHistoryPath } from '../../app/paths'
+import { PrOnlyRepo } from './PrOnlyRepo'
 
 export function RepoPage() {
   const repoId = useParams().repoId ?? ''
@@ -18,6 +19,7 @@ export function RepoPage() {
 
   if (repo === undefined) return <p className="page muted">Loading…</p>
   if (repo === null) return <p className="page error">Repo not found.</p>
+  if (!repo.folderName) return <PrOnlyRepo repo={{ ...repo, id: repoId }} />
   return <RepoFolderGate repo={{ ...repo, id: repoId }}>{(opened) => <RepoDetails repo={opened} />}</RepoFolderGate>
 }
 

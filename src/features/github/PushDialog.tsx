@@ -1,25 +1,15 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { db } from '../../db/db'
-import type { Note, Repo, Session } from '../../db/schema'
-import { gitService } from '../../git/client'
-import type { FileChange } from '../../git/types'
-import { connect } from '../../github/connect'
+import type { Note, Session } from '../../db/schema'
 import { errorMessage } from '../../github/errors'
 import type { PlacedNote, UnplacedNote } from '../../github/push'
-import {
-  preparePush,
-  pushErrorHint,
-  pushPendingReview,
-  type PushPreview,
-  type PushResult,
-} from '../../github/pushReview'
+import { pushErrorHint, type PushPreview, type PushResult } from '../../github/pushReview'
+import type { PushTarget } from './pushTargets'
 import type { PullRequest } from '../../github/types'
 import { NoteBadges } from '../notes/NoteBadges'
 import './github.css'
 
 type State =
   | { status: 'loading' }
-  | { status: 'unavailable'; message: string }
   | { status: 'no-pr' }
   | { status: 'error'; message: string }
   | { status: 'ready'; preview: PushPreview }
@@ -27,10 +17,8 @@ type State =
 
 interface PushDialogProps {
   session: Session
-  repo: Repo
   notes: Note[]
-  /** The scanned changes, for local renames. */
-  files: FileChange[] | null
+  target: PushTarget
   onClose: () => void
 }
 
@@ -44,16 +32,14 @@ function defaultSelection(preview: PushPreview): Set<string> {
   )
 }
 
-export function PushDialog({ session, repo, notes, files, onClose }: PushDialogProps) {
+export function PushDialog({ session, notes, target, onClose }: PushDialogProps) {
   const dialog = useRef<HTMLDialogElement>(null)
   const [state, setState] = useState<State>({ status: 'loading' })
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [pushing, setPushing] = useState(false)
   const [pushError, setPushError] = useState<string | null>(null)
   const [initialNotes] = useState(notes)
-  const [renames] = useState(
-    () => new Map((files ?? []).flatMap((file) => (file.oldPath ? [[file.path, file.oldPath] as const] : []))),
-  )
+  const [initialTarget] = useState(target)
 
   useEffect(() => {
     dialog.current?.showModal()
@@ -62,17 +48,7 @@ export function PushDialog({ session, repo, notes, files, onClose }: PushDialogP
   useEffect(() => {
     let cancelled = false
     const load = async (): Promise<State> => {
-      const conn = await connect(repo)
-      if (!conn) {
-        return {
-          status: 'unavailable',
-          message: repo.owner
-            ? 'Set a GitHub personal access token in Settings to push notes.'
-            : 'This repository has no GitHub remote named origin.',
-        }
-      }
-      const { headSha } = await gitService().info()
-      const lookup = await preparePush(conn.gh, conn.ref, session.branch, headSha, initialNotes, renames)
+      const lookup = await initialTarget.prepare(initialNotes)
       if (lookup.kind === 'no-pr') return { status: 'no-pr' }
       return { status: 'ready', preview: lookup.preview }
     }
@@ -86,7 +62,7 @@ export function PushDialog({ session, repo, notes, files, onClose }: PushDialogP
     return () => {
       cancelled = true
     }
-  }, [repo, session.branch, initialNotes, renames])
+  }, [initialTarget, initialNotes])
 
   const toggle = (id: string) =>
     setSelected((current) => {
@@ -97,15 +73,13 @@ export function PushDialog({ session, repo, notes, files, onClose }: PushDialogP
     })
 
   const push = async (preview: PushPreview) => {
-    const conn = await connect(repo)
-    if (!conn) return
     const isSelected = ({ note }: { note: Note }) => note.id !== undefined && selected.has(note.id)
     const placed = preview.placement.placed.filter(isSelected)
     const bodyNotes = preview.placement.unplaced.filter(isSelected).map((entry) => entry.note)
     setPushing(true)
     setPushError(null)
     try {
-      const result = await pushPendingReview(db, conn.gh, conn.ref, preview.pr, { placed, bodyNotes })
+      const result = await target.push(preview, { placed, bodyNotes })
       setState({ status: 'pushed', pr: preview.pr, result, comments: placed.length, inBody: bodyNotes.length })
     } catch (error) {
       setPushError(pushErrorHint(error) ?? errorMessage(error))
@@ -122,7 +96,7 @@ export function PushDialog({ session, repo, notes, files, onClose }: PushDialogP
         {pushError && <p className="error">{pushError}</p>}
         <footer>
           {state.status === 'ready' && (
-            <span className="muted">The review stays pending, visible only to you, until you submit it on GitHub.</span>
+            <span className="muted">{target.notice}</span>
           )}
           <span className="spacer" />
           <button type="submit" className="secondary">
@@ -154,7 +128,6 @@ function Body({ state, selected, onToggle, branch }: BodyProps) {
   switch (state.status) {
     case 'loading':
       return <p className="muted">Looking for the pull request…</p>
-    case 'unavailable':
     case 'error':
       return <p className="error">{state.message}</p>
     case 'no-pr':
@@ -245,7 +218,6 @@ function NoteRow({ note, where, extra, selected, onToggle }: { note: Note; where
         <span className="push-note-text">
           <span className="row" style={{ gap: '0.25rem' }}>
             <NoteBadges note={note} />
-            {alreadyPushed(note) && <span className="badge muted">already pushed</span>}
             {extra}
           </span>
           <span className="note-where mono">{where}</span>

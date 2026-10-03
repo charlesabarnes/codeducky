@@ -1,7 +1,7 @@
 import { errorMessage } from '../github/errors'
 import { carryOverNotes } from '../review/carryOver'
 import type { SkelbertDb } from './db'
-import type { Session } from './schema'
+import { isPrSession, type Session } from './schema'
 
 export interface SessionStart {
   repoId: string
@@ -11,7 +11,7 @@ export interface SessionStart {
 }
 
 export async function activeSession(db: SkelbertDb, repoId: string, branch: string): Promise<Session | undefined> {
-  const sessions = await db.sessions.where({ repoId, branch }).filter((s) => s.status === 'active').sortBy('startedAt')
+  const sessions = await db.sessions.where({ repoId, branch }).filter((s) => s.status === 'active' && !isPrSession(s)).sortBy('startedAt')
   return sessions[sessions.length - 1]
 }
 
@@ -56,6 +56,7 @@ export async function startNewSession(db: SkelbertDb, start: SessionStart): Prom
   return db.transaction('rw', db.sessions, db.notes, async () => {
     await db.sessions
       .where({ repoId: start.repoId, branch: start.branch })
+      .filter((session) => !isPrSession(session))
       .modify((session) => {
         session.status = 'archived'
       })
@@ -64,7 +65,7 @@ export async function startNewSession(db: SkelbertDb, start: SessionStart): Prom
 }
 
 export async function latestSession(db: SkelbertDb, repoId: string, branch: string): Promise<Session | undefined> {
-  const sessions = await db.sessions.where({ repoId, branch }).sortBy('startedAt')
+  const sessions = await db.sessions.where({ repoId, branch }).filter((s) => !isPrSession(s)).sortBy('startedAt')
   return sessions[sessions.length - 1]
 }
 

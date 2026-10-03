@@ -10,6 +10,7 @@ import { AnchorExcerpt } from '../notes/AnchorExcerpt'
 import { NoteCard } from '../notes/NoteCard'
 import { exportSessionReport } from './exportReport'
 import { repoHistoryPath } from '../../app/paths'
+import { prPath } from '../../../shared/links'
 
 function groupByFile(notes: Note[]): [string, Note[]][] {
   const groups = new Map<string, Note[]>()
@@ -38,6 +39,29 @@ export function SessionReport({ session, repo }: { session: Session; repo: Repo 
           Head <span className="mono">{session.headSha.slice(0, 7)}</span>, merge base{' '}
           <span className="mono">{session.baseSha.slice(0, 7)}</span>.
         </p>
+        {session.pr && session.source === 'github-pr' && (
+          <p>
+            Pull request{' '}
+            <a href={session.pr.url ?? `https://github.com/${session.pr.owner}/${session.pr.name}/pull/${session.pr.number}`} target="_blank" rel="noreferrer">
+              #{session.pr.number} {session.pr.title}
+            </a>
+            {session.review && (
+              <>
+                {' '}
+                · review submitted: <strong>{session.review.state.toLowerCase().replace('_', ' ')}</strong>{' '}
+                {new Date(session.review.at).toLocaleString()}
+                {session.review.url && (
+                  <>
+                    {' '}
+                    (<a href={session.review.url} target="_blank" rel="noreferrer">on GitHub</a>)
+                  </>
+                )}
+              </>
+            )}
+            {' · '}
+            <Link to={prPath(session.pr)}>Review again</Link>
+          </p>
+        )}
         <p className="muted">
           {counts.total} notes: {counts.byStatus.open} open, {counts.byStatus.resolved} resolved,{' '}
           {counts.possiblyResolved} possibly resolved.

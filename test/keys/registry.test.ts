@@ -39,8 +39,22 @@ describe('keymap', () => {
     expect(keysOf('tab.notes')).toEqual(['g n'])
     expect(keysOf('files.filter')).toEqual(['/'])
     expect(keysOf('help')).toEqual(['?'])
+    expect(keysOf('nav.inbox')).toEqual(['g i'])
+    expect(keysOf('thread.next')).toEqual(['t'])
+    expect(keysOf('thread.prev')).toEqual(['T'])
+    expect(keysOf('thread.reply')).toEqual(['R'])
+    expect(keysOf('thread.resolve')).toEqual(['X'])
+    expect(keysOf('inbox.open')).toEqual(['o'])
     for (const id of ['note.comment', 'note.edit', 'note.resolve', 'note.accept', 'note.dismiss', 'file.viewed', 'view.mode']) {
       expect(BINDINGS.has(id)).toBe(true)
+    }
+  })
+
+  it('gives pull request keys their own keys in a session', () => {
+    const sessionIds = ['line.next', 'line.prev', 'change.next', 'change.prev', 'hunk.next', 'hunk.prev', 'file.next', 'file.prev', 'note.next', 'note.prev', 'side.old', 'side.new', 'gap.expand', 'note.comment', 'note.edit', 'note.resolve', 'note.accept', 'note.dismiss', 'file.viewed', 'view.mode', 'view.whitespace', 'files.filter', 'tab.files', 'tab.notes', 'tab.checklists', 'thread.next', 'thread.prev', 'thread.reply', 'thread.resolve', 'tab.conversation', 'nav.inbox', 'help']
+    const keys = sessionIds.flatMap((id) => BINDINGS.get(id)!.keys.map((key) => ({ id, key })))
+    for (const { id, key } of keys) {
+      expect(keys.filter((other) => other.key === key).map((other) => other.id), `${id}: ${key}`).toEqual([id])
     }
   })
 })
