@@ -79,10 +79,12 @@ answer=$(skelbert_check "$repo" "$branch") || exit 0
 [ "$(printf '%s\n' "$answer" | head -n 1)" = FAIL ] || exit 0
 
 link=$(printf '%s\n' "$answer" | sed -n 's/^url //p')
+pr_link=$(printf '%s\n' "$answer" | sed -n 's/^pr //p')
 reason=$(
   printf 'Skelbert review gate: push of %s@%s is blocked.\n' "$repo" "$branch"
   printf '%s\n' "$answer" | sed -n 's/^- /- /p'
   printf 'Review: %s\n' "$link"
+  [ -z "$pr_link" ] || printf 'Pull request: %s\n' "$pr_link"
   printf 'Fix the notes (and resolve them with resolve_note) or tick the required items, then push again. Do not bypass with --no-verify unless the user asks.'
 )
 escaped=$(printf '%s' "$reason" | tr '\t' ' ' | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'NR > 1 { printf "%s", "\\n" } { printf "%s", $0 }')

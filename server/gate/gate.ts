@@ -1,4 +1,5 @@
-import { findBranchSession, sessionChecklists, type DataSnapshot, type NoteRecord } from '../mcp/records'
+import { prUrl } from '../../shared/links'
+import { findBranchSession, isPrSession, sessionChecklists, type DataSnapshot, type NoteRecord, type SessionRecord } from '../mcp/records'
 import { headline } from '../review/patterns'
 
 export const BLOCKING_SEVERITIES: ReadonlySet<NoteRecord['severity']> = new Set(['blocker', 'issue'])
@@ -10,6 +11,14 @@ export interface GateResult {
   counts: { blockers: number; issues: number; uncheckedRequired: number }
   url: string
   session: string | null
+  /** The branch's pull request in Skelbert, when one is known. */
+  prUrl?: string
+}
+
+/** The branch's pull request: on its session, or on a PR session for the same branch. */
+function branchPr(data: DataSnapshot, session: SessionRecord): SessionRecord['pr'] {
+  if (session.pr) return session.pr
+  return data.sessions.find((s) => isPrSession(s) && s.repoId === session.repoId && s.branch === session.branch && s.pr)?.pr
 }
 
 const noteLine = (note: NoteRecord) => {
@@ -45,10 +54,20 @@ export function evaluateGate(data: DataSnapshot, repoQuery: string, branch: stri
   const reasons = [...blocking.map(noteLine), ...unchecked]
   const listed = reasons.slice(0, MAX_LISTED)
   if (reasons.length > MAX_LISTED) listed.push(`…and ${reasons.length - MAX_LISTED} more`)
-  return { pass: reasons.length === 0, reasons: listed, counts, url: `${origin}/sessions/${encodeURIComponent(session.id)}`, session: session.id }
+  const pr = branchPr(data, session)
+  return {
+    pass: reasons.length === 0,
+    reasons: listed,
+    counts,
+    url: `${origin}/sessions/${encodeURIComponent(session.id)}`,
+    session: session.id,
+    ...(pr ? { prUrl: prUrl(origin, pr) } : {}),
+  }
 }
 
-/** The plain-text form the hook scripts read without a JSON parser: PASS or FAIL, reasons, then the link. */
+/** The plain-text form the hook scripts read without a JSON parser: PASS or FAIL, reasons, the link, then the PR link if any. */
 export function gateText(result: GateResult): string {
-  return [result.pass ? 'PASS' : 'FAIL', ...result.reasons.map((reason) => `- ${reason.replace(/[\r\n]+/g, ' ')}`), `url ${result.url}`].join('\n') + '\n'
+  const lines = [result.pass ? 'PASS' : 'FAIL', ...result.reasons.map((reason) => `- ${reason.replace(/[\r\n]+/g, ' ')}`), `url ${result.url}`]
+  if (result.prUrl) lines.push(`pr ${result.prUrl}`)
+  return lines.join('\n') + '\n'
 }

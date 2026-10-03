@@ -25,6 +25,19 @@ export interface SessionRecord {
   status: 'active' | 'archived'
   /** The changed files as the PWA's last scan saw them. */
   files?: { path: string; status: string; additions?: number; deletions?: number; binary?: boolean }[]
+  /** 'github-pr' for pull request reviews; absent or 'local' for a local checkout. */
+  source?: 'local' | 'github-pr'
+  /** The pull request: reviewed (github-pr), or the open PR of a local branch. */
+  pr?: { owner: string; name: string; number: number; title?: string; url?: string; author?: string; baseRef?: string }
+  review?: { state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED'; at: number; url?: string }
+}
+
+export const isPrSession = (session: Pick<SessionRecord, 'source'>) => session.source === 'github-pr'
+
+export interface InboxRecord {
+  id: string
+  fetchedAt: number
+  items: { repo: string; number: number; title: string; author: string; url: string; updatedAt: string; section: string }[]
 }
 
 export type Severity = 'nit' | 'suggestion' | 'issue' | 'blocker'
@@ -107,10 +120,19 @@ export function sessionChecklists(lists: ChecklistRecord[], session: SessionReco
 
 const byNewest = (a: SessionRecord, b: SessionRecord) => b.startedAt - a.startedAt
 
-/** The session the PWA resumes for a repo and branch: the newest active one, else the newest. */
+/**
+ * The session the PWA resumes for a repo and branch: the newest active one, else the newest.
+ * Local sessions come before pull request sessions of the same branch.
+ */
 export function currentSession(sessions: SessionRecord[]): SessionRecord | undefined {
-  const sorted = [...sessions].sort(byNewest)
+  const local = sessions.filter((session) => !isPrSession(session))
+  const sorted = [...(local.length ? local : sessions)].sort(byNewest)
   return sorted.find((session) => session.status === 'active') ?? sorted[0]
+}
+
+/** The current session of one pull request. */
+export function currentPrSession(sessions: SessionRecord[], number: number): SessionRecord | undefined {
+  return currentSession(sessions.filter((session) => isPrSession(session) && session.pr?.number === number))
 }
 
 /** Read-only snapshot of everything the tools look at, loaded once per request. */
@@ -124,6 +146,7 @@ export function loadData(db: Database) {
     repoById,
     notes: () => listRecords<NoteRecord>(db, 'notes'),
     checklists: () => listRecords<ChecklistRecord>(db, 'checklists'),
+    inbox: () => getRecord<InboxRecord>(db, 'inbox', 'inbox'),
     checked: (sessionId: string, itemId: string) =>
       getRecord<{ checked: boolean }>(db, 'checklistState', pairId(sessionId, itemId))?.checked ?? false,
   }

@@ -1,10 +1,10 @@
 import { repoInstructions } from '../../shared/instructions'
-import { repoLabel, type DataSnapshot, type SessionRecord } from '../mcp/records'
-import { checklistView, compareNotes, iso, noteView } from '../mcp/views'
+import { isPrSession, repoLabel, type DataSnapshot, type SessionRecord } from '../mcp/records'
+import { checklistView, compareNotes, iso, noteView, prView } from '../mcp/views'
 import { recurringPatterns } from './patterns'
 
 /** Everything a reviewer needs before reading the diff of one session. */
-export function reviewContext(data: DataSnapshot, session: SessionRecord) {
+export function reviewContext(data: DataSnapshot, session: SessionRecord, origin: string) {
   const repo = data.repoById.get(session.repoId)
   const notes = data.notes()
   const inSession = notes.filter((note) => note.sessionId === session.id).sort(compareNotes)
@@ -16,11 +16,28 @@ export function reviewContext(data: DataSnapshot, session: SessionRecord) {
     deletions: 0,
   })
 
+  const pr = prView(session, origin)
   return {
     repo: repo ? repoLabel(repo) : session.repoId,
     branch: session.branch,
-    baseBranch: repo?.baseBranch ?? null,
-    session: { id: session.id, status: session.status, started: iso(session.startedAt), headSha: session.headSha, baseSha: session.baseSha },
+    baseBranch: (isPrSession(session) ? session.pr?.baseRef : undefined) ?? repo?.baseBranch ?? null,
+    session: {
+      id: session.id,
+      source: session.source ?? 'local',
+      status: session.status,
+      started: iso(session.startedAt),
+      headSha: session.headSha,
+      baseSha: session.baseSha,
+      url: `${origin}/sessions/${encodeURIComponent(session.id)}`,
+    },
+    ...(pr ? { pullRequest: pr } : {}),
+    ...(isPrSession(session) && session.pr
+      ? {
+          howToReadDiff:
+            `This session reviews pull request #${session.pr.number}; the diff is the PR diff (head ${session.headSha.slice(0, 7)} against merge base ${session.baseSha.slice(0, 7)}). ` +
+            `Read it with \`gh pr diff ${session.pr.number} --repo ${session.pr.owner}/${session.pr.name}\` (or a checkout of the PR), and anchor notes on the head version of each file.`,
+        }
+      : {}),
     instructions: repo ? repoInstructions(repo) : '',
     checklists: checklistView(data, session).checklists,
     files: {

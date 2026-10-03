@@ -1,5 +1,6 @@
 import type { MiddlewareHandler } from 'hono'
 import { extname, resolve, sep } from 'node:path'
+import { isServerPath } from '../shared/serverPaths'
 
 const IMMUTABLE = 'public, max-age=31536000, immutable'
 const NO_CACHE = 'no-cache'
@@ -7,8 +8,6 @@ const NO_CACHE = 'no-cache'
 /** Vite fingerprints everything under /assets; the service worker, manifest and index.html must revalidate. */
 export const cacheControl = (pathname: string) => (pathname.startsWith('/assets/') ? IMMUTABLE : NO_CACHE)
 
-const SERVER_PREFIXES = ['/api', '/mcp', '/oauth', '/.well-known', '/gate']
-const isServerPath = (path: string) => SERVER_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))
 
 /** Serves the built PWA: files by path, extension-less paths fall back to index.html, missing files are 404. */
 export function serveWeb(webDist: string): MiddlewareHandler {
