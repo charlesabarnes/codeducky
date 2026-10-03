@@ -24,10 +24,11 @@ export function countNotes(notes: readonly Note[]): NoteCounts {
 
 export type StatusFilter = 'all' | 'active' | NoteStatus | 'possibly-resolved'
 
+/** Whether a note passes the status filter in the notes panel. */
 export function matchesStatus(note: Note, filter: StatusFilter): boolean {
   if (filter === 'all') return true
+  if (filter === 'possibly-resolved') return note.status === 'open' && note.anchorLost === true
   if (filter === 'active') return note.status === 'open' || note.status === 'suggested'
-  if (filter === 'possibly-resolved') return note.status === 'open' && Boolean(note.anchorLost)
   return note.status === filter
 }
 
