@@ -14,7 +14,6 @@ import { BaseBanner } from '../github/BaseBanner'
 import { PushDialog } from '../github/PushDialog'
 import { useBaseFreshness } from '../github/useBaseFreshness'
 import { repoRef } from '../../github/connect'
-import { ClaudePass } from '../claude/ClaudePass'
 import { exportSessionReport } from '../history/exportReport'
 import { useKeys, useShortcuts } from '../../keys/context'
 import type { NavRequest } from '../../keys/diffNavContext'
@@ -24,6 +23,7 @@ import { FileList, type FileNoteCount } from './FileList'
 import { filterFiles, nextUnviewed, stepFile } from './fileNav'
 import { FilePane, OrphanPane, type NoteFocus } from './FilePane'
 import { useReanchor } from './useReanchor'
+import { useFileSummary } from './useFileSummary'
 import { useSessionScan } from './useSessionScan'
 import { repoPath } from '../../app/paths'
 
@@ -49,6 +49,7 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
   const sessionId = session.id!
   const scan = useSessionScan(repo.dirHandle, session.baseSha, session.baseSource === 'github' ? repoRef(repo) : null)
   useReanchor(sessionId, scan.files)
+  useFileSummary(sessionId, scan.files, scan.stats, scan.scanning)
   const [params, setParams] = useSearchParams()
   const [mode, setMode] = useState<ViewMode>(() =>
     localStorage.getItem(VIEW_MODE_KEY) === 'split' ? 'split' : 'unified',
@@ -181,7 +182,6 @@ export function SessionView({ session, repo }: { session: Session; repo: OpenedR
           </div>
           {scan.files && scan.files.length > 0 && <ViewedProgress viewed={viewed.size} total={scan.files.length} />}
           {exportError && <p className="error">{exportError}</p>}
-          <ClaudePass sessionId={sessionId} repo={repo} files={scan.files} viewed={viewed} />
         </div>
         <div className="tabs" role="tablist">
           <TabButton tab="files" current={tab} onSelect={setTab} label={`Files ${scan.files?.length ?? ''}`} />

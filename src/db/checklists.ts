@@ -5,7 +5,9 @@ import type { Checklist, ChecklistScope } from './schema'
 export const newItem = (text: string) => ({ id: crypto.randomUUID(), text })
 
 export async function createChecklist(db: SkelbertDb, scope: ChecklistScope, draft: ChecklistDraft): Promise<string> {
-  return db.checklists.add({ scope, title: draft.title, items: draft.items.map(newItem) }) as Promise<string>
+  const checklist: Checklist = { scope, title: draft.title, items: draft.items.map(newItem) }
+  if (draft.required) checklist.required = true
+  return db.checklists.add(checklist) as Promise<string>
 }
 
 export async function importChecklists(db: SkelbertDb, scope: ChecklistScope, drafts: ChecklistDraft[]): Promise<string[]> {
@@ -37,4 +39,5 @@ export async function checkedItems(db: SkelbertDb, sessionId: string): Promise<S
 export const toDraft = (checklist: Checklist): ChecklistDraft => ({
   title: checklist.title,
   items: checklist.items.map((item) => item.text),
+  ...(checklist.required ? { required: true } : {}),
 })

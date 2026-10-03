@@ -117,7 +117,7 @@ describe('sync middleware', () => {
 
   it('does not touch local-only tables', async () => {
     const db = open('mw-local')
-    await db.settings.put({ id: 'app', githubPat: 'ghp_secret', anthropicKey: 'sk', claudeModel: 'm' })
+    await db.settings.put({ id: 'app', githubPat: 'ghp_secret' })
     await db.repoHandles.put({ repoId: 'gh:o/r', dirHandle: {} as FileSystemDirectoryHandle })
     expect(await db.outbox.count()).toBe(0)
     expect(Dexie.currentTransaction).toBeNull()

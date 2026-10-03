@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { db } from '../../db/db'
-import { DEFAULT_CLAUDE_MODEL, loadSettings, saveSettings, type SettingsInput } from '../../db/settings'
+import { loadSettings, saveSettings, type SettingsInput } from '../../db/settings'
 import { TokenTest } from '../github/TokenTest'
 import { ServerSection } from '../sync/ServerSection'
 
@@ -11,9 +11,7 @@ export function SettingsPage() {
   const [saveState, setSaveState] = useState<SaveState>('idle')
 
   useEffect(() => {
-    loadSettings(db).then(({ githubPat, anthropicKey, claudeModel }) =>
-      setForm({ githubPat, anthropicKey, claudeModel }),
-    )
+    loadSettings(db).then(({ githubPat }) => setForm({ githubPat }))
   }, [])
 
   if (!form) return <p className="muted">Loading settings…</p>
@@ -46,22 +44,6 @@ export function SettingsPage() {
           onChange={update('githubPat')}
         />
         <TokenTest token={form.githubPat} />
-        <SecretField
-          label="Anthropic API key"
-          hint="Used for the optional Claude review pass."
-          value={form.anthropicKey}
-          onChange={update('anthropicKey')}
-        />
-        <label className="field">
-          <span>Claude model</span>
-          <input
-            name="claudeModel"
-            value={form.claudeModel}
-            placeholder={DEFAULT_CLAUDE_MODEL}
-            onChange={(e) => update('claudeModel')(e.target.value)}
-            spellCheck={false}
-          />
-        </label>
         <div className="row">
           <button type="submit" disabled={saveState === 'saving'}>
             Save

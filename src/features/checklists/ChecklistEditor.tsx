@@ -11,6 +11,7 @@ interface ChecklistEditorProps {
 export function ChecklistEditor({ checklist, onDone }: ChecklistEditorProps) {
   const [title, setTitle] = useState(checklist.title)
   const [items, setItems] = useState<ChecklistItem[]>(checklist.items.length ? checklist.items : [newItem('')])
+  const [required, setRequired] = useState(Boolean(checklist.required))
 
   const update = (index: number, text: string) =>
     setItems((current) => current.map((item, i) => (i === index ? { ...item, text } : item)))
@@ -25,13 +26,19 @@ export function ChecklistEditor({ checklist, onDone }: ChecklistEditorProps) {
 
   const save = async () => {
     const kept = items.map((item) => ({ ...item, text: item.text.trim() })).filter((item) => item.text)
-    await saveChecklist(db, { ...checklist, title: title.trim() || 'Untitled', items: kept })
+    await saveChecklist(db, { ...checklist, title: title.trim() || 'Untitled', items: kept, required })
     onDone()
   }
 
   return (
     <div className="stack checklist-editor" style={{ gap: '0.5rem' }}>
       <input value={title} aria-label="Checklist title" onChange={(event) => setTitle(event.target.value)} />
+      <label className="row">
+        <input type="checkbox" checked={required} onChange={(event) => setRequired(event.target.checked)} />
+        <span>
+          Required <span className="muted">(unticked items block a push through the pre-push gate)</span>
+        </span>
+      </label>
       <ol className="stack" style={{ gap: '0.25rem' }}>
         {items.map((item, index) => (
           <li key={item.id} className="row">

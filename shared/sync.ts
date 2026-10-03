@@ -98,10 +98,11 @@ const shape =
 
 const anchor = shape({ line: num, side: oneOf('old', 'new'), text: str, before: arrayOf(str), after: arrayOf(str) })
 
+/** 'claude' only appears on notes from the removed in-app Claude pass. */
 export const NOTE_SOURCES = ['me', 'claude', 'mcp'] as const
 
 const FIELDS: Record<SyncKind, Record<string, Check>> = {
-  repos: { owner: str, name: str, folderName: str, baseBranch: str, lastOpenedAt: num },
+  repos: { owner: str, name: str, folderName: str, baseBranch: str, lastOpenedAt: num, instructions: optional(str) },
   sessions: {
     repoId: str,
     branch: str,
@@ -110,6 +111,7 @@ const FIELDS: Record<SyncKind, Record<string, Check>> = {
     baseSource: oneOf('local', 'github'),
     startedAt: num,
     status: oneOf('active', 'archived'),
+    files: optional(arrayOf(shape({ path: str, status: str }))),
   },
   notes: {
     sessionId: str,
@@ -123,7 +125,7 @@ const FIELDS: Record<SyncKind, Record<string, Check>> = {
     updatedAt: num,
     resolution: optional(shape({ by: str, text: str, at: num })),
   },
-  checklists: { scope: str, title: str, items: arrayOf(shape({ id: str, text: str })) },
+  checklists: { scope: str, title: str, items: arrayOf(shape({ id: str, text: str })), required: optional(bool) },
   checklistState: { sessionId: str, itemId: str, checked: bool },
   fileViews: { sessionId: str, path: str, contentHash: str, viewed: bool },
 }

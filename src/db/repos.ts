@@ -1,3 +1,4 @@
+import { MAX_INSTRUCTIONS } from '../../shared/instructions'
 import { repoIdFor } from '../sync/ids'
 import type { SkelbertDb } from './db'
 import type { OpenedRepo, Repo } from './schema'
@@ -65,3 +66,8 @@ export async function openedRepo(db: SkelbertDb, repo: Repo | undefined): Promis
 }
 
 export const repoLabel = (repo: Pick<Repo, 'owner' | 'name'>) => (repo.owner ? `${repo.owner}/${repo.name}` : repo.name)
+
+/** Saves the repo's review instructions; the legacy field goes so the two cannot disagree. */
+export async function saveRepoInstructions(db: SkelbertDb, repoId: string, text: string): Promise<void> {
+  await db.repos.update(repoId, { instructions: text.trim().slice(0, MAX_INSTRUCTIONS), claudeInstructions: undefined })
+}

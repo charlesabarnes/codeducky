@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NOTE_SEVERITIES, type Note, type NoteSeverity } from '../../db/schema'
 import { compareNotes, matchesStatus, type StatusFilter } from '../../review/summary'
-import { SuggestionActions } from '../claude/SuggestionActions'
+import { SuggestionActions } from './SuggestionActions'
 import { NoteBadges } from './NoteBadges'
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [

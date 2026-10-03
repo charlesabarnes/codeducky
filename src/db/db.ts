@@ -1,4 +1,5 @@
 import { Dexie, type EntityTable, type Table } from 'dexie'
+import { dropClaudePass } from './dropClaudePass'
 import { migrateToStringIds, restoreFromStaging } from '../sync/migrateIds'
 import { syncMiddleware } from '../sync/middleware'
 import type { MetaEntry, OutboxEntry, RejectedEntry } from '../sync/types'
@@ -80,6 +81,7 @@ export class SkelbertDb extends Dexie {
         stagingChecklists: null,
       })
       .upgrade(restoreFromStaging)
+    this.version(5).upgrade(dropClaudePass)
     this.use(syncMiddleware)
   }
 }

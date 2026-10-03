@@ -8,6 +8,7 @@ import { gitService } from '../../git/client'
 import type { RepoInfo } from '../../git/types'
 import { githubDefaultBase } from '../github/defaultBase'
 import { RepoFolderGate } from './RepoFolderGate'
+import { RepoInstructions } from './RepoInstructions'
 import { repoHistoryPath } from '../../app/paths'
 
 export function RepoPage() {
@@ -118,6 +119,7 @@ function RepoDetails({ repo }: { repo: OpenedRepo }) {
           its open notes over.
         </p>
       )}
+      <RepoInstructions repo={repo} />
     </section>
   )
 }

@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it } from 'vitest'
 import { SkelbertDb } from '../../src/db/db'
-import { DEFAULT_CLAUDE_MODEL, loadSettings, saveSettings } from '../../src/db/settings'
+import { loadSettings, saveSettings } from '../../src/db/settings'
 
 const opened: SkelbertDb[] = []
 const openDb = (name: string) => {
@@ -16,16 +16,19 @@ afterEach(async () => {
 
 describe('settings', () => {
   it('returns defaults before anything is saved', async () => {
-    const settings = await loadSettings(openDb('defaults'))
-    expect(settings).toEqual({ id: 'app', githubPat: '', anthropicKey: '', claudeModel: DEFAULT_CLAUDE_MODEL })
+    expect(await loadSettings(openDb('defaults'))).toEqual({ id: 'app', githubPat: '' })
   })
 
   it('persists across database connections', async () => {
     const first = openDb('persist')
-    await saveSettings(first, { githubPat: ' ghp_x ', anthropicKey: 'sk-ant', claudeModel: '' })
+    await saveSettings(first, { githubPat: ' ghp_x ' })
     first.close()
+    expect(await loadSettings(openDb('persist'))).toEqual({ id: 'app', githubPat: 'ghp_x' })
+  })
 
-    const reopened = await loadSettings(openDb('persist'))
-    expect(reopened).toEqual({ id: 'app', githubPat: 'ghp_x', anthropicKey: 'sk-ant', claudeModel: DEFAULT_CLAUDE_MODEL })
+  it('ignores fields left over from the removed Claude pass', async () => {
+    const db = openDb('leftover')
+    await db.settings.put({ id: 'app', githubPat: 'ghp', anthropicKey: 'sk', claudeModel: 'm' } as never)
+    expect(await loadSettings(db)).toEqual({ id: 'app', githubPat: 'ghp' })
   })
 })
