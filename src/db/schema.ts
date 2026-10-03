@@ -53,8 +53,13 @@ export interface Session extends Synced {
   headSha: string
   baseSha: string
   baseSource: BaseSource
-  /** Set when baseSource is 'github': the GitHub base branch tip the merge base was computed from. */
-  githubBase?: { branch: string; tipSha: string }
+  /**
+   * Set when baseSource is 'github': the GitHub base branch tip the merge base was computed from, and
+   * `pushedSha`, the last pushed ancestor compared against it when HEAD is not on GitHub.
+   */
+  githubBase?: { branch: string; tipSha: string; pushedSha?: string }
+  /** Why a resumed GitHub-base session went back to the local base. */
+  baseNotice?: string
   startedAt: number
   status: SessionStatus
   files?: SessionFile[]

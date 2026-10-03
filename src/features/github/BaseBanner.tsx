@@ -18,6 +18,7 @@ export function BaseBanner({ state, session, repo }: BaseBannerProps) {
   const [actionError, setActionError] = useState<string | null>(null)
   const base = `origin/${repo.baseBranch}`
   const usingGitHub = session.baseSource === 'github'
+  const pushedSha = usingGitHub ? session.githubBase?.pushedSha : undefined
 
   const act = async (action: () => Promise<void>) => {
     setBusy(true)
@@ -61,6 +62,7 @@ export function BaseBanner({ state, session, repo }: BaseBannerProps) {
       ) : (
         <>
           Diffing against {base} from GitHub ({short(freshness.remoteTip)}), merge base {short(session.baseSha)}.
+          {pushedSha && <> HEAD is not on GitHub, so this used your last pushed commit {short(pushedSha)}.</>}
           {freshness.remoteTip !== localTip && <> Your local {base} is at {short(localTip)}.</>}
         </>
       )
@@ -75,16 +77,20 @@ export function BaseBanner({ state, session, repo }: BaseBannerProps) {
         </>
       )
     } else if (freshness.kind === 'stale') {
+      const { pushed } = state
+      const canUseGitHub = freshness.headPushed || pushed !== null
       message = (
         <>
           Your local {base} ({short(freshness.localTip)}) differs from GitHub ({short(freshness.remoteTip)}), so this diff
           may include changes that are already on {repo.baseBranch} or miss some.{' '}
           {freshness.headPushed
             ? 'Your HEAD is on GitHub, so the merge base and base files can come from there.'
-            : 'Your HEAD is not on GitHub yet. Run git fetch and resume the session from the repo page, or push your branch and rescan.'}
+            : pushed
+              ? `Your HEAD is not on GitHub yet, so the GitHub base would use ${pushed.fallback ? 'the commit your branch forked from' : 'your last pushed commit'} ${short(pushed.sha)}. Unpushed commits stay in the diff.`
+              : 'Your HEAD is not on GitHub yet. Run git fetch and resume the session from the repo page, or push your branch and rescan.'}
         </>
       )
-      if (freshness.headPushed) {
+      if (canUseGitHub) {
         actions = (
           <button type="button" disabled={busy} onClick={() => applyGitHubBase(freshness.remoteTip)}>
             Use GitHub base
@@ -92,6 +98,15 @@ export function BaseBanner({ state, session, repo }: BaseBannerProps) {
         )
       }
     }
+  }
+
+  if (session.baseNotice && !usingGitHub) {
+    message = (
+      <>
+        {session.baseNotice}
+        {message && <> {message}</>}
+      </>
+    )
   }
 
   if (!message) return null

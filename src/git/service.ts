@@ -51,6 +51,21 @@ export function createGitService() {
         return false
       }
     },
+    /** HEAD and its first parents, newest first, up to `limit` commits or the first one missing locally. */
+    async firstParents(limit: number) {
+      const { fs, dir, gitdir, cache } = await fresh()
+      const shas: string[] = []
+      let oid: string | undefined = await git.resolveRef({ fs, dir, gitdir, ref: 'HEAD' })
+      while (oid && shas.length < limit) {
+        shas.push(oid)
+        try {
+          oid = (await git.readCommit({ fs, dir, gitdir, cache, oid })).commit.parent[0]
+        } catch {
+          break
+        }
+      }
+      return shas
+    },
     async missingBlobs(oids: string[]) {
       if (!ctx) throw new Error('No repository is open.')
       return missingBlobs(ctx, oids)

@@ -1,3 +1,4 @@
+import { errorMessage } from '../github/errors'
 import { carryOverNotes } from '../review/carryOver'
 import type { SkelbertDb } from './db'
 import type { Session } from './schema'
@@ -14,16 +15,37 @@ export async function activeSession(db: SkelbertDb, repoId: string, branch: stri
   return sessions[sessions.length - 1]
 }
 
-export async function startOrResumeSession(db: SkelbertDb, start: SessionStart): Promise<string> {
+export type GitHubBaseResolver = () => Promise<Pick<Session, 'headSha' | 'baseSha' | 'githubBase'>>
+
+/**
+ * Resumes the active session for the branch, or starts one. A session on a GitHub base keeps it, with the
+ * merge base recomputed by `resolveGitHubBase`; if that fails, it goes back to the local base with a notice.
+ */
+export async function startOrResumeSession(
+  db: SkelbertDb,
+  start: SessionStart,
+  resolveGitHubBase?: GitHubBaseResolver,
+): Promise<string> {
+  const previous = await activeSession(db, start.repoId, start.branch)
+  let base: Partial<Session> = {
+    headSha: start.headSha,
+    baseSha: start.baseSha,
+    baseSource: 'local',
+    githubBase: undefined,
+    baseNotice: undefined,
+  }
+  if (previous?.baseSource === 'github') {
+    try {
+      if (!resolveGitHubBase) throw new Error('No GitHub connection.')
+      base = { ...(await resolveGitHubBase()), baseSource: 'github', baseNotice: undefined }
+    } catch (error) {
+      base.baseNotice = `Could not get the base from GitHub, so this session uses your local base. ${errorMessage(error)}`
+    }
+  }
   return db.transaction('rw', db.sessions, db.notes, async () => {
     const current = await activeSession(db, start.repoId, start.branch)
     if (current?.id !== undefined) {
-      await db.sessions.update(current.id, {
-        headSha: start.headSha,
-        baseSha: start.baseSha,
-        baseSource: 'local',
-        githubBase: undefined,
-      })
+      await db.sessions.update(current.id, base)
       return current.id
     }
     return createSession(db, start)

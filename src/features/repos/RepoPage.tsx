@@ -6,6 +6,7 @@ import type { OpenedRepo } from '../../db/schema'
 import { activeSession, startNewSession, startOrResumeSession } from '../../db/sessions'
 import { gitService } from '../../git/client'
 import type { RepoInfo } from '../../git/types'
+import { resolveGitHubBase } from '../github/baseActions'
 import { githubDefaultBase } from '../github/defaultBase'
 import { RepoFolderGate } from './RepoFolderGate'
 import { RepoInstructions } from './RepoInstructions'
@@ -66,7 +67,9 @@ function RepoDetails({ repo }: { repo: OpenedRepo }) {
       const base = await gitService().resolveBase(baseBranch)
       const current = await gitService().info()
       const params = { repoId, branch, headSha: current.headSha, baseSha: base.mergeBaseSha }
-      const sessionId = fresh ? await startNewSession(db, params) : await startOrResumeSession(db, params)
+      const sessionId = fresh
+        ? await startNewSession(db, params)
+        : await startOrResumeSession(db, params, () => resolveGitHubBase(repo, baseBranch))
       navigate(`/sessions/${sessionId}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
