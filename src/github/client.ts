@@ -8,8 +8,13 @@ import type {
   ComparedFile,
   ComparedFileStatus,
   Comparison,
+  IssueComment,
   PendingReviewInput,
+  PullDetail,
   PullFile,
+  PullReview,
+  ReviewEvent,
+  ReviewInput,
   PullRequest,
   RepoRef,
   RepoSummary,
@@ -32,7 +37,7 @@ export interface GitHubClientOptions {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST'
+  method?: 'GET' | 'POST' | 'PUT'
   query?: Record<string, string | number>
   body?: unknown
 }
@@ -48,6 +53,8 @@ interface RawFile {
   status: ComparedFileStatus
   sha?: string | null
   patch?: string
+  additions?: number
+  deletions?: number
 }
 
 interface RawPull {
@@ -136,7 +143,108 @@ const toPullFile = (file: RawFile): PullFile => ({
   previousPath: file.previous_filename ?? null,
   status: file.status,
   patch: file.patch ?? null,
+  sha: file.sha ?? null,
+  additions: file.additions ?? 0,
+  deletions: file.deletions ?? 0,
 })
+
+interface RawUser {
+  login: string
+  avatar_url?: string
+}
+
+interface RawPullDetail extends RawPull {
+  body?: string | null
+  state: 'open' | 'closed'
+  merged?: boolean
+  user: RawUser | null
+  head: { sha: string; ref: string; repo?: { full_name: string } | null }
+  base: { sha: string; ref: string }
+  labels?: { name: string; color?: string }[]
+  requested_reviewers?: RawUser[]
+  requested_teams?: { slug: string; name?: string }[]
+  additions?: number
+  deletions?: number
+  changed_files?: number
+  created_at: string
+  updated_at: string
+}
+
+const toPullDetail = (pull: RawPullDetail): PullDetail => ({
+  ...toPull(pull),
+  body: pull.body ?? '',
+  state: pull.merged ? 'merged' : pull.state,
+  author: pull.user?.login ?? 'ghost',
+  baseSha: pull.base.sha,
+  headRepo: pull.head.repo?.full_name ?? null,
+  labels: (pull.labels ?? []).map((label) => ({ name: label.name, color: label.color ?? null })),
+  requestedReviewers: (pull.requested_reviewers ?? []).map((user) => user.login),
+  requestedTeams: (pull.requested_teams ?? []).map((team) => team.slug),
+  additions: pull.additions ?? 0,
+  deletions: pull.deletions ?? 0,
+  changedFiles: pull.changed_files ?? 0,
+  createdAt: pull.created_at,
+  updatedAt: pull.updated_at,
+})
+
+interface RawReview {
+  id: number
+  node_id?: string
+  user: RawUser | null
+  state: string
+  body?: string | null
+  submitted_at?: string | null
+  html_url: string
+  commit_id?: string | null
+}
+
+const toPullReview = (review: RawReview): PullReview => ({
+  id: review.id,
+  nodeId: review.node_id ?? null,
+  author: review.user?.login ?? 'ghost',
+  state: review.state,
+  body: review.body ?? '',
+  submittedAt: review.submitted_at ?? null,
+  htmlUrl: review.html_url,
+  commitId: review.commit_id ?? null,
+})
+
+interface RawIssueComment {
+  id: number
+  user: RawUser | null
+  body?: string | null
+  created_at: string
+  updated_at: string
+  html_url: string
+}
+
+/** The GraphQL error types GitHub sends, mapped onto the REST error kinds. */
+function graphqlError(errors: { type?: string; message?: string }[]): GitHubError {
+  const first = errors[0] ?? {}
+  const text = errors.map((error) => error.message).filter(Boolean).join('; ')
+  switch (first.type) {
+    case 'NOT_FOUND':
+      return new GitHubError('not-found', 404, `Not found on GitHub. ${text}`)
+    case 'FORBIDDEN':
+      return new GitHubError(
+        'forbidden',
+        403,
+        `GitHub refused access. ${text} A fine-grained token must include this repository, with Pull requests: read and write.`,
+      )
+    case 'RATE_LIMITED':
+      return new GitHubError('rate-limited', 403, `GitHub rate limit reached. ${text}`)
+    default:
+      if (/not accessible by (personal access|integration)/i.test(text)) {
+        return new GitHubError('forbidden', 403, `GitHub refused access. ${text}`)
+      }
+      return new GitHubError('invalid', 422, `GitHub rejected the request. ${text}`)
+  }
+}
+
+export interface GraphqlOptions {
+  /** Return partial data when only some fields failed (e.g. a repository the token cannot see). */
+  partial?: boolean
+}
 
 const toComparedFile = (file: RawFile): ComparedFile => ({
   path: file.filename,
@@ -211,6 +319,21 @@ export function createGitHubClient({ token, fetch: fetchImpl = globalThis.fetch,
       first = false
     }
     return items
+  }
+
+  /** Creates a review; with an `event` it is submitted in the same call, without one it stays pending. */
+  async function createReview(repo: RepoRef, number: number, input: ReviewInput): Promise<Review> {
+    const body: Record<string, unknown> = {
+      commit_id: input.commitId,
+      body: input.body,
+      comments: input.comments.map(({ path, line, side, body }) => ({ path, line, side, body })),
+    }
+    if (input.event) body.event = input.event
+    const { data } = await request<{ id: number; state: string; html_url: string }>(`${repoPath(repo)}/pulls/${number}/reviews`, {
+      method: 'POST',
+      body,
+    })
+    return { id: data.id, state: data.state, htmlUrl: data.html_url }
   }
 
   return {
@@ -290,18 +413,54 @@ export function createGitHubClient({ token, fetch: fetchImpl = globalThis.fetch,
 
     /** Creates a PENDING review: no `event`, so nothing is published until the author submits it on GitHub. */
     async createPendingReview(repo: RepoRef, number: number, input: PendingReviewInput): Promise<Review> {
+      return createReview(repo, number, input)
+    },
+
+    createReview,
+
+    /** Submits a pending review. */
+    async submitReview(repo: RepoRef, number: number, reviewId: number, event: ReviewEvent, body: string): Promise<Review> {
       const { data } = await request<{ id: number; state: string; html_url: string }>(
-        `${repoPath(repo)}/pulls/${number}/reviews`,
-        {
-          method: 'POST',
-          body: {
-            commit_id: input.commitId,
-            body: input.body,
-            comments: input.comments.map(({ path, line, side, body }) => ({ path, line, side, body })),
-          },
-        },
+        `${repoPath(repo)}/pulls/${number}/reviews/${reviewId}/events`,
+        { method: 'POST', body: { event, body } },
       )
       return { id: data.id, state: data.state, htmlUrl: data.html_url }
+    },
+
+    async updateReviewBody(repo: RepoRef, number: number, reviewId: number, body: string): Promise<void> {
+      await request(`${repoPath(repo)}/pulls/${number}/reviews/${reviewId}`, { method: 'PUT', body: { body } })
+    },
+
+    async pull(repo: RepoRef, number: number): Promise<PullDetail> {
+      return toPullDetail((await request<RawPullDetail>(`${repoPath(repo)}/pulls/${number}`)).data)
+    },
+
+    /** Submitted reviews, oldest first (pending reviews of other people are never listed). */
+    async pullReviews(repo: RepoRef, number: number): Promise<PullReview[]> {
+      return (await paginate<RawReview>(`${repoPath(repo)}/pulls/${number}/reviews`)).map(toPullReview)
+    },
+
+    /** The pull request's conversation: comments that are not on a line. */
+    async issueComments(repo: RepoRef, number: number): Promise<IssueComment[]> {
+      const comments = await paginate<RawIssueComment>(`${repoPath(repo)}/issues/${number}/comments`)
+      return comments.map((c) => ({
+        id: c.id,
+        author: c.user?.login ?? 'ghost',
+        body: c.body ?? '',
+        createdAt: c.created_at,
+        updatedAt: c.updated_at,
+        htmlUrl: c.html_url,
+      }))
+    },
+
+    async graphql<T>(query: string, variables: Record<string, unknown> = {}, options: GraphqlOptions = {}): Promise<T> {
+      const { data } = await request<{ data?: T | null; errors?: { type?: string; message?: string }[] }>('/graphql', {
+        method: 'POST',
+        body: { query, variables },
+      })
+      if (data.errors?.length && (!options.partial || !data.data)) throw graphqlError(data.errors)
+      if (!data.data) throw new GitHubError('invalid', 422, 'GitHub returned no data.')
+      return data.data
     },
 
     /** Check runs for a commit, or null when GitHub does not have the commit. */

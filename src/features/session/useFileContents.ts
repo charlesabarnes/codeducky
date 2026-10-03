@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { gitService } from '../../git/client'
 import type { FileChange, FileContents } from '../../git/types'
+import type { DiffSource } from './source'
 
 const LARGE_FILE_LIMIT = 50 * 1024 * 1024
 
-export function useFileContents(change: FileChange | null, generation: number) {
+export function useFileContents(source: DiffSource, change: FileChange | null, generation: number) {
   const [state, setState] = useState<{ key: string; contents: FileContents | null; error: string | null } | null>(null)
   const [largeAllowed, setLargeAllowed] = useState<string | null>(null)
   const key = change ? `${generation}:${change.path}:${change.oldOid}:${change.newOid}` : ''
@@ -13,7 +13,7 @@ export function useFileContents(change: FileChange | null, generation: number) {
   useEffect(() => {
     if (!change) return
     let cancelled = false
-    gitService()
+    source
       .contents(change, allowLarge ? LARGE_FILE_LIMIT : undefined)
       .then((contents) => !cancelled && setState({ key, contents, error: null }))
       .catch(
@@ -23,7 +23,7 @@ export function useFileContents(change: FileChange | null, generation: number) {
     return () => {
       cancelled = true
     }
-  }, [change, key, allowLarge])
+  }, [source, change, key, allowLarge])
 
   const current = state?.key === key ? state : null
   return {

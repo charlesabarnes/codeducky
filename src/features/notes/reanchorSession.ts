@@ -1,8 +1,7 @@
 import { db } from '../../db/db'
 import { applyReanchoring, sessionNotes } from '../../db/notes'
 import type { NoteSide } from '../../db/schema'
-import { gitService } from '../../git/client'
-import type { FileChange, FileSide } from '../../git/types'
+import type { FileChange, FileContents, FileSide } from '../../git/types'
 import { sideLines, type NumberedLine } from '../../review/lines'
 import { reanchorNotes } from '../../review/reanchor'
 
@@ -10,7 +9,12 @@ type Sides = Record<NoteSide, NumberedLine[] | null>
 
 const unreadable = (side: FileSide | null) => side !== null && side.kind !== 'text'
 
-export async function reanchorSession(sessionId: string, files: FileChange[], cancelled: () => boolean): Promise<void> {
+export async function reanchorSession(
+  sessionId: string,
+  files: FileChange[],
+  readContents: (change: FileChange) => Promise<FileContents>,
+  cancelled: () => boolean,
+): Promise<void> {
   const notes = await sessionNotes(db, sessionId)
   if (notes.length === 0) return
   // A note left on a file's old name follows it through a rename.
@@ -23,7 +27,7 @@ export async function reanchorSession(sessionId: string, files: FileChange[], ca
       sides.set(path, { old: null, new: null })
       continue
     }
-    const contents = await gitService().contents(change)
+    const contents = await readContents(change)
     if (cancelled()) return
     sides.set(
       path,

@@ -1,6 +1,6 @@
 /** Wire protocol for `POST /api/sync`, shared by the PWA and the server. */
 
-export const SYNC_KINDS = ['repos', 'sessions', 'notes', 'checklists', 'checklistState', 'fileViews'] as const
+export const SYNC_KINDS = ['repos', 'sessions', 'notes', 'checklists', 'checklistState', 'fileViews', 'inbox'] as const
 export type SyncKind = (typeof SYNC_KINDS)[number]
 
 export type RecordData = Record<string, unknown>
@@ -112,6 +112,9 @@ const FIELDS: Record<SyncKind, Record<string, Check>> = {
     startedAt: num,
     status: oneOf('active', 'archived'),
     files: optional(arrayOf(shape({ path: str, status: str }))),
+    source: optional(oneOf('local', 'github-pr')),
+    pr: optional(shape({ owner: str, name: str, number: num })),
+    review: optional(shape({ state: oneOf('APPROVED', 'CHANGES_REQUESTED', 'COMMENTED'), at: num })),
   },
   notes: {
     sessionId: str,
@@ -128,6 +131,10 @@ const FIELDS: Record<SyncKind, Record<string, Check>> = {
   checklists: { scope: str, title: str, items: arrayOf(shape({ id: str, text: str })), required: optional(bool) },
   checklistState: { sessionId: str, itemId: str, checked: bool },
   fileViews: { sessionId: str, path: str, contentHash: str, viewed: bool },
+  inbox: {
+    fetchedAt: num,
+    items: arrayOf(shape({ repo: str, number: num, title: str, author: str, url: str, updatedAt: str, section: str })),
+  },
 }
 
 function pairMatches(kind: SyncKind, id: string, data: RecordData): boolean {

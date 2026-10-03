@@ -16,6 +16,7 @@ const KIND_LABEL: Record<SyncKind, string> = {
   checklists: 'Checklist',
   checklistState: 'Checklist tick',
   fileViews: 'Viewed file',
+  inbox: 'Inbox',
 }
 
 function describe(kind: SyncKind, row: Record<string, unknown> | undefined): string {

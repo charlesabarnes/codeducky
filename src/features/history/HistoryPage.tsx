@@ -40,7 +40,10 @@ export function HistoryPage() {
           <tbody>
             {history.map(({ session, counts }) => (
               <tr key={session.id}>
-                <td className="mono">{session.branch}</td>
+                <td className="mono">
+                  {session.source === 'github-pr' && session.pr ? `PR #${session.pr.number} (${session.branch})` : session.branch}
+                  {session.review && <span className="badge muted">{session.review.state.toLowerCase().replace('_', ' ')}</span>}
+                </td>
                 <td>{new Date(session.startedAt).toLocaleString()}</td>
                 <td className="mono">{session.headSha.slice(0, 7)}</td>
                 <td>{counts.byStatus.open}</td>

@@ -30,12 +30,14 @@ for branch in $branches; do
   answer=$(skelbert_check "$repo" "$branch") || continue
   verdict=$(printf '%s\n' "$answer" | head -n 1)
   link=$(printf '%s\n' "$answer" | sed -n 's/^url //p')
+  pr_link=$(printf '%s\n' "$answer" | sed -n 's/^pr //p')
   if [ "$verdict" = FAIL ]; then
     blocked=1
     {
       printf 'skelbert: push of %s@%s blocked by the review gate:\n' "$repo" "$branch"
       printf '%s\n' "$answer" | sed -n 's/^- /  - /p'
       printf '  Review: %s\n' "$link"
+      [ -z "$pr_link" ] || printf '  Pull request: %s\n' "$pr_link"
     } >&2
   else
     printf '%s\n' "$answer" | sed -n 's/^- /skelbert: /p' >&2

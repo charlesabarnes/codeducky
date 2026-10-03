@@ -92,6 +92,7 @@ describe('mcp tools', () => {
       'get_review_context',
       'list_notes',
       'list_repos',
+      'list_review_requests',
       'list_sessions',
       'resolve_note',
     ])
@@ -199,7 +200,7 @@ describe('mcp tools', () => {
     expect((await call('add_note', { repo: 'charlesabarnes/invoice-service', branch: 'nope', path: 'a', line: 1, body: 'x' })).error).toContain(
       'Branches with sessions: feature/tax, main',
     )
-    expect((await call('add_note', { path: 'a', line: 1, body: 'x' })).error).toContain('Give a session id, or both repo and branch')
+    expect((await call('add_note', { path: 'a', line: 1, body: 'x' })).error).toContain('Give a session id, or repo with branch or pr')
   })
 
   it('get_checklist and check_item use the applicable checklists', async () => {

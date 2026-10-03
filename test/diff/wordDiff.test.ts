@@ -104,3 +104,10 @@ describe('pairChangedLines with skipped lines', () => {
     expect(partners.has(moved)).toBe(false)
   })
 })
+
+describe('very long runs', () => {
+  it('pairs a 200k-line run without overflowing the stack', () => {
+    const lines = Array.from({ length: 200_000 }, (_, i) => ({ kind: 'add' as const, text: `x${i}`, oldNo: null, newNo: i + 1 }))
+    expect(pairChangedLines(lines, () => false).size).toBe(0)
+  })
+})

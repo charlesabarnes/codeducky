@@ -164,3 +164,12 @@ describe('pinned lines', () => {
     expect(pinned[1]!.lines.map((line) => line.newNo)).toEqual([10])
   })
 })
+
+describe('very long files', () => {
+  it('segments a 200k-line added file without overflowing the stack', () => {
+    const text = Array.from({ length: 200_000 }, (_, i) => `line ${i}`).join('\n')
+    const segments = buildSegments(buildLines('', text))
+    expect(segments).toHaveLength(1)
+    expect(segments[0]!.lines).toHaveLength(200_000)
+  })
+})

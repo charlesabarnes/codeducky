@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { MovedIndex } from '../../diff/moved'
-import { gitService } from '../../git/client'
 import type { FileChange, FileStats } from '../../git/types'
-import { connect } from '../../github/connect'
-import { githubBaseChanges } from '../../github/remoteBase'
-import type { RepoRef } from '../../github/types'
+import type { DiffSource } from './source'
 
 export interface ScanState {
   files: FileChange[] | null
@@ -19,8 +16,8 @@ export interface ScanState {
 
 const NO_MOVES: MovedIndex = {}
 
-/** `githubRepo` is set when the session's base came from GitHub, so base files may need fetching from there. */
-export function useSessionScan(handle: FileSystemDirectoryHandle, baseSha: string, githubRepo: RepoRef | null): ScanState {
+/** Lists the source's files, then analyses them (line counts, moved blocks); runs again on rescan or a new source. */
+export function useSessionScan(source: DiffSource): ScanState {
   const [files, setFiles] = useState<FileChange[] | null>(null)
   const [stats, setStats] = useState<Record<string, FileStats>>({})
   const [moved, setMoved] = useState<MovedIndex>(NO_MOVES)
@@ -28,8 +25,6 @@ export function useSessionScan(handle: FileSystemDirectoryHandle, baseSha: strin
   const [error, setError] = useState<string | null>(null)
   const [scanning, setScanning] = useState(true)
   const [generation, setGeneration] = useState(0)
-  const owner = githubRepo?.owner ?? null
-  const name = githubRepo?.name ?? null
 
   useEffect(() => {
     let cancelled = false
@@ -37,14 +32,11 @@ export function useSessionScan(handle: FileSystemDirectoryHandle, baseSha: strin
       setScanning(true)
       setError(null)
       try {
-        const git = gitService()
-        await git.open(handle)
-        const changes = owner && name ? await scanGitHubBase({ owner, name }, baseSha) : await git.changes(baseSha)
-        const renamed = await git.detectRenames(changes)
+        const listed = await source.listFiles()
         if (cancelled) return
-        setFiles(renamed.changes)
-        setRenamesLimited(renamed.limited)
-        const analysis = await git.analyze(renamed.changes)
+        setFiles(listed.files)
+        setRenamesLimited(listed.renamesLimited)
+        const analysis = await source.analyze(listed.files)
         if (cancelled) return
         setStats(analysis.stats)
         setMoved(analysis.moved)
@@ -58,14 +50,8 @@ export function useSessionScan(handle: FileSystemDirectoryHandle, baseSha: strin
     return () => {
       cancelled = true
     }
-  }, [handle, baseSha, owner, name, generation])
+  }, [source, generation])
 
   const rescan = useCallback(() => setGeneration((n) => n + 1), [])
   return { files, stats, moved, renamesLimited, error, scanning, rescan }
-}
-
-async function scanGitHubBase(ref: RepoRef, baseSha: string): Promise<FileChange[]> {
-  const conn = await connect(ref)
-  if (!conn) throw new Error('This session diffs against a GitHub base, but no GitHub token is set in Settings.')
-  return githubBaseChanges(gitService(), conn.gh, conn.ref, baseSha)
 }

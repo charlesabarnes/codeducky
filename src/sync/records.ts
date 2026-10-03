@@ -39,12 +39,13 @@ export const RECORD_SPECS: Record<SyncKind, RecordSpec> = {
   checklists: byId,
   checklistState: byPair('itemId'),
   fileViews: byPair('path'),
+  inbox: byId,
 }
 
 /** Synced tables share their name with their sync kind. */
 export const isSyncedTable = (name: string): name is SyncKind => Object.hasOwn(RECORD_SPECS, name)
 
-export const HAS_GENERATED_ID: ReadonlySet<SyncKind> = new Set(['repos', 'sessions', 'notes', 'checklists'])
+export const HAS_GENERATED_ID: ReadonlySet<SyncKind> = new Set(['repos', 'sessions', 'notes', 'checklists', 'inbox'])
 
 export function toWire(kind: SyncKind, row: Row): WireChange {
   const spec = RECORD_SPECS[kind]

@@ -50,4 +50,12 @@ describe('static', () => {
     expect(await api.json()).toEqual({ error: 'not_found' })
     expect((await made.app.request('/api/health')).status).toBe(200)
   })
+
+  it('serves the app for pull request deep links, including github.com-shaped ones', async () => {
+    for (const path of ['/pr/charlesabarnes/skelbert/12', '/charlesabarnes/skelbert/pull/12', '/charlesabarnes/skelbert/pull/12/files', '/charlesabarnes/skelbert/pull/12/commits', '/inbox']) {
+      const res = await made.app.request(path)
+      expect(res.status, path).toBe(200)
+      expect(await res.text()).toContain('<title>Skelbert</title>')
+    }
+  })
 })

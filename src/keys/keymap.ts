@@ -12,8 +12,8 @@ export type KeyScope = 'global' | 'session' | 'file' | 'diff' | 'split'
 /** Higher wins when two active registrations claim the same key. */
 export const SCOPE_PRIORITY: Record<KeyScope, number> = { global: 0, session: 1, file: 2, diff: 3, split: 4 }
 
-export type KeyGroup = 'Navigation' | 'Notes' | 'View' | 'Editor' | 'General'
-export const GROUP_ORDER: readonly KeyGroup[] = ['Navigation', 'Notes', 'View', 'Editor', 'General']
+export type KeyGroup = 'Navigation' | 'Notes' | 'Pull request' | 'View' | 'Editor' | 'Inbox' | 'General'
+export const GROUP_ORDER: readonly KeyGroup[] = ['Navigation', 'Notes', 'Pull request', 'View', 'Editor', 'Inbox', 'General']
 
 export interface KeyBinding {
   id: string
@@ -51,6 +51,12 @@ export const KEYMAP = [
   { id: 'note.accept', keys: ['a'], label: 'Accept the suggestion at or near the focus', group: 'Notes' },
   { id: 'note.dismiss', keys: ['d'], label: 'Dismiss the suggestion at or near the focus', group: 'Notes' },
 
+  { id: 'thread.next', keys: ['t'], label: 'Next review thread', group: 'Pull request', repeat: true },
+  { id: 'thread.prev', keys: ['T'], label: 'Previous review thread', group: 'Pull request', repeat: true },
+  { id: 'thread.reply', keys: ['R'], label: 'Reply to the current thread', group: 'Pull request' },
+  { id: 'thread.resolve', keys: ['X'], label: 'Resolve or unresolve the current thread', group: 'Pull request' },
+  { id: 'tab.conversation', keys: ['g d'], label: 'Conversation tab', group: 'Pull request' },
+
   { id: 'file.viewed', keys: ['v'], label: 'Toggle viewed, then go to the next unviewed file', group: 'View' },
   { id: 'view.mode', keys: ['s'], label: 'Switch split and unified', group: 'View' },
   { id: 'view.whitespace', keys: ['w'], label: 'Hide or show whitespace changes', group: 'View' },
@@ -62,6 +68,11 @@ export const KEYMAP = [
   { id: 'editor.save', keys: ['mod+Enter'], label: 'Save the note', group: 'Editor', docOnly: true, shownWith: 'note.comment' },
   { id: 'editor.cancel', keys: ['Escape'], label: 'Cancel the note, or leave a text field', group: 'Editor', docOnly: true, shownWith: 'note.comment' },
 
+  { id: 'inbox.next', keys: ['j'], label: 'Next pull request', group: 'Inbox', repeat: true },
+  { id: 'inbox.prev', keys: ['k'], label: 'Previous pull request', group: 'Inbox', repeat: true },
+  { id: 'inbox.open', keys: ['o'], label: 'Open a pull request by URL or owner/repo#123', group: 'Inbox' },
+
+  { id: 'nav.inbox', keys: ['g i'], label: 'Go to the inbox', group: 'General' },
   { id: 'help', keys: ['?'], label: 'Show keyboard shortcuts', group: 'General' },
   { id: 'escape', keys: ['Escape'], label: 'Leave the text field', group: 'General', hidden: true },
 ] as const satisfies readonly KeyBinding[]

@@ -1,3 +1,4 @@
+import { githubPrUrl, prUrl } from '../../shared/links'
 import { repoLabel, sessionChecklists, type DataSnapshot, type NoteRecord, type SessionRecord } from './records'
 
 /** How notes and checklists look in tool results. */
@@ -46,5 +47,23 @@ export function checklistView(data: DataSnapshot, session: SessionRecord) {
         items,
       }
     }),
+  }
+}
+
+/** A session's pull request, with links to open it in Skelbert and on GitHub. */
+export function prView(session: SessionRecord, origin: string) {
+  const pr = session.pr
+  if (!pr) return undefined
+  const ref = { owner: pr.owner, name: pr.name, number: pr.number }
+  return {
+    number: pr.number,
+    repo: `${pr.owner}/${pr.name}`,
+    ...(pr.title ? { title: pr.title } : {}),
+    ...(pr.author ? { author: pr.author } : {}),
+    ...(pr.baseRef ? { baseRef: pr.baseRef } : {}),
+    headRef: session.branch,
+    url: pr.url ?? githubPrUrl(ref),
+    skelbertUrl: prUrl(origin, ref),
+    ...(session.review ? { review: { state: session.review.state, at: iso(session.review.at), ...(session.review.url ? { url: session.review.url } : {}) } } : {}),
   }
 }

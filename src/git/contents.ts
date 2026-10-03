@@ -1,23 +1,10 @@
 import git from 'isomorphic-git'
 import { countChanges } from '../diff/hunks'
 import type { GitContext } from './context'
+import { DEFAULT_MAX_BYTES, toSide } from './sides'
 import type { FileChange, FileContents, FileSide, FileStats } from './types'
 
-export const DEFAULT_MAX_BYTES = 1024 * 1024
-const BINARY_SNIFF_BYTES = 8000
-
-export function isBinary(bytes: Uint8Array): boolean {
-  const end = Math.min(bytes.byteLength, BINARY_SNIFF_BYTES)
-  for (let i = 0; i < end; i++) if (bytes[i] === 0) return true
-  return false
-}
-
-function toSide(bytes: Uint8Array, maxBytes: number): FileSide {
-  const size = bytes.byteLength
-  if (isBinary(bytes)) return { kind: 'binary', size }
-  if (size > maxBytes) return { kind: 'too-large', size }
-  return { kind: 'text', text: new TextDecoder().decode(bytes), size }
-}
+export { DEFAULT_MAX_BYTES, isBinary } from './sides'
 
 export async function readOldBytes(ctx: GitContext, oid: string): Promise<Uint8Array> {
   const { fs, dir, gitdir, cache, blobs } = ctx

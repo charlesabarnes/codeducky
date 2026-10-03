@@ -3,8 +3,10 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import { uuidv7 } from '../../shared/ids'
+import { prUrl } from '../../shared/links'
 import { pairId } from '../../shared/sync'
 import {
+  currentPrSession,
   currentSession,
   InvalidRecordError,
   loadData,
@@ -18,12 +20,13 @@ import {
 } from './records'
 import { reviewContext } from '../review/context'
 import { registerPrompts } from './prompts'
-import { checklistView, compareNotes, iso, noteView } from './views'
+import { checklistView, compareNotes, iso, noteView, prView } from './views'
 
 export const SERVER_INSTRUCTIONS = `Skelbert holds the owner's self-review of their git branches: review sessions per repo and branch, line notes, and checklists.
 To work on the checkout you are in, use repo "owner/name" (from the git remote) and the current branch; get_review_context returns the repo's review instructions, checklists, changed files, open notes and recurring past findings in one call.
 Tools that take a session also accept repo + branch instead. Notes you add arrive as suggestions the owner accepts or dismisses; resolve_note closes a note with your reply.
-The review prompt reviews a branch and adds notes; the fix prompt fixes open notes and resolves them.`
+The review prompt reviews a branch and adds notes; the fix prompt fixes open notes and resolves them.
+Pull requests reviewed in Skelbert are sessions too (source "github-pr"): select one with repo + pr. list_review_requests returns the owner's GitHub inbox as last synced from Skelbert.`
 
 const SEVERITIES = ['nit', 'suggestion', 'issue', 'blocker'] as const
 const STATUSES = ['open', 'resolved', 'suggested', 'dismissed'] as const
@@ -48,9 +51,17 @@ function guarded<A>(handler: (args: A) => CallToolResult) {
 }
 
 const sessionTarget = {
-  session: z.string().optional().describe('Session id. Alternatively give repo and branch.'),
+  session: z.string().optional().describe('Session id. Alternatively give repo and branch, or repo and pr.'),
   repo: z.string().optional().describe('Repository as "owner/name" (case-insensitive), or a repo id.'),
   branch: z.string().optional().describe('Branch name; with repo, selects that branch\'s current session.'),
+  pr: z.number().int().min(1).optional().describe('Pull request number; with repo, selects the session reviewing that pull request.'),
+}
+
+interface SessionTarget {
+  session?: string
+  repo?: string
+  branch?: string
+  pr?: number
 }
 
 function findRepos(data: DataSnapshot, query: string): RepoRecord[] {
@@ -62,13 +73,19 @@ function findRepos(data: DataSnapshot, query: string): RepoRecord[] {
   return found
 }
 
-function resolveSession(data: DataSnapshot, target: { session?: string; repo?: string; branch?: string }): SessionRecord {
+function resolveSession(data: DataSnapshot, target: SessionTarget): SessionRecord {
   if (target.session) {
     const session = data.sessions.find((s) => s.id === target.session)
     if (!session) throw new ToolError(`No session with id ${target.session}. Use list_sessions to find one.`)
     return session
   }
-  if (!target.repo || !target.branch) throw new ToolError('Give a session id, or both repo and branch.')
+  if (target.repo && target.pr !== undefined) {
+    const repoIds = new Set(findRepos(data, target.repo).map((repo) => repo.id))
+    const session = currentPrSession(data.sessions.filter((s) => repoIds.has(s.repoId)), target.pr)
+    if (!session) throw new ToolError(`No Skelbert session for ${target.repo}#${target.pr}; the owner has to open the pull request in Skelbert first.`)
+    return session
+  }
+  if (!target.repo || !target.branch) throw new ToolError('Give a session id, or repo with branch or pr.')
   const repoIds = new Set(findRepos(data, target.repo).map((repo) => repo.id))
   const session = currentSession(data.sessions.filter((s) => repoIds.has(s.repoId) && s.branch === target.branch))
   if (!session) {
@@ -94,12 +111,14 @@ const pathMatches = (notePath: string, filter: string) => {
 
 export interface ToolContext {
   db: Database
+  /** Skelbert's public origin, for links in results. */
+  origin?: string
   /** Who is calling, recorded on resolutions as `mcp:<actor>`: the token or OAuth client name. */
   actor: string
   now?: () => number
 }
 
-export function createMcpServer({ db, actor, now = Date.now }: ToolContext): McpServer {
+export function createMcpServer({ db, actor, origin = '', now = Date.now }: ToolContext): McpServer {
   const server = new McpServer({ name: 'skelbert', version: '1.0.0' }, { instructions: SERVER_INSTRUCTIONS })
   const read = { readOnlyHint: true, openWorldHint: false }
   registerPrompts(server, () => loadData(db))
@@ -117,7 +136,7 @@ export function createMcpServer({ db, actor, now = Date.now }: ToolContext): Mcp
     },
     guarded((target) => {
       const data = loadData(db)
-      return json(reviewContext(data, resolveSession(data, target)))
+      return json(reviewContext(data, resolveSession(data, target), origin))
     }),
   )
 
@@ -152,7 +171,8 @@ export function createMcpServer({ db, actor, now = Date.now }: ToolContext): Mcp
       title: 'List review sessions',
       description:
         'Lists review sessions, newest first. Filter by repo ("owner/name") and branch to find the session for a checkout; ' +
-        'the one with current: true is what Skelbert shows for that branch.',
+        'the one with current: true is what Skelbert shows for that branch. source is "local" for a checkout and "github-pr" for a ' +
+        'pull request review, which also carries pr (number, title, GitHub and Skelbert URLs).',
       inputSchema: {
         repo: z.string().optional().describe('Repository as "owner/name", or a repo id.'),
         branch: z.string().optional().describe('Exact branch name.'),
@@ -169,7 +189,8 @@ export function createMcpServer({ db, actor, now = Date.now }: ToolContext): Mcp
       )
       const currentIds = new Set<string>()
       for (const s of matching) {
-        const current = currentSession(data.sessions.filter((other) => other.repoId === s.repoId && other.branch === s.branch))
+        const sameBranch = data.sessions.filter((other) => other.repoId === s.repoId && other.branch === s.branch)
+        const current = s.source === 'github-pr' && s.pr ? currentPrSession(sameBranch, s.pr.number) : currentSession(sameBranch)
         if (current) currentIds.add(current.id)
       }
       return json({
@@ -181,8 +202,11 @@ export function createMcpServer({ db, actor, now = Date.now }: ToolContext): Mcp
               id: s.id,
               repo: repoRecord ? repoLabel(repoRecord) : s.repoId,
               branch: s.branch,
+              source: s.source ?? 'local',
+              ...(s.pr ? { pr: prView(s, origin) } : {}),
               status: s.status,
               current: currentIds.has(s.id),
+              url: `${origin}/sessions/${encodeURIComponent(s.id)}`,
               started: iso(s.startedAt),
               headSha: s.headSha,
               baseSha: s.baseSha,
@@ -211,10 +235,11 @@ export function createMcpServer({ db, actor, now = Date.now }: ToolContext): Mcp
       },
       annotations: read,
     },
-    guarded(({ session, repo, branch, path, severity, status, source, allSessions, limit }) => {
+    guarded(({ session, repo, branch, pr, path, severity, status, source, allSessions, limit }) => {
       const data = loadData(db)
       let sessions: SessionRecord[]
       if (session) sessions = [resolveSession(data, { session })]
+      else if (repo && pr !== undefined) sessions = [resolveSession(data, { repo, pr })]
       else {
         const repoIds = repo ? new Set(findRepos(data, repo).map((r) => r.id)) : null
         const matching = data.sessions.filter((s) => (!repoIds || repoIds.has(s.repoId)) && (!branch || s.branch === branch))
@@ -312,9 +337,9 @@ export function createMcpServer({ db, actor, now = Date.now }: ToolContext): Mcp
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
-    guarded(({ session, repo, branch, path, line, side, severity, title, body, lineText, before, after }) => {
+    guarded(({ session, repo, branch, pr, path, line, side, severity, title, body, lineText, before, after }) => {
       const data = loadData(db)
-      const target = resolveSession(data, { session, repo, branch })
+      const target = resolveSession(data, { session, repo, branch, pr })
       const at = now()
       const note: NoteRecord = {
         id: uuidv7(at),
@@ -332,6 +357,46 @@ export function createMcpServer({ db, actor, now = Date.now }: ToolContext): Mcp
       }
       saveRecord(db, 'notes', note.id, note, at)
       return json({ added: noteView(note, data) })
+    }),
+  )
+
+  server.registerTool(
+    'list_review_requests',
+    {
+      title: 'List review requests',
+      description:
+        'The owner\'s GitHub pull request inbox as last synced from Skelbert: PRs where their review is requested, their own open PRs, ' +
+        'and PRs they reviewed recently. Each item has repo, number, title, author, url, updatedAt and a Skelbert URL. ' +
+        'Skelbert refreshes it whenever the owner opens the Inbox page; fetchedAt says how old it is.',
+      inputSchema: {
+        section: z.enum(['requested', 'mine', 'reviewed', 'all']).default('requested').describe('Which part of the inbox.'),
+      },
+      annotations: read,
+    },
+    guarded(({ section }) => {
+      const data = loadData(db)
+      const inbox = data.inbox()
+      if (!inbox) return json({ fetchedAt: null, items: [], note: 'No inbox has been synced yet. Ask the owner to open the Inbox in Skelbert.' })
+      const items = inbox.items.filter((item) => section === 'all' || item.section === section)
+      return json({
+        fetchedAt: iso(inbox.fetchedAt),
+        section,
+        items: items.map((item) => {
+          const [owner = '', name = ''] = item.repo.split('/')
+          const session = currentPrSession(
+            data.sessions.filter((s) => {
+              const repo = data.repoById.get(s.repoId)
+              return repo !== undefined && repoLabel(repo).toLowerCase() === item.repo.toLowerCase()
+            }),
+            item.number,
+          )
+          return {
+            ...item,
+            skelbertUrl: prUrl(origin, { owner, name, number: item.number }),
+            ...(session ? { session: session.id, sessionStatus: session.status } : {}),
+          }
+        }),
+      })
     }),
   )
 

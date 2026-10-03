@@ -87,7 +87,7 @@ export function FileList(props: FileListProps) {
 
 function rowTitle(file: FileChange, risk: Risk | undefined): string {
   const lines = [file.path]
-  if (file.oldPath) lines.push(`Renamed from ${file.oldPath} (${file.similarity}% similar)`)
+  if (file.oldPath) lines.push(`Renamed from ${file.oldPath}${file.similarity === undefined ? '' : ` (${file.similarity}% similar)`}`)
   if (risk?.reasons.length) lines.push(`Risk: ${risk.reasons.join(', ')}`)
   return lines.join('\n')
 }

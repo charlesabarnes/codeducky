@@ -13,7 +13,11 @@ import { useCiAnnotations } from '../ci/useCiAnnotations'
 import type { CiView } from '../ci/useCiStatus'
 import { LostNotes } from '../notes/LostNotes'
 import { useNoteAnnotations } from '../notes/useNoteAnnotations'
+import type { ReviewThread } from '../../github/threads'
+import { ThreadCard, type ThreadActions } from '../pr/ThreadCard'
+import { useThreadAnnotations } from '../pr/useThreadAnnotations'
 import { renameLabel } from './renames'
+import type { DiffSource } from './source'
 import { useFileContents } from './useFileContents'
 
 export interface NoteFocus {
@@ -23,6 +27,10 @@ export interface NoteFocus {
 
 interface FilePaneProps {
   sessionId: string
+  source: DiffSource
+  /** Review threads on this file, in a pull request session. */
+  threads: ReviewThread[] | null
+  threadActions: ThreadActions | null
   change: FileChange
   notes: Note[]
   mode: ViewMode
@@ -45,18 +53,22 @@ interface FilePaneProps {
 export function FilePane(props: FilePaneProps) {
   const { sessionId, change, notes, mode, onModeChange, generation, viewed, onToggleViewed, focus } = props
   const { navRequest, onBoundary, ignoreWhitespace, onIgnoreWhitespaceChange, moved, onOpenMoved, ci } = props
-  const { contents, error, loading, loadLarge } = useFileContents(change, generation)
+  const { source, threads, threadActions } = props
+  const { contents, error, loading, loadLarge } = useFileContents(source, change, generation)
   const lines = useMemo(
     () => ({ old: sideLines(contents?.old ?? null), new: sideLines(contents?.new ?? null) }),
     [contents],
   )
   const focusedId = focus && notes.some((note) => note.id === focus.id) ? focus.id : null
   const noteAnnotations = useNoteAnnotations({ sessionId, path: change.path, notes, lines, focusedId })
-  const { annotations, placed } = useCiAnnotations(ci, change.path, lines.new?.length ?? null, noteAnnotations)
+  const withCi = useCiAnnotations(ci, change.path, lines.new?.length ?? null, noteAnnotations)
+  const placed = withCi.placed
+  const { annotations, listed: listedThreads } = useThreadAnnotations(threads, threadActions, withCi.annotations)
+  const threadFocused = threadActions?.focusedId != null && (threads ?? []).some((thread) => thread.id === threadActions.focusedId)
   const movedLines = useMemo(() => (moved?.length ? { ranges: moved, onOpen: onOpenMoved } : undefined), [moved, onOpenMoved])
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const paneKey = `${change.path}:${change.oldOid}:${change.newOid}`
-  const collapsed = viewed && expandedKey !== paneKey && focusedId === null
+  const collapsed = viewed && expandedKey !== paneKey && focusedId === null && !threadFocused
   const lost = notes.filter((note) => note.anchorLost && note.status !== 'dismissed')
 
   const focusedNote = focusedId === null ? undefined : notes.find((note) => note.id === focusedId)
@@ -94,12 +106,24 @@ export function FilePane(props: FilePaneProps) {
     scrolled.current = focus
   })
 
+  const scrolledThread = useRef<string | null>(null)
+  const focusedThreadId = threadFocused ? threadActions!.focusedId : null
+  useEffect(() => {
+    if (!focusedThreadId || scrolledThread.current === `${focusedThreadId}:${threadActions?.focusAt}`) return
+    const element = document.getElementById(`thread-${focusedThreadId}`)
+    if (!element) return
+    element.scrollIntoView({ block: 'center' })
+    scrolledThread.current = `${focusedThreadId}:${threadActions?.focusAt}`
+  })
+
   return (
     <>
       <div className="diff-toolbar" data-sticky-header>
         <span className="path mono" title={change.oldPath ? `Renamed from ${change.oldPath}` : undefined}>
           {change.oldPath ? renameLabel(change.oldPath, change.path) : change.path}
-          {change.oldPath && <span className="rename-from"> · renamed, {change.similarity}% similar</span>}
+          {change.oldPath && (
+            <span className="rename-from"> · renamed{change.similarity !== undefined && `, ${change.similarity}% similar`}</span>
+          )}
         </span>
         <button
           type="button"
@@ -129,6 +153,16 @@ export function FilePane(props: FilePaneProps) {
         </div>
       </div>
       <LostNotes notes={lost} heading="Possibly resolved: the anchored line is gone" focusedId={focusedId} />
+      {threadActions && listedThreads.length > 0 && (
+        <section className="listed-threads stack" aria-label="Outdated and file comments">
+          <h3>
+            Outdated and file comments <span className="muted">({listedThreads.length})</span>
+          </h3>
+          {listedThreads.map((thread) => (
+            <ThreadCard key={thread.id} thread={thread} actions={threadActions} showWhere />
+          ))}
+        </section>
+      )}
       {!collapsed && <UnplacedAnnotations items={placed.unplaced} runs={ci.runs} />}
       {collapsed ? (
         <p className="diff-notice muted">
