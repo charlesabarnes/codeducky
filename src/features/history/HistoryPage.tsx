@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router'
 import { db } from '../../db/db'
 import { repoHistory } from '../../db/history'
 import { repoLabel } from '../../db/repos'
+import { repoPath } from '../../app/paths'
 
 export function HistoryPage() {
   const repoId = useParams().repoId ?? ''
@@ -18,7 +19,7 @@ export function HistoryPage() {
   return (
     <section className="page stack">
       <div>
-        <Link to={`/repos/${repoId}`}>← {repoLabel(repo)}</Link>
+        <Link to={repoPath(repoId)}>← {repoLabel(repo)}</Link>
         <h1>History</h1>
       </div>
       {history.length === 0 ? (

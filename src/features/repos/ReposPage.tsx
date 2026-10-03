@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router'
 import { db } from '../../db/db'
 import { supportsFileSystemAccess } from '../../fs/permission'
 import { openRepoFolder } from './openRepoFolder'
+import { repoPath } from '../../app/paths'
 
 export function ReposPage() {
   const navigate = useNavigate()
@@ -16,7 +17,7 @@ export function ReposPage() {
     setOpening(true)
     try {
       const repoId = await openRepoFolder()
-      if (repoId !== null) navigate(`/repos/${repoId}`)
+      if (repoId !== null) navigate(repoPath(repoId))
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -44,7 +45,7 @@ export function ReposPage() {
         <ul className="repo-list">
           {repos.map((repo) => (
             <li key={repo.id} className="card">
-              <Link to={`/repos/${repo.id}`}>
+              <Link to={repoPath(repo.id!)}>
                 <strong>{repo.owner ? `${repo.owner}/${repo.name}` : repo.name}</strong>
               </Link>
               <div className="muted">
