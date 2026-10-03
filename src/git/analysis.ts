@@ -1,5 +1,5 @@
 import { buildLines, type DiffLine } from '../diff/hunks'
-import { detectMovedBlocks, MAX_MOVE_LINES, type MovedIndex, type MoveInput } from '../diff/moved'
+import { changedRuns, detectMovedBlocks, MAX_MOVE_LINES, type MovedIndex, type MoveInput } from '../diff/moved'
 import { readFileContents } from './contents'
 import type { GitContext } from './context'
 import type { FileChange, FileSide, FileStats } from './types'
@@ -20,15 +20,6 @@ function count(lines: readonly DiffLine[]): FileStats {
     else if (line.kind === 'del') deletions++
   }
   return { additions, deletions }
-}
-
-/** The changed lines, with each stretch of context squeezed to one line so runs stay apart. */
-function changedRuns(lines: readonly DiffLine[]): DiffLine[] {
-  const kept: DiffLine[] = []
-  for (const line of lines) {
-    if (line.kind !== 'context' || kept[kept.length - 1]?.kind !== 'context') kept.push(line)
-  }
-  return kept
 }
 
 /** Line counts for every file and moved blocks across the change set, from one read of each file. */

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createAnchor } from '../../src/review/anchor'
 import { numberLines } from '../../src/review/lines'
 import { matchAnchor } from '../../src/review/match'
-import { patchSideLines } from '../../src/review/patch'
+import { patchDiffLines, patchSideLines } from '../../src/review/patch'
 
 const patch = [
   '@@ -1,4 +1,5 @@',
@@ -43,5 +43,17 @@ describe('patchSideLines', () => {
     )
     const anchor = createAnchor(workTree, 22, 'new')
     expect(matchAnchor(anchor, patchSideLines(patch, 'RIGHT'))).toMatchObject({ line: 22 })
+  })
+})
+
+describe('patchDiffLines', () => {
+  it('numbers both sides and skips no-newline markers and a trailing blank', () => {
+    const lines = patchDiffLines('@@ -3,3 +3,3 @@ fn\n a\n-b\n+B\n\\ No newline at end of file\n c\n')
+    expect(lines).toEqual([
+      { kind: 'context', text: 'a', oldNo: 3, newNo: 3 },
+      { kind: 'del', text: 'b', oldNo: 4, newNo: null },
+      { kind: 'add', text: 'B', oldNo: null, newNo: 4 },
+      { kind: 'context', text: 'c', oldNo: 5, newNo: 5 },
+    ])
   })
 })

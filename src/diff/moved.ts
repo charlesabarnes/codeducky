@@ -161,3 +161,12 @@ export function movedAt(ranges: readonly MovedRange[] | undefined, side: DiffSid
   for (const range of ranges) if (range.side === side && line >= range.start && line <= range.end) return range
   return null
 }
+
+/** The changed lines, with each stretch of context squeezed to one line so runs stay apart. */
+export function changedRuns(lines: readonly DiffLine[]): DiffLine[] {
+  const kept: DiffLine[] = []
+  for (const line of lines) {
+    if (line.kind !== 'context' || kept[kept.length - 1]?.kind !== 'context') kept.push(line)
+  }
+  return kept
+}
