@@ -10,6 +10,7 @@ export function syncSummary(state: SyncSnapshot): { label: string; tone: Tone; d
   if (state.auth === 'expired') return { label: 'Sign in again', tone: 'error', detail: 'The sync token was revoked or expired' }
   if (state.rejected > 0) return { label: `${state.rejected} not synced`, tone: 'error', detail: 'The server refused some changes; see Settings' }
   if (state.status === 'offline') return { label: `Offline${pending}`, tone: 'warn', detail: 'Changes are kept and upload when you are back online' }
+  if (state.status === 'unreachable') return { label: `Server unreachable${pending}`, tone: 'warn', detail: 'Changes are kept and upload when the server is back' }
   if (state.status === 'error') return { label: `Sync failed${pending}`, tone: 'error', detail: state.lastError ?? '' }
   if (state.status === 'syncing') return { label: 'Syncing…', tone: 'busy', detail: '' }
   if (state.pending > 0) return { label: `${state.pending} to upload`, tone: 'busy', detail: '' }

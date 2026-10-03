@@ -7,7 +7,7 @@ import { META_AUTH, META_CURSOR, META_LAST_SYNCED_AT, getMeta, setMeta, type Sto
 import { discardRejected, retryRejected } from './rejected'
 
 export type AuthState = 'loading' | 'signedOut' | 'signedIn' | 'expired'
-export type SyncStatus = 'idle' | 'syncing' | 'offline' | 'error'
+export type SyncStatus = 'idle' | 'syncing' | 'offline' | 'unreachable' | 'error'
 export type SignInResult = 'ok' | 'invalid' | 'throttled' | 'offline' | 'error'
 
 export interface SyncSnapshot {
@@ -113,7 +113,10 @@ export class SyncController {
     this.auth = (await getMeta<StoredAuth>(this.db, META_AUTH)) ?? null
     const lastSyncedAt = (await getMeta<number>(this.db, META_LAST_SYNCED_AT)) ?? null
     this.update({ auth: this.auth ? 'signedIn' : 'signedOut', lastSyncedAt, deviceName: this.auth?.name ?? null })
-    if (this.auth) this.startTriggers()
+    if (this.auth) {
+      this.startTriggers()
+      void this.sync()
+    }
   }
 
   /** Stops timers and listeners; used by tests and on sign-out. */
@@ -232,8 +235,8 @@ export class SyncController {
         await this.expire()
         return
       }
-      const offline = error instanceof NetworkError && !isOnline()
-      this.update({ status: offline ? 'offline' : 'error', lastError: error instanceof Error ? error.message : String(error) })
+      const status = error instanceof NetworkError ? (isOnline() ? 'unreachable' : 'offline') : 'error'
+      this.update({ status, lastError: error instanceof Error ? error.message : String(error) })
       this.scheduleRetry()
     }
   }
@@ -283,6 +286,5 @@ export class SyncController {
       })
     }
     this.stopTriggers = () => cleanups.forEach((cleanup) => cleanup())
-    if (this.snapshot.pending > 0) this.scheduleSoon()
   }
 }

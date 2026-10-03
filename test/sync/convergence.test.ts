@@ -77,7 +77,7 @@ describe('two clients', () => {
     await editNote(b.db, doomed, { body: 'edited on B before A deleted it?', severity: 'nit' })
     const fromB = await addNote(b.db, { sessionId, path: 'src/b.ts', anchor, body: 'new on B', severity: 'suggestion' })
     await a.controller.sync()
-    expect(a.controller.getSnapshot().status).toBe('error')
+    expect(a.controller.getSnapshot().status).toBe('unreachable')
     expect(a.controller.getSnapshot().pending).toBeGreaterThan(0)
 
     // Back online: sync both, then A again to pick up B's writes.
@@ -218,5 +218,26 @@ describe('two clients', () => {
       await vi.advanceTimersByTimeAsync(60)
       expect(server.live('notes')).toHaveLength(1)
     })
+  })
+})
+
+describe('app start', () => {
+  it('syncs as soon as a signed-in device starts', async () => {
+    const server = new FakeSyncServer()
+    const a = client('start-a', server)
+    await a.controller.signIn('pass', 'A')
+    await addNote(a.db, { sessionId: 's', path: 'x', anchor, body: 'from A', severity: 'nit' })
+    await a.controller.sync()
+
+    const b = client('start-b', server)
+    await b.controller.signIn('pass', 'B')
+    b.controller.dispose()
+    await addNote(a.db, { sessionId: 's', path: 'y', anchor, body: 'later', severity: 'nit' })
+    await a.controller.sync()
+
+    const reopened = new SyncController(b.db, { fetch: server.fetch, listenToBrowser: false })
+    opened.push({ db: b.db, controller: reopened })
+    await reopened.start()
+    await vi.waitFor(async () => expect(await b.db.notes.count()).toBe(2))
   })
 })
