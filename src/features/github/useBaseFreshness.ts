@@ -4,12 +4,16 @@ import { gitService } from '../../git/client'
 import { connect } from '../../github/connect'
 import { errorMessage } from '../../github/errors'
 import { checkFreshness, type Freshness } from '../../github/freshness'
+import { pushedAncestor, type PushedAncestor } from '../../github/pushedBase'
 
 export type FreshnessState =
   | { status: 'off' }
   | { status: 'checking' }
   | { status: 'error'; message: string }
-  | { status: 'done'; freshness: Freshness; localTip: string }
+  /** `pushed` is HEAD's nearest ancestor on GitHub, looked up when the base is stale and HEAD is not pushed. */
+  | { status: 'done'; freshness: Freshness; localTip: string; pushed: PushedAncestor | null }
+
+const ancestors = new Map<string, Promise<PushedAncestor>>()
 
 /** Compares local origin/<base> with GitHub once the repo is open (`ready`), and again on each `refreshKey`. */
 export function useBaseFreshness(repo: Repo, ready: boolean, refreshKey: number): FreshnessState {
@@ -31,7 +35,18 @@ export function useBaseFreshness(repo: Repo, ready: boolean, refreshKey: number)
         localTip: base.baseTipSha,
         headSha: info.headSha,
       })
-      if (!cancelled) setState({ status: 'done', freshness, localTip: base.baseTipSha })
+      let pushed: PushedAncestor | null = null
+      if (freshness.kind === 'stale' && !freshness.headPushed) {
+        const key = `${owner}/${name}@${info.headSha}:${baseBranch}`
+        let lookup = ancestors.get(key)
+        if (!lookup) {
+          lookup = pushedAncestor(conn.gh, conn.ref, git, baseBranch)
+          ancestors.set(key, lookup)
+          lookup.catch(() => ancestors.delete(key))
+        }
+        pushed = await lookup
+      }
+      if (!cancelled) setState({ status: 'done', freshness, localTip: base.baseTipSha, pushed })
     }
     run().catch((error: unknown) => !cancelled && setState({ status: 'error', message: errorMessage(error) }))
     return () => {

@@ -2,19 +2,18 @@ import { db } from '../../db/db'
 import type { Repo, Session } from '../../db/schema'
 import { gitService } from '../../git/client'
 import { connect } from '../../github/connect'
-import { githubMergeBase } from '../../github/freshness'
+import { findGitHubBase, type GitHubBase } from '../../github/pushedBase'
 
-export async function switchToGitHubBase(session: Session, repo: Repo, remoteTip: string): Promise<void> {
+/** The merge base of HEAD (or its last pushed ancestor) and `baseBranch` on GitHub. */
+export async function resolveGitHubBase(repo: Pick<Repo, 'owner' | 'name'>, baseBranch: string, remoteTip?: string): Promise<GitHubBase> {
   const conn = await connect(repo)
   if (!conn) throw new Error('Set a GitHub token in Settings first.')
-  const { headSha } = await gitService().info()
-  const mergeBase = await githubMergeBase(conn.gh, conn.ref, remoteTip, headSha)
-  await db.sessions.update(session.id!, {
-    headSha,
-    baseSha: mergeBase,
-    baseSource: 'github',
-    githubBase: { branch: repo.baseBranch, tipSha: remoteTip },
-  })
+  return findGitHubBase(conn.gh, conn.ref, gitService(), { baseBranch, remoteTip })
+}
+
+export async function switchToGitHubBase(session: Session, repo: Repo, remoteTip: string): Promise<void> {
+  const base = await resolveGitHubBase(repo, repo.baseBranch, remoteTip)
+  await db.sessions.update(session.id!, { ...base, baseSource: 'github', baseNotice: undefined })
 }
 
 export async function switchToLocalBase(session: Session, repo: Repo): Promise<void> {
@@ -25,5 +24,6 @@ export async function switchToLocalBase(session: Session, repo: Repo): Promise<v
     baseSha: base.mergeBaseSha,
     baseSource: 'local',
     githubBase: undefined,
+    baseNotice: undefined,
   })
 }
