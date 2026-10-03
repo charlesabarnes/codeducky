@@ -40,3 +40,5 @@ export async function saveOpenedRepo(
     lastOpenedAt: now,
   }) as Promise<number>
 }
+
+export const repoLabel = (repo: Pick<Repo, 'owner' | 'name'>) => (repo.owner ? `${repo.owner}/${repo.name}` : repo.name)

@@ -1,11 +1,14 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
 import { CodeText } from './CodeText'
 import {
   buildSegments,
+  DEFAULT_CONTEXT,
   limitBlocks,
+  lineOn,
   toSplitRows,
   visibleBlocks,
   type DiffLine,
+  type DiffSide,
   type GapExpansion,
 } from './hunks'
 import type { SideTokens } from './useHighlight'
@@ -15,15 +18,46 @@ export type ViewMode = 'unified' | 'split'
 const EXPAND_STEP = 20
 const RENDER_STEP = 2000
 const MARKERS = { add: '+', del: '-', context: ' ' } as const
+const NO_PINS: ReadonlySet<string> = new Set()
+
+export interface LineAnnotations {
+  pinned: ReadonlySet<string>
+  render: (side: DiffSide, line: number) => ReactNode
+  onSelect?: (side: DiffSide, line: number) => void
+}
 
 interface DiffTableProps {
   lines: DiffLine[]
   mode: ViewMode
   tokens: SideTokens
+  annotations?: LineAnnotations
 }
 
-export function DiffTable({ lines, mode, tokens }: DiffTableProps) {
-  const segments = useMemo(() => buildSegments(lines), [lines])
+interface RowsProps {
+  lines: DiffLine[]
+  tokens: SideTokens
+  annotations?: LineAnnotations
+}
+
+function selectHandler(annotations: LineAnnotations | undefined, side: DiffSide, line: DiffLine | null) {
+  const number = line ? lineOn(line, side) : null
+  const onSelect = annotations?.onSelect
+  if (!onSelect || number === null) return undefined
+  return (event: MouseEvent) => {
+    const selection = window.getSelection()
+    if ((event.target as HTMLElement).closest('.code') && selection && !selection.isCollapsed) return
+    onSelect(side, number)
+  }
+}
+
+function annotationFor(annotations: LineAnnotations | undefined, side: DiffSide, line: DiffLine | null): ReactNode {
+  const number = line ? lineOn(line, side) : null
+  return annotations && number !== null ? annotations.render(side, number) : null
+}
+
+export function DiffTable({ lines, mode, tokens, annotations }: DiffTableProps) {
+  const pinned = annotations?.pinned ?? NO_PINS
+  const segments = useMemo(() => buildSegments(lines, DEFAULT_CONTEXT, pinned), [lines, pinned])
   const [expanded, setExpanded] = useState<Map<number, GapExpansion>>(new Map())
   const [renderLimit, setRenderLimit] = useState(RENDER_STEP)
   const { blocks, remaining } = useMemo(
@@ -47,7 +81,7 @@ export function DiffTable({ lines, mode, tokens }: DiffTableProps) {
   }
 
   return (
-    <table className="diff-table">
+    <table className={annotations?.onSelect ? 'diff-table selectable' : 'diff-table'}>
       {mode === 'split' ? (
         <colgroup>
           <col className="ln" style={{ width: '3.5rem' }} />
@@ -79,9 +113,9 @@ export function DiffTable({ lines, mode, tokens }: DiffTableProps) {
           ) : (
             <Fragment key={`lines-${index}`}>
               {mode === 'split' ? (
-                <SplitRows lines={block.lines} tokens={tokens} />
+                <SplitRows lines={block.lines} tokens={tokens} annotations={annotations} />
               ) : (
-                <UnifiedRows lines={block.lines} tokens={tokens} />
+                <UnifiedRows lines={block.lines} tokens={tokens} annotations={annotations} />
               )}
             </Fragment>
           ),
@@ -105,43 +139,82 @@ export function DiffTable({ lines, mode, tokens }: DiffTableProps) {
   )
 }
 
-function UnifiedRows({ lines, tokens }: { lines: DiffLine[]; tokens: SideTokens }) {
-  return lines.map((line, index) => (
-    <tr key={index} className={line.kind}>
-      <td className="ln">{line.oldNo}</td>
-      <td className="ln">{line.newNo}</td>
-      <td className="marker">{MARKERS[line.kind]}</td>
-      <td className="code">
-        <CodeText line={line} tokens={tokens} />
-      </td>
-    </tr>
-  ))
+function UnifiedRows({ lines, tokens, annotations }: RowsProps) {
+  return lines.map((line, index) => {
+    const oldNote = annotationFor(annotations, 'old', line)
+    const newNote = annotationFor(annotations, 'new', line)
+    const codeSide = line.kind === 'del' ? 'old' : 'new'
+    return (
+      <Fragment key={index}>
+        <tr className={line.kind}>
+          <td className="ln" onClick={selectHandler(annotations, 'old', line)}>
+            {line.oldNo}
+          </td>
+          <td className="ln" onClick={selectHandler(annotations, 'new', line)}>
+            {line.newNo}
+          </td>
+          <td className="marker">{MARKERS[line.kind]}</td>
+          <td className="code" onClick={selectHandler(annotations, codeSide, line)}>
+            <CodeText line={line} tokens={tokens} />
+          </td>
+        </tr>
+        {(oldNote || newNote) && (
+          <tr className="annotation">
+            <td colSpan={4}>
+              {oldNote}
+              {newNote}
+            </td>
+          </tr>
+        )}
+      </Fragment>
+    )
+  })
 }
 
-function SplitRows({ lines, tokens }: { lines: DiffLine[]; tokens: SideTokens }) {
-  return toSplitRows(lines).map(({ left, right }, index) => (
-    <tr key={index}>
-      <SplitCells line={left} side="old" tokens={tokens} />
-      <SplitCells line={right} side="new" tokens={tokens} divider />
-    </tr>
-  ))
+function SplitRows({ lines, tokens, annotations }: RowsProps) {
+  return toSplitRows(lines).map(({ left, right }, index) => {
+    const oldNote = annotationFor(annotations, 'old', left)
+    const newNote = annotationFor(annotations, 'new', right)
+    return (
+      <Fragment key={index}>
+        <tr>
+          <SplitCells line={left} side="old" tokens={tokens} annotations={annotations} />
+          <SplitCells line={right} side="new" tokens={tokens} annotations={annotations} divider />
+        </tr>
+        {(oldNote || newNote) && (
+          <tr className="annotation">
+            <td colSpan={3}>{oldNote}</td>
+            <td colSpan={3} className="split-divider">
+              {newNote}
+            </td>
+          </tr>
+        )}
+      </Fragment>
+    )
+  })
 }
 
 interface SplitCellsProps {
   line: DiffLine | null
-  side: 'old' | 'new'
+  side: DiffSide
   tokens: SideTokens
+  annotations?: LineAnnotations
   divider?: boolean
 }
 
-function SplitCells({ line, side, tokens, divider }: SplitCellsProps) {
+function SplitCells({ line, side, tokens, annotations, divider }: SplitCellsProps) {
   const kind = line ? line.kind : 'empty'
   const edge = divider ? ' split-divider' : ''
+  const onSelect = selectHandler(annotations, side, line)
   return (
     <>
-      <td className={`ln ${kind}${edge}`}>{line ? (side === 'old' ? line.oldNo : line.newNo) : null}</td>
+      <td className={`ln ${kind}${edge}`} onClick={onSelect}>
+        {line ? (side === 'old' ? line.oldNo : line.newNo) : null}
+      </td>
       <td className={`marker ${kind}`}>{line ? MARKERS[line.kind] : null}</td>
-      <td className={`code ${kind}`}>{line && <CodeText line={line} tokens={tokens} />}</td>
+      <td className={`code ${kind}`} onClick={onSelect}>
+        {line && <CodeText line={line} tokens={tokens} />}
+      </td>
     </>
   )
 }

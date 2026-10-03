@@ -1,7 +1,7 @@
 export type BaseSource = 'local' | 'github'
 export type SessionStatus = 'active' | 'archived'
 export type NoteSide = 'old' | 'new'
-export type NoteSeverity = 'info' | 'nit' | 'warning' | 'blocker'
+export type NoteSeverity = 'nit' | 'suggestion' | 'issue' | 'blocker'
 export type NoteStatus = 'open' | 'resolved' | 'suggested' | 'dismissed'
 export type NoteSource = 'me' | 'claude'
 
@@ -51,8 +51,14 @@ export interface Note {
   severity: NoteSeverity
   status: NoteStatus
   source: NoteSource
+  anchorLost?: boolean
+  carriedFrom?: number
+  createdAt: number
+  updatedAt: number
   github?: { reviewId?: number; commentId?: number }
 }
+
+export const NOTE_SEVERITIES: readonly NoteSeverity[] = ['nit', 'suggestion', 'issue', 'blocker']
 
 export type ChecklistScope = 'global' | number
 

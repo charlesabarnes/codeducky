@@ -1,6 +1,7 @@
 import { diffLines } from 'diff'
 
 export type LineKind = 'context' | 'add' | 'del'
+export type DiffSide = 'old' | 'new'
 
 export interface DiffLine {
   kind: LineKind
@@ -71,9 +72,26 @@ export function countChanges(oldText: string, newText: string): { additions: num
   return { additions, deletions }
 }
 
-export function buildSegments(lines: DiffLine[], context = DEFAULT_CONTEXT): DiffSegment[] {
+export function lineOn(line: DiffLine, side: DiffSide): number | null {
+  if (side === 'old') return line.kind === 'add' ? null : line.oldNo
+  return line.kind === 'del' ? null : line.newNo
+}
+
+export const lineKey = (side: DiffSide, line: number) => `${side}:${line}`
+
+export function buildSegments(
+  lines: DiffLine[],
+  context = DEFAULT_CONTEXT,
+  pinned: ReadonlySet<string> = new Set(),
+): DiffSegment[] {
   const visible = new Array<boolean>(lines.length).fill(false)
+  const isPinned = (line: DiffLine) =>
+    (['old', 'new'] as const).some((side) => {
+      const number = lineOn(line, side)
+      return number !== null && pinned.has(lineKey(side, number))
+    })
   lines.forEach((line, index) => {
+    if (pinned.size > 0 && isPinned(line)) visible[index] = true
     if (line.kind === 'context') return
     const from = Math.max(0, index - context)
     const to = Math.min(lines.length - 1, index + context)

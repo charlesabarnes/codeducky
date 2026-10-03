@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLines, buildSegments, countChanges, toSplitRows, visibleBlocks, limitBlocks, type DiffLine } from '../../src/diff/hunks'
+import { buildLines, buildSegments, countChanges, lineKey, toSplitRows, visibleBlocks, limitBlocks, type DiffLine } from '../../src/diff/hunks'
 
 const numbered = (count: number, from = 1) =>
   Array.from({ length: count }, (_, i) => `line ${i + from}`).join('\n') + '\n'
@@ -149,5 +149,18 @@ describe('limitBlocks', () => {
   it('leaves small diffs untouched', () => {
     const blocks = visibleBlocks(buildSegments(buildLines('a\n', 'b\n')), new Map())
     expect(limitBlocks(blocks, 20)).toEqual({ blocks, remaining: 0 })
+  })
+})
+
+describe('pinned lines', () => {
+  it('keeps pinned lines visible inside a collapsed gap', () => {
+    const oldText = Array.from({ length: 30 }, (_, i) => `line ${i + 1}`).join('\n') + '\n'
+    const newText = oldText.replace('line 30', 'line thirty')
+    const lines = buildLines(oldText, newText)
+    const plain = buildSegments(lines)
+    expect(plain[0]).toMatchObject({ type: 'gap' })
+    const pinned = buildSegments(lines, 3, new Set([lineKey('new', 10)]))
+    expect(pinned.map((segment) => segment.type)).toEqual(['gap', 'lines', 'gap', 'lines'])
+    expect(pinned[1]!.lines.map((line) => line.newNo)).toEqual([10])
   })
 })

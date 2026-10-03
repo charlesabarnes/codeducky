@@ -12,6 +12,7 @@ export function Layout() {
           <NavLink to="/" end>
             Repos
           </NavLink>
+          <NavLink to="/checklists">Checklists</NavLink>
           <NavLink to="/settings">Settings</NavLink>
         </nav>
       </header>

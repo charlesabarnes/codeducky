@@ -29,6 +29,18 @@ export class SkelbertDb extends Dexie {
       checklistState: '[sessionId+itemId], sessionId',
       settings: 'id',
     })
+    this.version(2).upgrade((tx) =>
+      tx
+        .table<Note>('notes')
+        .toCollection()
+        .modify((note) => {
+          const legacy = note.severity as string
+          if (legacy === 'info') note.severity = 'suggestion'
+          if (legacy === 'warning') note.severity = 'issue'
+          note.createdAt ??= Date.now()
+          note.updatedAt ??= note.createdAt
+        }),
+    )
   }
 }
 

@@ -75,6 +75,7 @@ function RepoDetails({ repo }: { repo: Repo }) {
           {repo.folderName} · {branch ?? 'detached HEAD'} @ {info.headSha.slice(0, 7)}
         </p>
         {!info.owner && <p className="muted">No GitHub remote named origin was found.</p>}
+        <Link to={`/repos/${repoId}/history`}>Session history</Link>
       </div>
 
       {info.baseBranches.length === 0 ? (
@@ -105,7 +106,10 @@ function RepoDetails({ repo }: { repo: Repo }) {
         )}
       </div>
       {existing && (
-        <p className="muted">Session started {new Date(existing.startedAt).toLocaleString()}.</p>
+        <p className="muted">
+          Session started {new Date(existing.startedAt).toLocaleString()}. Starting a new session archives it and carries
+          its open notes over.
+        </p>
       )}
     </section>
   )
