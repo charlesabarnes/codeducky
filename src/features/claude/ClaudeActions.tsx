@@ -2,6 +2,7 @@ import { Bot, ChevronDown, Send } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { isFinished, matchSessions, MAX_TASK_NOTES, type ChannelTaskKind, type TaskNote } from '../../../shared/channel'
+import { readStorage, writeStorage } from '../../app/storage'
 import { channelClient, useChannel } from '../../channel/client'
 import { claudeDeepLink, customPrompt, linkPrompt, type LinkTarget } from '../../channel/deepLink'
 import type { Note, Repo, Session } from '../../db/schema'
@@ -34,10 +35,10 @@ export function ClaudeActions({ session, repo, pr, notes }: ClaudeActionsProps) 
 }
 
 function OpenInClaude({ target }: { target: LinkTarget }) {
-  const [hintSeen, setHintSeen] = useState(() => localStorage.getItem(HINT_KEY) === '1')
+  const [hintSeen, setHintSeen] = useState(() => readStorage(HINT_KEY) === '1')
   const [custom, setCustom] = useState('')
   const dismiss = () => {
-    localStorage.setItem(HINT_KEY, '1')
+    writeStorage(HINT_KEY, '1')
     setHintSeen(true)
   }
   return (

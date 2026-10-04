@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { readStorage, writeStorage } from '../../app/storage'
 import type { ViewMode } from '../../diff/DiffTable'
 import type { FileOrder } from '../../review/order'
 
@@ -8,12 +9,12 @@ const KEYS = {
   order: 'skelbert.fileOrder',
 } as const
 
-/** A preference kept in localStorage on this device. */
+/** A preference kept in localStorage on this device, or only in memory when storage fails. */
 function usePersisted<T>(key: string, read: (stored: string | null) => T, write: (value: T) => string) {
-  const [value, setValue] = useState<T>(() => read(localStorage.getItem(key)))
+  const [value, setValue] = useState<T>(() => read(readStorage(key)))
   const change = (next: T) => {
     setValue(next)
-    localStorage.setItem(key, write(next))
+    writeStorage(key, write(next))
   }
   return [value, change] as const
 }
