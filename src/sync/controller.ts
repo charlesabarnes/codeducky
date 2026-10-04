@@ -242,7 +242,7 @@ export class SyncController {
       }
       const status = error instanceof NetworkError ? (isOnline() ? 'unreachable' : 'offline') : 'error'
       this.update({ status, lastError: error instanceof Error ? error.message : String(error) })
-      this.scheduleRetry()
+      this.scheduleRetry(error instanceof HttpError ? error.retryAfterMs : null)
     }
   }
 
@@ -263,13 +263,13 @@ export class SyncController {
     }, this.debounceMs)
   }
 
-  private scheduleRetry() {
+  private scheduleRetry(delayMs: number | null = null) {
     if (!this.stopTriggers) return
     if (this.retryTimer) clearTimeout(this.retryTimer)
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null
       void this.sync()
-    }, this.retryMs)
+    }, delayMs ?? this.retryMs)
   }
 
   private startTriggers() {
