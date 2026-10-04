@@ -20,11 +20,11 @@ import { reviewContext } from '../review/context'
 import { registerPrompts } from './prompts'
 import { checklistView, compareNotes, iso, noteView, prView } from './views'
 
-export const SERVER_INSTRUCTIONS = `Code Ducky holds the owner's self-review of their git branches: review sessions per repo and branch, line notes, and checklists.
+export const SERVER_INSTRUCTIONS = `Code Ducky holds the signed-in user's self-review of their git branches: review sessions per repo and branch, line notes, and checklists.
 To work on the checkout you are in, use repo "owner/name" (from the git remote) and the current branch; get_review_context returns the repo's review instructions, checklists, changed files, open notes and recurring past findings in one call.
-Tools that take a session also accept repo + branch instead. Notes you add arrive as suggestions the owner accepts or dismisses; resolve_note closes a note with your reply.
+Tools that take a session also accept repo + branch instead. Notes you add arrive as suggestions the user accepts or dismisses; resolve_note closes a note with your reply.
 The review prompt reviews a branch and adds notes; the fix prompt fixes open notes and resolves them.
-Pull requests reviewed in Code Ducky are sessions too (source "github-pr"): select one with repo + pr. list_review_requests returns the owner's GitHub inbox as last synced from Code Ducky.`
+Pull requests reviewed in Code Ducky are sessions too (source "github-pr"): select one with repo + pr. list_review_requests returns the user's GitHub inbox as last synced from Code Ducky.`
 
 const SEVERITIES = ['nit', 'suggestion', 'issue', 'blocker'] as const
 const STATUSES = ['open', 'resolved', 'suggested', 'dismissed'] as const
@@ -80,7 +80,7 @@ function resolveSession(data: DataSnapshot, target: SessionTarget): SessionRecor
   if (target.repo && target.pr !== undefined) {
     const repoIds = new Set(findRepos(data, target.repo).map((repo) => repo.id))
     const session = currentPrSession(data.sessions.filter((s) => repoIds.has(s.repoId)), target.pr)
-    if (!session) throw new ToolError(`No Code Ducky session for ${target.repo}#${target.pr}; the owner has to open the pull request in Code Ducky first.`)
+    if (!session) throw new ToolError(`No Code Ducky session for ${target.repo}#${target.pr}; the user has to open the pull request in Code Ducky first.`)
     return session
   }
   if (!target.repo || !target.branch) throw new ToolError('Give a session id, or repo with branch or pr.')
@@ -89,7 +89,7 @@ function resolveSession(data: DataSnapshot, target: SessionTarget): SessionRecor
   if (!session) {
     const branches = [...new Set(data.sessions.filter((s) => repoIds.has(s.repoId)).map((s) => s.branch))].sort()
     throw new ToolError(
-      `No Code Ducky session for ${target.repo}@${target.branch}; the owner has to open it in Code Ducky first.` +
+      `No Code Ducky session for ${target.repo}@${target.branch}; the user has to open it in Code Ducky first.` +
         (branches.length ? ` Branches with sessions: ${branches.join(', ')}.` : ''),
     )
   }
@@ -229,7 +229,7 @@ export function createMcpServer({ db, userId, actor, origin = '', now = Date.now
         path: z.string().optional().describe('A file path, or a directory prefix such as "src/api".'),
         severity: z.enum(SEVERITIES).optional(),
         status: z.enum([...STATUSES, 'all']).default('open').describe('Note status; "all" for every status.'),
-        source: z.enum(SOURCES).optional().describe('Who wrote it: me (the owner), mcp (an MCP client), or claude (old notes from a since-removed in-app pass).'),
+        source: z.enum(SOURCES).optional().describe('Who wrote it: me (the user), mcp (an MCP client), or claude (old notes from a since-removed in-app pass).'),
         allSessions: z.boolean().default(false).describe('Include archived and superseded sessions of the branch too.'),
         limit: z.number().int().min(1).max(500).default(100),
       },
@@ -321,7 +321,7 @@ export function createMcpServer({ db, userId, actor, origin = '', now = Date.now
     {
       title: 'Add a note',
       description:
-        'Adds a review note on a line. It arrives in Code Ducky as a suggestion the owner accepts or dismisses. ' +
+        'Adds a review note on a line. It arrives in Code Ducky as a suggestion the user accepts or dismisses. ' +
         'Pass lineText (and a few lines of before/after context) so the note stays anchored when the file changes.',
       inputSchema: {
         ...sessionTarget,
@@ -365,9 +365,9 @@ export function createMcpServer({ db, userId, actor, origin = '', now = Date.now
     {
       title: 'List review requests',
       description:
-        'The owner\'s GitHub pull request inbox as last synced from Code Ducky: PRs where their review is requested, their own open PRs, ' +
+        'The user\'s GitHub pull request inbox as last synced from Code Ducky: PRs where their review is requested, their own open PRs, ' +
         'and PRs they reviewed recently. Each item has repo, number, title, author, url, updatedAt and a Code Ducky URL. ' +
-        'Code Ducky refreshes it whenever the owner opens the Inbox page; fetchedAt says how old it is.',
+        'Code Ducky refreshes it whenever the user opens the Inbox page; fetchedAt says how old it is.',
       inputSchema: {
         section: z.enum(['requested', 'mine', 'reviewed', 'all']).default('requested').describe('Which part of the inbox.'),
       },
@@ -376,7 +376,7 @@ export function createMcpServer({ db, userId, actor, origin = '', now = Date.now
     guarded(({ section }) => {
       const data = loadData(db, userId)
       const inbox = data.inbox()
-      if (!inbox) return json({ fetchedAt: null, items: [], note: 'No inbox has been synced yet. Ask the owner to open the Inbox in Code Ducky.' })
+      if (!inbox) return json({ fetchedAt: null, items: [], note: 'No inbox has been synced yet. Ask the user to open the Inbox in Code Ducky.' })
       const items = inbox.items.filter((item) => section === 'all' || item.section === section)
       return json({
         fetchedAt: iso(inbox.fetchedAt),

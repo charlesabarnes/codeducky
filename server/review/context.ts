@@ -3,7 +3,10 @@ import { isPrSession, repoLabel, type DataSnapshot, type SessionRecord } from '.
 import { checklistView, compareNotes, iso, noteView, prView } from '../mcp/views'
 import { recurringPatterns } from './patterns'
 
-/** Everything a reviewer needs before reading the diff of one session. */
+/**
+ * Everything a reviewer needs before reading the diff of one session. A pure function of one user's
+ * snapshot from loadData: it never reads the database, so it cannot see another user's records.
+ */
 export function reviewContext(data: DataSnapshot, session: SessionRecord, origin: string) {
   const repo = data.repoById.get(session.repoId)
   const notes = data.notes()

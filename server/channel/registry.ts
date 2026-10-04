@@ -22,8 +22,12 @@ export interface Registration {
   pluginVersion: string
 }
 
-/** The access token behind a plugin connection. OAuth tokens rotate, so their grant is what stays the same. */
+/**
+ * The access token behind a plugin connection. OAuth tokens rotate, so their grant is what stays the same.
+ * Sessions belong to the token's user: every lookup is keyed by user, so ids never collide across users.
+ */
 export interface ChannelOwner {
+  userId: string
   tokenId: string
   grantId: string | null
   tokenName: string
@@ -67,7 +71,10 @@ export interface RegistryOptions {
   /** Unanswered permission prompts are marked expired after this long. */
   permissionTtlMs?: number
   maxQueued?: number
+  /** Tasks kept per user. */
   maxTasks?: number
+  /** Sessions listed per user, connected or waiting to reconnect. */
+  maxSessions?: number
   heartbeatMs?: number
 }
 
@@ -76,6 +83,16 @@ interface SessionEntry {
   owner: ChannelOwner
   sink: PluginSink | null
   queue: { taskId: string; event: PluginEvent }[]
+}
+
+interface TaskEntry {
+  userId: string
+  view: ChannelTaskView
+}
+
+interface PermissionEntry {
+  userId: string
+  view: PermissionView
 }
 
 const STATE_ORDER: Record<ChannelTaskState, number> = {
@@ -88,13 +105,19 @@ const STATE_ORDER: Record<ChannelTaskState, number> = {
   failed: 5,
 }
 
-const sameOwner = (a: ChannelOwner, b: ChannelOwner) => (a.grantId || b.grantId ? a.grantId === b.grantId : a.tokenId === b.tokenId)
+const sameOwner = (a: ChannelOwner, b: ChannelOwner) =>
+  a.userId === b.userId && (a.grantId || b.grantId ? a.grantId === b.grantId : a.tokenId === b.tokenId)
 
+const sessionKey = (userId: string, id: string) => `${userId}\u0000${id}`
+
+const byNewest = <T extends { createdAt: number }>(a: T, b: T) => b.createdAt - a.createdAt
+
+export type ConnectResult = 'ok' | 'conflict' | 'limit'
 export type DecideResult = 'ok' | 'not_found' | 'decided' | 'disconnected'
 
 /**
- * Connected Claude Code channel sessions, the tasks sent to them and their permission prompts. All in
- * memory: a server restart drops them, and the plugins reconnect and register again.
+ * Connected Claude Code channel sessions, the tasks sent to them and their permission prompts, kept apart
+ * per user. All in memory: a server restart drops them, and the plugins reconnect and register again.
  */
 export function createChannelRegistry({
   now = Date.now,
@@ -103,25 +126,30 @@ export function createChannelRegistry({
   permissionTtlMs = 10 * 60_000,
   maxQueued = 20,
   maxTasks = 200,
+  maxSessions = 10,
   heartbeatMs = 15_000,
 }: RegistryOptions = {}) {
   const sessions = new Map<string, SessionEntry>()
-  const tasks = new Map<string, ChannelTaskView>()
-  const permissions = new Map<string, PermissionView>()
-  const listeners = new Set<(state: ChannelState) => void>()
+  const tasks = new Map<string, TaskEntry>()
+  const permissions = new Map<string, PermissionEntry>()
+  const listeners = new Map<string, Set<(state: ChannelState) => void>>()
 
-  const permissionKey = (channelId: string, requestId: string) => `${channelId}:${requestId}`
+  const permissionKey = (userId: string, channelId: string, requestId: string) => `${sessionKey(userId, channelId)}\u0000${requestId}`
 
-  const snapshot = (): ChannelState => ({
-    sessions: [...sessions.values()].map((s) => ({ ...s.view })).sort((a, b) => b.connectedAt - a.connectedAt),
-    tasks: [...tasks.values()].map((t) => ({ ...t })).sort((a, b) => b.createdAt - a.createdAt),
-    permissions: [...permissions.values()].map((p) => ({ ...p })).sort((a, b) => b.createdAt - a.createdAt),
+  const snapshot = (userId: string): ChannelState => ({
+    sessions: [...sessions.values()]
+      .filter((s) => s.owner.userId === userId)
+      .map((s) => ({ ...s.view }))
+      .sort((a, b) => b.connectedAt - a.connectedAt),
+    tasks: [...tasks.values()].filter((t) => t.userId === userId).map((t) => ({ ...t.view })).sort(byNewest),
+    permissions: [...permissions.values()].filter((p) => p.userId === userId).map((p) => ({ ...p.view })).sort(byNewest),
   })
 
-  const changed = () => {
-    if (listeners.size === 0) return
-    const state = snapshot()
-    for (const listener of listeners) listener(state)
+  const changed = (userId: string) => {
+    const subscribed = listeners.get(userId)
+    if (!subscribed?.size) return
+    const state = snapshot(userId)
+    for (const listener of subscribed) listener(state)
   }
 
   const setTaskState = (task: ChannelTaskView, state: ChannelTaskState, message?: string | null) => {
@@ -146,52 +174,63 @@ export function createChannelRegistry({
   }
 
   const owned = (id: string, owner: ChannelOwner): SessionEntry | null => {
-    const entry = sessions.get(id)
+    const entry = sessions.get(sessionKey(owner.userId, id))
     return entry && sameOwner(entry.owner, owner) ? entry : null
   }
 
+  const taskOf = (userId: string, channelId: string, taskId: string): ChannelTaskView | null => {
+    const task = tasks.get(taskId)
+    return task && task.userId === userId && task.view.channelId === channelId ? task.view : null
+  }
+
+  const admit = (id: string, owner: ChannelOwner): ConnectResult => {
+    const existing = sessions.get(sessionKey(owner.userId, id))
+    if (existing) return sameOwner(existing.owner, owner) ? 'ok' : 'conflict'
+    let count = 0
+    for (const entry of sessions.values()) if (entry.owner.userId === owner.userId) count++
+    return count >= maxSessions ? 'limit' : 'ok'
+  }
+
   /** A session is gone: its unfinished tasks can no longer finish, and its prompts can no longer be answered. */
-  const forget = (id: string) => {
-    sessions.delete(id)
-    for (const task of tasks.values()) {
-      if (task.channelId !== id || isFinished(task.state)) continue
+  const forget = (userId: string, id: string) => {
+    sessions.delete(sessionKey(userId, id))
+    for (const { userId: taskUser, view: task } of tasks.values()) {
+      if (taskUser !== userId || task.channelId !== id || isFinished(task.state)) continue
       const delivered = STATE_ORDER[task.state] >= STATE_ORDER.delivered
       setTaskState(task, 'failed', delivered ? 'The Claude Code session ended before reporting done.' : 'The Claude Code session ended before the task was delivered.')
     }
-    for (const request of permissions.values()) {
-      if (request.channelId === id && request.state === 'pending') {
+    for (const { userId: requestUser, view: request } of permissions.values()) {
+      if (requestUser === userId && request.channelId === id && request.state === 'pending') {
         request.state = 'expired'
         request.decidedAt = now()
       }
     }
   }
 
-  const pruneTasks = () => {
-    const at = now()
-    for (const [id, task] of tasks) {
-      if (at - task.updatedAt > taskTtlMs) tasks.delete(id)
-    }
-    if (tasks.size <= maxTasks) return
-    const oldest = [...tasks.values()].sort((a, b) => a.createdAt - b.createdAt)
-    for (const task of oldest.slice(0, tasks.size - maxTasks)) tasks.delete(task.id)
+  /** Keeps a user's newest tasks, up to the cap. */
+  const capTasks = (userId: string) => {
+    const own = [...tasks.values()].filter((t) => t.userId === userId)
+    if (own.length <= maxTasks) return
+    own.sort((a, b) => a.view.createdAt - b.view.createdAt)
+    for (const task of own.slice(0, own.length - maxTasks)) tasks.delete(task.view.id)
   }
 
   return {
     heartbeatMs,
 
-    canConnect(id: string, owner: ChannelOwner): boolean {
-      const existing = sessions.get(id)
-      return !existing || sameOwner(existing.owner, owner)
-    },
+    canConnect: admit,
 
     /**
-     * Registers (or re-registers) a plugin connection. A session id already held by a different token is
-     * refused, so one token cannot take over another's session.
+     * Registers (or re-registers) a plugin connection. Session ids are per user, so another user's session
+     * with the same id is never touched. Within a user, an id held by a different token is refused, so one
+     * token cannot take over another's session, and a user has at most `maxSessions` sessions.
      */
-    connect(registration: Registration, owner: ChannelOwner, sink: PluginSink): 'ok' | 'conflict' {
+    connect(registration: Registration, owner: ChannelOwner, sink: PluginSink): ConnectResult {
+      const admitted = admit(registration.id, owner)
+      if (admitted !== 'ok') return admitted
       const at = now()
-      const existing = sessions.get(registration.id)
-      if (existing && !sameOwner(existing.owner, owner)) return 'conflict'
+      const key = sessionKey(owner.userId, registration.id)
+      const existing = sessions.get(key)
       const view: ChannelSessionView = {
         ...registration,
         tokenName: owner.tokenName,
@@ -201,47 +240,55 @@ export function createChannelRegistry({
       }
       const entry: SessionEntry = existing ?? { view, owner, sink, queue: [] }
       Object.assign(entry, { view, owner, sink })
-      sessions.set(registration.id, entry)
+      sessions.set(key, entry)
       write(entry, { event: 'ready', data: { id: registration.id, heartbeatMs } })
       const queued = entry.queue.splice(0)
       for (const item of queued) {
-        const task = tasks.get(item.taskId)
+        const task = taskOf(owner.userId, registration.id, item.taskId)
         if (!task || isFinished(task.state)) continue
         if (write(entry, item.event)) setTaskState(task, 'sent')
         else entry.queue.push(item)
       }
-      changed()
+      changed(owner.userId)
       return 'ok'
     },
 
     /** The stream closed. Only the current stream can mark the session disconnected. */
-    disconnect(id: string, sink: PluginSink) {
-      const entry = sessions.get(id)
+    disconnect(id: string, owner: ChannelOwner, sink: PluginSink) {
+      const entry = sessions.get(sessionKey(owner.userId, id))
       if (!entry || entry.sink !== sink) return
       entry.sink = null
       entry.view.connected = false
       entry.view.lastSeenAt = now()
-      changed()
+      changed(owner.userId)
     },
 
     /** The plugin is shutting down. */
     remove(id: string, owner: ChannelOwner): boolean {
       if (!owned(id, owner)) return false
-      forget(id)
-      changed()
+      forget(owner.userId, id)
+      changed(owner.userId)
       return true
     },
 
     /** Drops every session a revoked token registered. */
     removeOwner(owner: ChannelOwner) {
       let removed = false
-      for (const [id, entry] of sessions) {
+      for (const entry of sessions.values()) {
         if (sameOwner(entry.owner, owner)) {
-          forget(id)
+          forget(owner.userId, entry.view.id)
           removed = true
         }
       }
-      if (removed) changed()
+      if (removed) changed(owner.userId)
+    },
+
+    /** Drops a disabled or deleted user's sessions, tasks and prompts. Their plugin streams end at the next heartbeat. */
+    removeUser(userId: string) {
+      for (const [key, entry] of sessions) if (entry.owner.userId === userId) sessions.delete(key)
+      for (const [id, task] of tasks) if (task.userId === userId) tasks.delete(id)
+      for (const [key, request] of permissions) if (request.userId === userId) permissions.delete(key)
+      changed(userId)
     },
 
     update(id: string, owner: ChannelOwner, changes: { branch?: string | null; label?: string }): boolean {
@@ -250,13 +297,13 @@ export function createChannelRegistry({
       if (changes.branch !== undefined) entry.view.branch = changes.branch
       if (changes.label !== undefined) entry.view.label = changes.label
       entry.view.lastSeenAt = now()
-      changed()
+      changed(owner.userId)
       return true
     },
 
-    /** Sends a task, or queues it while the plugin reconnects. */
-    sendTask(id: string, input: NewTask): ChannelTaskView | 'not_found' | 'queue_full' {
-      const entry = sessions.get(id)
+    /** Sends a task to one of the user's sessions, or queues it while the plugin reconnects. */
+    sendTask(userId: string, id: string, input: NewTask): ChannelTaskView | 'not_found' | 'queue_full' {
+      const entry = sessions.get(sessionKey(userId, id))
       if (!entry) return 'not_found'
       if (!entry.sink && entry.queue.length >= maxQueued) return 'queue_full'
       const at = now()
@@ -273,32 +320,32 @@ export function createChannelRegistry({
         createdAt: at,
         updatedAt: at,
       }
-      tasks.set(task.id, task)
-      pruneTasks()
+      tasks.set(task.id, { userId, view: task })
+      capTasks(userId)
       const event: PluginEvent = { event: 'task', data: { id: task.id, content: input.content, meta: { ...input.meta, task_id: task.id } } }
       if (write(entry, event)) setTaskState(task, 'sent')
       else entry.queue.push({ taskId: task.id, event })
-      changed()
+      changed(userId)
       return { ...task }
     },
 
     /** The plugin handed the task to Claude Code. */
     delivered(id: string, owner: ChannelOwner, taskId: string): boolean {
       const entry = owned(id, owner)
-      const task = tasks.get(taskId)
-      if (!entry || !task || task.channelId !== id) return false
+      const task = taskOf(owner.userId, id, taskId)
+      if (!entry || !task) return false
       entry.view.lastSeenAt = now()
-      if (setTaskState(task, 'delivered')) changed()
+      if (setTaskState(task, 'delivered')) changed(owner.userId)
       return true
     },
 
     /** Claude reported progress through the plugin's tool. */
     report(id: string, owner: ChannelOwner, taskId: string, state: ReportedState, message: string | null): boolean {
       const entry = owned(id, owner)
-      const task = tasks.get(taskId)
-      if (!entry || !task || task.channelId !== id) return false
+      const task = taskOf(owner.userId, id, taskId)
+      if (!entry || !task) return false
       entry.view.lastSeenAt = now()
-      if (setTaskState(task, state, message)) changed()
+      if (setTaskState(task, state, message)) changed(owner.userId)
       return true
     },
 
@@ -307,79 +354,93 @@ export function createChannelRegistry({
       if (!entry) return false
       entry.view.lastSeenAt = now()
       const active = [...tasks.values()]
-        .filter((t) => t.channelId === id && !isFinished(t.state))
-        .sort((a, b) => b.createdAt - a.createdAt)[0]
-      permissions.set(permissionKey(id, input.requestId), {
-        channelId: id,
-        requestId: input.requestId,
-        taskId: active?.id ?? null,
-        toolName: input.toolName,
-        description: input.description,
-        inputPreview: input.inputPreview,
-        state: 'pending',
-        createdAt: now(),
-        decidedAt: null,
+        .filter((t) => t.userId === owner.userId && t.view.channelId === id && !isFinished(t.view.state))
+        .map((t) => t.view)
+        .sort(byNewest)[0]
+      permissions.set(permissionKey(owner.userId, id, input.requestId), {
+        userId: owner.userId,
+        view: {
+          channelId: id,
+          requestId: input.requestId,
+          taskId: active?.id ?? null,
+          toolName: input.toolName,
+          description: input.description,
+          inputPreview: input.inputPreview,
+          state: 'pending',
+          createdAt: now(),
+          decidedAt: null,
+        },
       })
-      changed()
+      changed(owner.userId)
       return true
     },
 
-    /** Relays the owner's answer to a pending permission prompt. */
-    decide(id: string, requestId: string, behavior: PermissionBehavior): DecideResult {
-      const entry = sessions.get(id)
-      const request = permissions.get(permissionKey(id, requestId))
+    /** Relays the user's answer to a pending permission prompt in one of their sessions. */
+    decide(userId: string, id: string, requestId: string, behavior: PermissionBehavior): DecideResult {
+      const entry = sessions.get(sessionKey(userId, id))
+      const request = permissions.get(permissionKey(userId, id, requestId))?.view
       if (!entry || !request) return 'not_found'
       if (request.state !== 'pending') return 'decided'
       if (!write(entry, { event: 'verdict', data: { request_id: requestId, behavior } })) {
-        changed()
+        changed(userId)
         return 'disconnected'
       }
       request.state = behavior
       request.decidedAt = now()
-      changed()
+      changed(userId)
       return 'ok'
     },
 
     /** Writes a heartbeat; false when the stream is gone. */
-    ping(id: string, sink: PluginSink): boolean {
-      const entry = sessions.get(id)
+    ping(id: string, owner: ChannelOwner, sink: PluginSink): boolean {
+      const entry = sessions.get(sessionKey(owner.userId, id))
       if (!entry || entry.sink !== sink) return false
       const ok = write(entry, { event: 'ping', data: {} })
-      if (!ok) changed()
+      if (!ok) changed(owner.userId)
       return ok
     },
 
     /** Forgets sessions gone longer than the expiry, old tasks, and stale permission prompts. */
     sweep() {
       const at = now()
-      let dirty = false
-      for (const [id, entry] of sessions) {
+      const dirty = new Set<string>()
+      for (const entry of sessions.values()) {
         if (!entry.view.connected && at - entry.view.lastSeenAt > expiryMs) {
-          forget(id)
-          dirty = true
+          forget(entry.owner.userId, entry.view.id)
+          dirty.add(entry.owner.userId)
         }
       }
-      for (const [key, request] of permissions) {
-        if (request.state === 'pending' && (at - request.createdAt > permissionTtlMs || !sessions.has(request.channelId))) {
+      for (const [key, { userId, view: request }] of permissions) {
+        if (request.state === 'pending' && (at - request.createdAt > permissionTtlMs || !sessions.has(sessionKey(userId, request.channelId)))) {
           request.state = 'expired'
           request.decidedAt = at
-          dirty = true
+          dirty.add(userId)
         }
         if (request.state !== 'pending' && at - (request.decidedAt ?? request.createdAt) > permissionTtlMs) {
           permissions.delete(key)
-          dirty = true
+          dirty.add(userId)
         }
       }
-      const before = tasks.size
-      pruneTasks()
-      if (dirty || tasks.size !== before) changed()
+      for (const [id, task] of tasks) {
+        if (at - task.view.updatedAt > taskTtlMs) {
+          tasks.delete(id)
+          dirty.add(task.userId)
+        }
+      }
+      for (const userId of dirty) changed(userId)
     },
 
+    /** One user's sessions, tasks and permission prompts. */
     state: snapshot,
 
-    subscribe(listener: (state: ChannelState) => void): () => void {
-      listeners.add(listener)
-      return () => listeners.delete(listener)
+    subscribe(userId: string, listener: (state: ChannelState) => void): () => void {
+      const own = listeners.get(userId) ?? new Set()
+      listeners.set(userId, own)
+      own.add(listener)
+      return () => {
+        own.delete(listener)
+        if (own.size === 0 && listeners.get(userId) === own) listeners.delete(userId)
+      }
     },
   }
 }

@@ -8,7 +8,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import { createChannelRegistry } from './channel/registry'
-import { login, makeApp, request } from './testing'
+import { createUserSession, makeApp, request } from './testing'
 
 const ChannelNotification = z.object({
   method: z.literal('notifications/claude/channel'),
@@ -35,7 +35,7 @@ describe('channel plugin against a running server', () => {
   const http = Bun.serve({ port: 0, fetch: ctx.app.fetch, idleTimeout: 30 })
   const base = `http://localhost:${http.port}`
   const checkout = mkdtempSync(join(tmpdir(), 'codeducky-channel-repo-'))
-  let browser = ''
+  const { token: browser, user } = createUserSession(ctx.db, 'alice')
   let client: Client
   const channelMessages: z.infer<typeof ChannelNotification>['params'][] = []
   const verdicts: z.infer<typeof VerdictNotification>['params'][] = []
@@ -46,7 +46,6 @@ describe('channel plugin against a running server', () => {
     git('init', '-q', '-b', 'feature/tax')
     git('remote', 'add', 'origin', 'git@github.com:acme/invoice-service.git')
 
-    browser = await login(ctx.app)
     const minted = await request(ctx.app, 'POST', '/api/auth/tokens', { name: 'Claude channel' }, browser)
     const { token } = (await minted.json()) as { token: string }
 
@@ -74,7 +73,7 @@ describe('channel plugin against a running server', () => {
   it('registers, takes a task, reports status and relays a permission prompt', async () => {
     expect(client.getServerCapabilities()?.experimental).toEqual({ 'claude/channel': {}, 'claude/channel/permission': {} })
 
-    const session = await until(() => ctx.channel.state().sessions.find((s) => s.connected), `registration (stderr: ${stderr})`)
+    const session = await until(() => ctx.channel.state(user.id).sessions.find((s) => s.connected), `registration (stderr: ${stderr})`)
     expect(session).toMatchObject({ repo: 'acme/invoice-service', branch: 'feature/tax', tokenName: 'Claude channel', pluginVersion: '0.1.0' })
     expect(session.label).toMatch(/^codeducky-channel-repo-\w+ on /)
 
@@ -89,17 +88,17 @@ describe('channel plugin against a running server', () => {
     const message = await until(() => channelMessages[0], 'the channel notification')
     expect(message.content).toStartWith('Explain the tax rounding.')
     expect(message.meta).toMatchObject({ kind: 'custom', task_id: task.id, repo: 'acme/invoice-service', branch: 'feature/tax' })
-    await until(() => ctx.channel.state().tasks[0]?.state === 'delivered', 'delivery')
+    await until(() => ctx.channel.state(user.id).tasks[0]?.state === 'delivered', 'delivery')
 
     const result = (await client.callTool({ name: 'report_status', arguments: { task_id: task.id, state: 'done', message: 'Explained.' } })) as CallToolResult
     expect(result.isError).toBeFalsy()
-    expect(ctx.channel.state().tasks[0]).toMatchObject({ state: 'done', message: 'Explained.' })
+    expect(ctx.channel.state(user.id).tasks[0]).toMatchObject({ state: 'done', message: 'Explained.' })
 
     await client.notification({
       method: 'notifications/claude/channel/permission_request',
       params: { request_id: 'mnopq', tool_name: 'Bash', description: 'Run the tests', input_preview: '{"command":"npm test"}' },
     })
-    await until(() => ctx.channel.state().permissions[0], 'the permission request')
+    await until(() => ctx.channel.state(user.id).permissions[0], 'the permission request')
     const answered = await request(ctx.app, 'POST', `/api/channel/sessions/${session.id}/permissions/mnopq`, { behavior: 'allow' }, browser)
     expect(answered.status).toBe(200)
     expect(await until(() => verdicts[0], 'the verdict')).toEqual({ request_id: 'mnopq', behavior: 'allow' })
@@ -107,6 +106,6 @@ describe('channel plugin against a running server', () => {
 
   it('unregisters when Claude Code closes the session', async () => {
     await client.close()
-    await until(() => ctx.channel.state().sessions.length === 0, 'unregistering')
+    await until(() => ctx.channel.state(user.id).sessions.length === 0, 'unregistering')
   })
 })
