@@ -4,6 +4,7 @@ import { bodyLimit } from 'hono/body-limit'
 import { streamSSE, type SSEStreamingApi } from 'hono/streaming'
 import { bearerToken, requireToken, type AuthEnv } from '../auth/middleware'
 import type { TokenInfo, TokenStore } from '../auth/tokens'
+import { perUser, rateLimit, type RateLimiter } from '../limits'
 import { publicOrigin } from '../origin'
 import { loadData } from '../records/store'
 import { taskContent, taskMeta } from './content'
@@ -15,6 +16,8 @@ export interface ChannelRoutesOptions {
   tokens: TokenStore
   registry: ChannelRegistry
   publicUrl?: string
+  /** Per-user rate of tasks sent to Claude Code sessions. */
+  taskLimiter: RateLimiter
 }
 
 const MAX_BODY = 64 * 1024
@@ -48,7 +51,7 @@ async function holdOpen(stream: SSEStreamingApi, heartbeatMs: number, beat: () =
  * connects out: POST /stream registers it and streams tasks and permission verdicts back. The PWA,
  * signed in with a device session, lists sessions, sends tasks and answers permission prompts.
  */
-export function channelRoutes({ db, tokens, registry, publicUrl }: ChannelRoutesOptions) {
+export function channelRoutes({ db, tokens, registry, publicUrl, taskLimiter }: ChannelRoutesOptions) {
   const routes = new Hono<AuthEnv>()
   routes.use('*', bodyLimit({ maxSize: MAX_BODY, onError: (c) => c.json({ error: 'too_large' }, 413) }))
   const plugin = requireToken(tokens, ['api', 'oauth'])
@@ -128,7 +131,7 @@ export function channelRoutes({ db, tokens, registry, publicUrl }: ChannelRoutes
     })
   })
 
-  routes.post('/sessions/:id/tasks', browser, async (c) => {
+  routes.post('/sessions/:id/tasks', browser, rateLimit(taskLimiter, perUser), async (c) => {
     const request = parse(taskRequestSchema, await body(c))
     if (!request) return c.json({ error: 'invalid_task' }, 400)
     const { userId } = c.get('principal')

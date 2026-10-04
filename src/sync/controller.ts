@@ -71,6 +71,8 @@ export class SyncController {
   private stopTriggers: (() => void) | null = null
   private debounceTimer: ReturnType<typeof setTimeout> | null = null
   private retryTimer: ReturnType<typeof setTimeout> | null = null
+  /** Until when the server asked us (Retry-After) not to sync. */
+  private throttledUntil = 0
   private inFlight: Promise<void> | null = null
   private rerun = false
 
@@ -161,6 +163,7 @@ export class SyncController {
     this.stop()
     this.rerun = false
     await this.inFlight?.catch(() => undefined)
+    this.throttledUntil = 0
     const auth = this.auth
     this.auth = null
     await this.db.syncMeta.bulkDelete([META_AUTH, META_CURSOR, META_LAST_SYNCED_AT])
@@ -224,7 +227,7 @@ export class SyncController {
 
   private async once() {
     const auth = this.auth
-    if (!auth) return
+    if (!auth || Date.now() < this.throttledUntil) return
     if (!isOnline()) {
       this.update({ status: 'offline' })
       return
@@ -242,7 +245,9 @@ export class SyncController {
       }
       const status = error instanceof NetworkError ? (isOnline() ? 'unreachable' : 'offline') : 'error'
       this.update({ status, lastError: error instanceof Error ? error.message : String(error) })
-      this.scheduleRetry()
+      const retryAfterMs = error instanceof HttpError ? error.retryAfterMs : null
+      if (retryAfterMs !== null) this.throttledUntil = Date.now() + retryAfterMs
+      this.scheduleRetry(retryAfterMs)
     }
   }
 
@@ -263,13 +268,13 @@ export class SyncController {
     }, this.debounceMs)
   }
 
-  private scheduleRetry() {
+  private scheduleRetry(delayMs: number | null = null) {
     if (!this.stopTriggers) return
     if (this.retryTimer) clearTimeout(this.retryTimer)
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null
       void this.sync()
-    }, this.retryMs)
+    }, delayMs ?? this.retryMs)
   }
 
   private startTriggers() {

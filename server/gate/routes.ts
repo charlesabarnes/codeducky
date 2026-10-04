@@ -2,6 +2,7 @@ import type { Database } from 'bun:sqlite'
 import { Hono } from 'hono'
 import { requireToken, type AuthEnv } from '../auth/middleware'
 import type { TokenStore } from '../auth/tokens'
+import { perUser, rateLimit, type RateLimiter } from '../limits'
 import { publicOrigin } from '../origin'
 import { loadData } from '../records/store'
 import { evaluateGate, gateText } from './gate'
@@ -11,12 +12,14 @@ interface GateOptions {
   db: Database
   tokens: TokenStore
   publicUrl?: string
+  /** Per-user request rate. */
+  limiter: RateLimiter
 }
 
 /** `GET /api/gate`: whether a push of repo@branch may go ahead. Settings tokens and OAuth tokens only. */
-export function gateApi({ db, tokens, publicUrl }: GateOptions) {
+export function gateApi({ db, tokens, publicUrl, limiter }: GateOptions) {
   const api = new Hono<AuthEnv>()
-  api.get('/', requireToken(tokens, ['api', 'oauth']), (c) => {
+  api.get('/', requireToken(tokens, ['api', 'oauth']), rateLimit(limiter, perUser), (c) => {
     const repo = c.req.query('repo')?.trim()
     const branch = c.req.query('branch')?.trim()
     if (!repo || !branch) return c.json({ error: 'repo (owner/name) and branch are required' }, 400)

@@ -1,4 +1,6 @@
 import { resolve } from 'node:path'
+import { loadRateLimits, type RateLimits } from './limits'
+import { loadQuotas, type Quotas } from './records/quota'
 
 export const DEV_PASSPHRASE = 'codeducky'
 
@@ -9,6 +11,8 @@ export interface Config {
   production: boolean
   passphrase: string
   publicUrl?: string
+  limits: RateLimits
+  quotas: Quotas
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -27,5 +31,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     production,
     passphrase,
     publicUrl: env.CODEDUCKY_PUBLIC_URL || undefined,
+    limits: loadRateLimits(env),
+    quotas: loadQuotas(env),
   }
 }

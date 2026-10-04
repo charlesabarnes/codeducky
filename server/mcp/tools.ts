@@ -17,6 +17,7 @@ import {
   type RepoRecord,
   type SessionRecord,
 } from './records'
+import { QuotaError } from '../records/quota'
 import { InvalidRecordError, loadData, saveRecord } from '../records/store'
 import { reviewContext } from '../review/context'
 import { registerPrompts } from './prompts'
@@ -46,6 +47,7 @@ function guarded<A>(handler: (args: A) => CallToolResult) {
       return handler(args)
     } catch (error) {
       if (error instanceof ToolError || error instanceof InvalidRecordError) return fail(error.message)
+      if (error instanceof QuotaError) return fail(error.detail)
       throw error
     }
   }

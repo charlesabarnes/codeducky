@@ -1,10 +1,12 @@
 import type { Database } from 'bun:sqlite'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { Hono } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import { cors } from 'hono/cors'
 import { bearerToken } from '../auth/middleware'
 import { OAUTH_SCOPE } from '../auth/oauth/routes'
 import type { TokenStore } from '../auth/tokens'
+import { tooManyRequests, type RateLimiter } from '../limits'
 import { MCP_PATH, publicOrigin, resourceMetadataUrl } from '../origin'
 import { createMcpServer } from './tools'
 
@@ -12,7 +14,11 @@ export interface McpRoutesOptions {
   db: Database
   tokens: TokenStore
   publicUrl?: string
+  /** Per-user request rate. */
+  limiter: RateLimiter
 }
+
+const MAX_BODY = 1024 * 1024
 
 /** Settings tokens and OAuth access tokens; PWA device sessions are for /api only. */
 const MCP_TOKEN_KINDS = new Set(['api', 'oauth'])
@@ -21,7 +27,7 @@ const MCP_TOKEN_KINDS = new Set(['api', 'oauth'])
  * Streamable HTTP, stateless: every POST gets a fresh server and transport, and answers with
  * plain JSON. There is no server-to-client stream, so GET and DELETE are refused.
  */
-export function mcpRoutes({ db, tokens, publicUrl }: McpRoutesOptions) {
+export function mcpRoutes({ db, tokens, publicUrl, limiter }: McpRoutesOptions) {
   const routes = new Hono()
   routes.use(
     MCP_PATH,
@@ -33,6 +39,7 @@ export function mcpRoutes({ db, tokens, publicUrl }: McpRoutesOptions) {
       maxAge: 86_400,
     }),
   )
+  routes.use(MCP_PATH, bodyLimit({ maxSize: MAX_BODY, onError: (c) => c.json({ error: 'too_large' }, 413) }))
 
   routes.all(MCP_PATH, async (c) => {
     const raw = bearerToken(c)
@@ -43,6 +50,8 @@ export function mcpRoutes({ db, tokens, publicUrl }: McpRoutesOptions) {
       c.header('WWW-Authenticate', `Bearer ${challenge.join(', ')}`)
       return c.json({ error: raw ? 'invalid_token' : 'unauthorized' }, 401)
     }
+    const retryAfter = limiter.take(principal.userId)
+    if (retryAfter !== null) return tooManyRequests(c, retryAfter)
     if (c.req.method !== 'POST') {
       c.header('Allow', 'POST')
       return c.json({ jsonrpc: '2.0', error: { code: -32000, message: 'Method not allowed: this server is stateless' }, id: null }, 405)
