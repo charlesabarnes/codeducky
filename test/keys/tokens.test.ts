@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { eventToken, isEditableTarget, type KeyLike } from '../../src/keys/tokens'
+import { eventToken, isEditableTarget, keyCaps, ownsKeys, type KeyLike } from '../../src/keys/tokens'
 
 const key = (k: string, mods: Partial<KeyLike> = {}): KeyLike => ({
   key: k,
@@ -41,6 +41,14 @@ describe('eventToken', () => {
     expect(eventToken(key('Enter'))).toBeNull()
   })
 
+  it('recognises Cmd or Ctrl+S, but not with Shift or Alt', () => {
+    expect(eventToken(key('s', { metaKey: true }))).toBe('mod+s')
+    expect(eventToken(key('s', { ctrlKey: true }))).toBe('mod+s')
+    expect(eventToken(key('S', { metaKey: true, shiftKey: true }))).toBeNull()
+    expect(eventToken(key('s', { metaKey: true, altKey: true }))).toBeNull()
+    expect(eventToken(key('s'))).toBe('s')
+  })
+
   it('ignores space, modifiers on their own and IME composition', () => {
     expect(eventToken(key(' '))).toBeNull()
     expect(eventToken(key('Shift', { shiftKey: true }))).toBeNull()
@@ -63,5 +71,35 @@ describe('isEditableTarget', () => {
     expect(isEditableTarget({ tagName: 'BUTTON' })).toBe(false)
     expect(isEditableTarget({ tagName: 'BODY', isContentEditable: false })).toBe(false)
     expect(isEditableTarget(null)).toBe(false)
+  })
+})
+
+describe('ownsKeys', () => {
+  const element = (insideEditor: boolean) => ({ closest: (selector: string) => (insideEditor && selector === '[data-own-keys]' ? {} : null) })
+
+  it('claims keys inside the code editor, its search panel included', () => {
+    expect(ownsKeys(element(true))).toBe(true)
+  })
+
+  it('leaves everything else to the shortcuts', () => {
+    expect(ownsKeys(element(false))).toBe(false)
+    expect(ownsKeys({ tagName: 'INPUT' })).toBe(false)
+    expect(ownsKeys(null)).toBe(false)
+  })
+})
+
+describe('keyCaps', () => {
+  it('spells modifier combos for each platform', () => {
+    expect(keyCaps('mod+s', true)).toEqual(['⌘', 'S'])
+    expect(keyCaps('mod+s', false)).toEqual(['Ctrl', 'S'])
+    expect(keyCaps('mod+shift+z', true)).toEqual(['⌘', 'Shift', 'Z'])
+    expect(keyCaps('shift+Tab', true)).toEqual(['Shift', 'Tab'])
+    expect(keyCaps('mod+Enter', false)).toEqual(['Ctrl', 'Enter'])
+  })
+
+  it('keeps single keys as they were', () => {
+    expect(keyCaps('j', true)).toEqual(['j'])
+    expect(keyCaps('E', true)).toEqual(['Shift', 'E'])
+    expect(keyCaps('Escape', true)).toEqual(['Esc'])
   })
 })

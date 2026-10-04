@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ShortcutDispatcher } from '../../src/keys/dispatcher'
 
-const press = (dispatcher: ShortcutDispatcher, token: string | null, extra: { editable?: boolean; repeat?: boolean; now?: number } = {}) =>
-  dispatcher.handle({ token, editable: extra.editable ?? false, repeat: extra.repeat ?? false, now: extra.now ?? 0 })
+const press = (
+  dispatcher: ShortcutDispatcher,
+  token: string | null,
+  extra: { editable?: boolean; owned?: boolean; repeat?: boolean; now?: number } = {},
+) => dispatcher.handle({ token, editable: extra.editable ?? false, owned: extra.owned, repeat: extra.repeat ?? false, now: extra.now ?? 0 })
 
 describe('ShortcutDispatcher', () => {
   it('runs the handler for an active binding only', () => {
@@ -26,6 +29,40 @@ describe('ShortcutDispatcher', () => {
     expect(handler).not.toHaveBeenCalled()
     expect(press(dispatcher, 'Escape', { editable: true })).toBe(true)
     expect(handler).toHaveBeenCalledWith('escape')
+  })
+
+  it('fires nothing, not even Esc or Cmd+S, inside the file editor', () => {
+    const dispatcher = new ShortcutDispatcher()
+    const handler = vi.fn()
+    dispatcher.register('global', ['help', 'escape'], handler)
+    dispatcher.register('session', ['file.next', 'file.edit', 'tab.notes'], handler)
+    dispatcher.register('file', ['file.save'], handler)
+    for (const token of ['j', ']', 'E', '?', 'Escape', 'mod+s', 'mod+Enter', 'g']) {
+      expect(press(dispatcher, token, { editable: true, owned: true }), token).toBe(false)
+    }
+    expect(handler).not.toHaveBeenCalled()
+    expect(dispatcher.pending).toEqual([])
+  })
+
+  it('a key in the editor drops a sequence started outside it', () => {
+    const dispatcher = new ShortcutDispatcher()
+    const handler = vi.fn()
+    dispatcher.register('session', ['tab.notes'], handler)
+    press(dispatcher, 'g')
+    press(dispatcher, 'x', { editable: true, owned: true })
+    expect(press(dispatcher, 'n')).toBe(false)
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('saves with Cmd+S from a text field outside the editor, only while the editor is open', () => {
+    const dispatcher = new ShortcutDispatcher()
+    const save = vi.fn()
+    expect(press(dispatcher, 'mod+s', { editable: true })).toBe(false)
+    const off = dispatcher.register('file', ['file.save'], save)
+    expect(press(dispatcher, 'mod+s', { editable: true })).toBe(true)
+    expect(save).toHaveBeenCalledWith('file.save')
+    off()
+    expect(press(dispatcher, 'mod+s')).toBe(false)
   })
 
   it('handles two-key sequences and gives up after a timeout', () => {

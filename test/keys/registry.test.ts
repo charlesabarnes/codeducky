@@ -7,11 +7,11 @@ describe('keymap', () => {
     expect(new Set(KEYMAP.map((binding) => binding.id)).size).toBe(KEYMAP.length)
   })
 
-  it('never binds a browser or OS combo', () => {
-    for (const binding of KEYMAP) {
+  it('never dispatches a browser or OS combo other than Cmd/Ctrl+Enter and Cmd/Ctrl+S', () => {
+    for (const binding of KEYMAP.filter((candidate) => !('docOnly' in candidate))) {
       for (const keys of binding.keys) {
         for (const token of parseSequence(keys)) {
-          expect(token === 'mod+Enter' || !token.includes('+'), `${binding.id}: ${token}`).toBe(true)
+          expect(token === 'mod+Enter' || token === 'mod+s' || !token.includes('+'), `${binding.id}: ${token}`).toBe(true)
         }
       }
     }
@@ -51,7 +51,7 @@ describe('keymap', () => {
   })
 
   it('gives pull request keys their own keys in a session', () => {
-    const sessionIds = ['line.next', 'line.prev', 'change.next', 'change.prev', 'hunk.next', 'hunk.prev', 'file.next', 'file.prev', 'note.next', 'note.prev', 'side.old', 'side.new', 'gap.expand', 'note.comment', 'note.edit', 'note.resolve', 'note.accept', 'note.dismiss', 'file.viewed', 'view.mode', 'view.whitespace', 'files.filter', 'tab.files', 'tab.notes', 'tab.checklists', 'thread.next', 'thread.prev', 'thread.reply', 'thread.resolve', 'tab.conversation', 'nav.inbox', 'help']
+    const sessionIds = ['file.edit', 'line.next', 'line.prev', 'change.next', 'change.prev', 'hunk.next', 'hunk.prev', 'file.next', 'file.prev', 'note.next', 'note.prev', 'side.old', 'side.new', 'gap.expand', 'note.comment', 'note.edit', 'note.resolve', 'note.accept', 'note.dismiss', 'file.viewed', 'view.mode', 'view.whitespace', 'files.filter', 'tab.files', 'tab.notes', 'tab.checklists', 'thread.next', 'thread.prev', 'thread.reply', 'thread.resolve', 'tab.conversation', 'nav.inbox', 'help']
     const keys = sessionIds.flatMap((id) => BINDINGS.get(id)!.keys.map((key) => ({ id, key })))
     for (const { id, key } of keys) {
       expect(keys.filter((other) => other.key === key).map((other) => other.id), `${id}: ${key}`).toEqual([id])
@@ -64,6 +64,12 @@ describe('helpGroups', () => {
     const groups = helpGroups(new Set(['help', 'escape', 'line.next', 'file.viewed']))
     expect(groups.map((group) => group.group)).toEqual(['Navigation', 'View', 'General'])
     expect(groups.flatMap((group) => group.bindings.map((binding) => binding.id))).toEqual(['line.next', 'file.viewed', 'help'])
+  })
+
+  it('lists the file editor’s own keys while it is open', () => {
+    const ids = helpGroups(new Set(['file.edit', 'file.save'])).flatMap((group) => group.bindings.map((binding) => binding.id))
+    expect(ids).toEqual(['file.edit', 'file.save', 'file.find', 'file.undo', 'file.redo', 'file.indent', 'file.outdent', 'file.leave'])
+    expect(helpGroups(new Set(['file.edit'])).flatMap((group) => group.bindings.map((binding) => binding.id))).toEqual(['file.edit'])
   })
 
   it('shows editor keys alongside commenting', () => {
@@ -79,5 +85,8 @@ describe('describeKeys', () => {
     expect(describeKeys(BINDINGS.get('side.old')!, true)).toBe('h or ←')
     expect(describeKeys(BINDINGS.get('editor.save')!, true)).toBe('⌘+Enter')
     expect(describeKeys(BINDINGS.get('editor.save')!, false)).toBe('Ctrl+Enter')
+    expect(describeKeys(BINDINGS.get('file.save')!, true)).toBe('⌘+S')
+    expect(describeKeys(BINDINGS.get('file.edit')!, true)).toBe('Shift+E')
+    expect(describeKeys(BINDINGS.get('file.leave')!, true)).toBe('Esc then Tab')
   })
 })
