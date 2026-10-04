@@ -332,6 +332,17 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
       return ids.length
     },
 
+    /** Drops the user's authorization codes that have not been exchanged yet. */
+    deleteUserCodes(userId: string): number {
+      return db.query('DELETE FROM oauth_codes WHERE user_id = ?').run(userId).changes
+    },
+
+    /** Grants per user, for the admin's user list. */
+    countGrantsByUser(): Map<string, number> {
+      const rows = db.query<{ user_id: string; n: number }, []>('SELECT user_id, COUNT(*) AS n FROM oauth_grants GROUP BY user_id').all()
+      return new Map(rows.map(({ user_id, n }) => [user_id, n]))
+    },
+
     /** Revokes a grant only if it belongs to the user; another user's grant id is treated as unknown. */
     revokeUserGrant(userId: string, id: string): boolean {
       return getGrant(id)?.userId === userId && revokeGrant(id)

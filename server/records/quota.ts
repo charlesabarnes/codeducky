@@ -23,6 +23,11 @@ export function setDefaultQuotas(db: Database, quotas: Quotas): void {
   defaults.set(db, quotas)
 }
 
+/** The configured defaults for this database, which apply wherever a user has no override. */
+export function defaultQuotas(db: Database): Quotas {
+  return defaults.get(db) ?? DEFAULT_QUOTAS
+}
+
 /** The message is the wire error code; `detail` is the explanation shown to MCP clients. */
 export class QuotaError extends Error {
   readonly limit: keyof Quotas
@@ -46,7 +51,7 @@ export interface Usage {
 
 /** The user's usage and their quota: their own override where set, otherwise the configured default. */
 export function getUsage(db: Database, userId: string): Usage {
-  const fallback = defaults.get(db) ?? DEFAULT_QUOTAS
+  const fallback = defaultQuotas(db)
   const row = db
     .query<{ record_count: number; data_bytes: number; quota_records: number; quota_bytes: number }, [number, number, string]>(
       `SELECT record_count, data_bytes, coalesce(quota_records, ?) AS quota_records, coalesce(quota_bytes, ?) AS quota_bytes
