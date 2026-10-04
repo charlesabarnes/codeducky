@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { clientIp, requireToken, type AuthEnv } from './middleware'
 import { createFailureLimiter, passphraseMatches, type FailureLimiter } from './passphrase'
 import type { OAuthStore } from './oauth/store'
-import type { TokenStore } from './tokens'
+import { MAX_API_TOKENS, type TokenStore } from './tokens'
 import { ADMIN_USER_ID } from '../users/store'
 
 export interface AuthRoutesOptions {
@@ -95,7 +95,9 @@ export function authRoutes({
     const body = (await c.req.json().catch(() => null)) as { name?: unknown } | null
     const name = tokenName(body?.name, '')
     if (!name) return c.json({ error: 'invalid_name' }, 400)
-    const { token, info } = tokens.issue({ userId: c.get('principal').userId, name, kind: 'api' })
+    const { userId } = c.get('principal')
+    if (tokens.countByKind(userId, 'api') >= MAX_API_TOKENS) return c.json({ error: 'token_limit' }, 409)
+    const { token, info } = tokens.issue({ userId, name, kind: 'api' })
     return c.json({ token, info })
   })
 

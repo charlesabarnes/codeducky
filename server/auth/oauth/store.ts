@@ -7,7 +7,11 @@ export const ACCESS_TOKEN_TTL_MS = 60 * 60_000
 export const REFRESH_TOKEN_TTL_MS = 90 * 24 * 60 * 60_000
 export const CODE_TTL_MS = 5 * 60_000
 /** Registration is unauthenticated, so unused clients are pruned past this many. */
-export const MAX_CLIENTS = 200
+export const MAX_CLIENTS = 5000
+/** Unused clients younger than this may be mid-way through their first sign-in, so they are pruned last. */
+export const CLIENT_GRACE_MS = 24 * 60 * 60_000
+/** Grants (approved MCP clients) per user; approving another revokes the oldest. */
+export const MAX_GRANTS = 20
 
 export type ClientAuthMethod = 'none' | 'client_secret_post' | 'client_secret_basic'
 export type GrantType = 'authorization_code' | 'refresh_token'
@@ -143,12 +147,26 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
     for (const { id } of db.query<{ id: string }, [number]>('SELECT id FROM oauth_grants WHERE expires_at <= ?').all(now())) {
       revokeGrant(id)
     }
-    const count = db.query<{ n: number }, []>('SELECT COUNT(*) AS n FROM oauth_clients').get()!.n
-    if (count < MAX_CLIENTS) return
+    const count = () => db.query<{ n: number }, []>('SELECT COUNT(*) AS n FROM oauth_clients').get()!.n
+    if (count() < MAX_CLIENTS) return
+    db.query('DELETE FROM oauth_clients WHERE id NOT IN (SELECT client_id FROM oauth_grants) AND created_at <= ?').run(
+      now() - CLIENT_GRACE_MS,
+    )
+    const excess = count() - MAX_CLIENTS + 1
+    if (excess <= 0) return
     db.query(
-      `DELETE FROM oauth_clients WHERE id NOT IN (SELECT client_id FROM oauth_grants)
-       AND id IN (SELECT id FROM oauth_clients ORDER BY created_at LIMIT ?)`,
-    ).run(count - MAX_CLIENTS + 1)
+      `DELETE FROM oauth_clients WHERE id IN (
+         SELECT id FROM oauth_clients WHERE id NOT IN (SELECT client_id FROM oauth_grants) ORDER BY created_at LIMIT ?)`,
+    ).run(excess)
+  }
+
+  const capGrants = (userId: string) => {
+    const stale = db
+      .query<{ id: string }, [string, number]>(
+        'SELECT id FROM oauth_grants WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT -1 OFFSET ?',
+      )
+      .all(userId, MAX_GRANTS)
+    for (const { id } of stale) revokeGrant(id)
   }
 
   return {
@@ -256,6 +274,7 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
         grant.refreshedAt,
         grant.expiresAt,
       )
+      capGrants(grant.userId)
       return mint(grant, client)
     },
 
