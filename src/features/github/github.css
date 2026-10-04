@@ -12,11 +12,19 @@
   box-shadow: inset 2px 0 0 var(--mod-fg);
 }
 
+/* Fits below the dialog's 72px top margin; the body takes what the bar and footer leave. */
+.push-dialog > form {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 72px - 1rem);
+}
+
 .push-dialog .modal-body {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   gap: 14px;
-  max-height: calc(100vh - 14rem);
   overflow: auto;
   padding: 12px 14px;
 }
