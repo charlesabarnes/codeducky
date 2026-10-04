@@ -150,6 +150,22 @@ export function createChannelRegistry({
     return entry && sameOwner(entry.owner, owner) ? entry : null
   }
 
+  /** A session is gone: its unfinished tasks can no longer finish, and its prompts can no longer be answered. */
+  const forget = (id: string) => {
+    sessions.delete(id)
+    for (const task of tasks.values()) {
+      if (task.channelId !== id || isFinished(task.state)) continue
+      const delivered = STATE_ORDER[task.state] >= STATE_ORDER.delivered
+      setTaskState(task, 'failed', delivered ? 'The Claude Code session ended before reporting done.' : 'The Claude Code session ended before the task was delivered.')
+    }
+    for (const request of permissions.values()) {
+      if (request.channelId === id && request.state === 'pending') {
+        request.state = 'expired'
+        request.decidedAt = now()
+      }
+    }
+  }
+
   const pruneTasks = () => {
     const at = now()
     for (const [id, task] of tasks) {
@@ -211,7 +227,7 @@ export function createChannelRegistry({
     /** The plugin is shutting down. */
     remove(id: string, owner: ChannelOwner): boolean {
       if (!owned(id, owner)) return false
-      sessions.delete(id)
+      forget(id)
       changed()
       return true
     },
@@ -221,7 +237,7 @@ export function createChannelRegistry({
       let removed = false
       for (const [id, entry] of sessions) {
         if (sameOwner(entry.owner, owner)) {
-          sessions.delete(id)
+          forget(id)
           removed = true
         }
       }
@@ -339,11 +355,7 @@ export function createChannelRegistry({
       let dirty = false
       for (const [id, entry] of sessions) {
         if (!entry.view.connected && at - entry.view.lastSeenAt > expiryMs) {
-          sessions.delete(id)
-          for (const item of entry.queue) {
-            const task = tasks.get(item.taskId)
-            if (task) setTaskState(task, 'failed', 'The Claude Code session disconnected before the task was delivered.')
-          }
+          forget(id)
           dirty = true
         }
       }

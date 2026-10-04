@@ -97,8 +97,20 @@ describe('channel registry', () => {
     clock += 61_000
     registry.sweep()
     expect(registry.state().sessions).toEqual([])
-    expect(registry.state().tasks.find((t) => t.id === lost.id)).toMatchObject({ state: 'failed' })
+    expect(registry.state().tasks.find((t) => t.id === lost.id)).toMatchObject({ state: 'failed', message: 'The Claude Code session ended before the task was delivered.' })
     expect(registry.sendTask('plugin-session-0001', { kind: 'fix', repo: 'r/r', branch: 'b', pr: null, sessionId: null, content: '', meta: {} })).toBe('not_found')
+  })
+
+  it('fails unfinished tasks and expires prompts when the plugin unregisters', () => {
+    const registry = createChannelRegistry({ now })
+    registry.connect(registration(), owner, recorder().sink)
+    const task = registry.sendTask('plugin-session-0001', { kind: 'fix', repo: 'acme/invoice-service', branch: 'b', pr: null, sessionId: null, content: 'Fix', meta: {} })
+    if (typeof task === 'string') throw new Error(task)
+    registry.report('plugin-session-0001', owner, task.id, 'acknowledged', null)
+    registry.permissionRequest('plugin-session-0001', owner, { requestId: 'abcde', toolName: 'Edit', description: '', inputPreview: '' })
+    expect(registry.remove('plugin-session-0001', owner)).toBe(true)
+    expect(registry.state().tasks[0]).toMatchObject({ state: 'failed', message: 'The Claude Code session ended before reporting done.' })
+    expect(registry.state().permissions[0]!.state).toBe('expired')
   })
 
   it('a stale stream closing does not disconnect the newer one', () => {
