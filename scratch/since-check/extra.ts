@@ -1,0 +1,1 @@
+export const FREE_SHIPPING_CENTS = 5000
