@@ -1,0 +1,12 @@
+{
+  "name": "skelbert",
+  "description": "The Skelbert channel plugin for Claude Code",
+  "owner": { "name": "Charles Barnes" },
+  "plugins": [
+    {
+      "name": "skelbert",
+      "source": "./plugin",
+      "description": "Send review and fix tasks from Skelbert into a running Claude Code session (research-preview channel)."
+    }
+  ]
+}
