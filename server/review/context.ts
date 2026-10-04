@@ -1,4 +1,5 @@
 import { repoInstructions } from '../../shared/instructions'
+import { sessionUrl } from '../../shared/links'
 import { isPrSession, repoLabel, type DataSnapshot, type SessionRecord } from '../mcp/records'
 import { checklistView, compareNotes, iso, noteView, prView } from '../mcp/views'
 import { recurringPatterns } from './patterns'
@@ -31,7 +32,7 @@ export function reviewContext(data: DataSnapshot, session: SessionRecord, origin
       started: iso(session.startedAt),
       headSha: session.headSha,
       baseSha: session.baseSha,
-      url: `${origin}/sessions/${encodeURIComponent(session.id)}`,
+      url: sessionUrl(origin, session.id),
     },
     ...(pr ? { pullRequest: pr } : {}),
     ...(isPrSession(session) && session.pr
