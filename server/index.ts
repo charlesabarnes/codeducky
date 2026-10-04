@@ -10,6 +10,8 @@ const { app } = createApp({
   db,
   passphrase: config.passphrase,
   publicUrl: config.publicUrl,
+  limits: config.limits,
+  quotas: config.quotas,
   webDist: existsSync(config.webDist) ? config.webDist : undefined,
 })
 
