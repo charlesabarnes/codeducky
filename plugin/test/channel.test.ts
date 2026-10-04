@@ -3,7 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import { createChannelServer, STATUS_TOOL } from '../src/channel'
+import { createChannelServer, STATUS_TOOL, statusFooter } from '../src/channel'
 import type { ServerEvent } from '../src/connection'
 
 const ChannelNotification = z.object({
@@ -56,9 +56,10 @@ describe('channel MCP server', () => {
     await channel.deliverTask({ id: 't-1', content: 'Review branch feature/tax', meta: { kind: 'review', task_id: 't-1', repo: 'acme/app' } })
     await flush()
     expect(received).toEqual([
-      { method: 'notifications/claude/channel', params: { content: 'Review branch feature/tax', meta: { kind: 'review', task_id: 't-1', repo: 'acme/app' } } },
+      { method: 'notifications/claude/channel', params: { content: `Review branch feature/tax${statusFooter('t-1')}`, meta: { kind: 'review', task_id: 't-1', repo: 'acme/app' } } },
     ])
     expect(sent).toEqual([{ type: 'delivered', taskId: 't-1' }])
+    expect(statusFooter('t-1')).toContain('report_status tool of this channel (a tool call, not a shell command), task_id "t-1"')
   })
 
   it('forwards report_status calls to Skelbert and validates them', async () => {

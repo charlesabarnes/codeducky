@@ -37,6 +37,10 @@ export interface ChannelServerOptions {
   configError?: string | null
 }
 
+/** Appended to every task: models follow an instruction next to the task more reliably than server instructions. */
+export const statusFooter = (taskId: string) =>
+  `\n\n---\nSkelbert task ${taskId}. Report progress with the ${STATUS_TOOL} tool of this channel (a tool call, not a shell command), task_id "${taskId}": state "acknowledged" first, then as your very last step state "done" (or "failed") with a one or two sentence summary.`
+
 const text = (value: string, isError = false): CallToolResult => ({ content: [{ type: 'text', text: value }], isError })
 
 /**
@@ -100,7 +104,7 @@ export function createChannelServer({ send, log, configError = null }: ChannelSe
 
     /** Pushes a task into the session as a <channel> event, then tells Skelbert it was handed over. */
     async deliverTask(task: Task) {
-      await mcp.notification({ method: 'notifications/claude/channel', params: { content: task.content, meta: task.meta } })
+      await mcp.notification({ method: 'notifications/claude/channel', params: { content: task.content + statusFooter(task.id), meta: task.meta } })
       await send({ type: 'delivered', taskId: task.id })
     },
 
