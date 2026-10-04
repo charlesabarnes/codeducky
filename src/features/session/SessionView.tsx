@@ -192,16 +192,25 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
     () => (dirHandle ? { kind: 'local', root: dirHandle } : prGh && prSnapshot ? { kind: 'github', gh: prGh, snapshot: prSnapshot } : null),
     [dirHandle, prGh, prSnapshot],
   )
-  const editable = selected ? modes.branchChange(selected.path) : null
-  const editBlocked = !editSource
-    ? 'Editing needs the local checkout or a pull request'
-    : !editable
-      ? 'Only files changed on the branch can be edited'
-      : editable.status === 'deleted'
-        ? 'This file was deleted on the branch'
-        : null
-  const editorChange = editBlocked === null && (editing || dirtyPath === editable?.path) ? editable : null
-  const showEditor = editing && editorChange !== null
+  const editBlockedFor = (change: FileChange | null) =>
+    !editSource
+      ? 'Editing needs the local checkout or a pull request'
+      : !change
+        ? 'Only files changed on the branch can be edited'
+        : change.status === 'deleted'
+          ? 'This file was deleted on the branch'
+          : null
+  const editBlocked = editBlockedFor(selected ? modes.branchChange(selected.path) : null)
+  // The editor follows the file in the URL, not the one the review mode shows, so a mode switch never swaps out
+  // unsaved edits; a dirty editor stays mounted (hidden) until it is saved or a guarded navigation discards it.
+  const editPath = requested ?? selectedPath
+  const editTarget = editPath ? modes.branchChange(editPath) : null
+  const editorChange = dirtyPath
+    ? modes.branchChange(dirtyPath)
+    : editing && editBlockedFor(editTarget) === null
+      ? editTarget
+      : null
+  const showEditor = editing && editorChange !== null && editorChange.path === editPath
   useLeaveGuard(dirtyPath)
   const fileNotes = useMemo(
     () => notes.filter((note) => currentPath(note.path, renamed) === selectedPath),
@@ -251,10 +260,12 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
     setNavRequest(target ? { at: Date.now(), target, scroll } : null)
     announce(`File ${path}`)
   }
+  /** Opening edits the file the diff shows; closing keeps the edited file selected. */
   const setEditing = (next: boolean) => {
-    if (!selectedPath) return
-    setParams(next ? { file: selectedPath, view: 'edit' } : { file: selectedPath }, { replace: true })
-    announce(next ? `Editing ${selectedPath}` : 'Diff', { visible: true })
+    const path = next ? selectedPath : editPath
+    if (!path) return
+    setParams(next ? { file: path, view: 'edit' } : { file: path }, { replace: true })
+    announce(next ? `Editing ${path}` : 'Diff', { visible: true })
   }
   const toggleEditor = () => {
     if (!showEditor && editBlocked) return announce(editBlocked, { visible: true })

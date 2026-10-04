@@ -1,5 +1,5 @@
 import { db } from '../../db/db'
-import { headRepoRef, prEditAccess, readBranchFile, type PrAccess } from '../../editor/githubFile'
+import { headRepoRef, prEditAccess, type PrAccess } from '../../editor/githubFile'
 import { readLocalFile, type DiskVersion } from '../../editor/localFile'
 import { decodeText, type TextFormat } from '../../editor/textFormat'
 import { cachedBlobLoader } from '../../github/blobCache'
@@ -39,10 +39,13 @@ async function loadLocal(root: FileSystemDirectoryHandle, path: string): Promise
 export async function loadEditableFile(source: EditSource, change: FileChange): Promise<FileLoad> {
   if (source.kind === 'local') return loadLocal(source.root, change.path)
   if (!change.newOid) return { kind: 'unavailable', message: UNEDITABLE.missing }
-  const bytes = await cachedBlobLoader(db, source.gh, source.snapshot.ref)(change.newOid)
+  return blobText(await cachedBlobLoader(db, source.gh, source.snapshot.ref)(change.newOid), change.newOid)
+}
+
+function blobText(bytes: Uint8Array, sha: string): FileLoad {
   if (isBinary(bytes)) return { kind: 'unavailable', message: UNEDITABLE.binary }
   if (bytes.byteLength > DEFAULT_MAX_BYTES) return { kind: 'unavailable', message: UNEDITABLE.tooLarge }
-  return { kind: 'ready', file: { ...decodeText(bytes), base: { kind: 'github', sha: change.newOid } } }
+  return { kind: 'ready', file: { ...decodeText(bytes), base: { kind: 'github', sha } } }
 }
 
 /** Reads the file again after a conflict: what is on disk, or on the head branch now. */
@@ -50,8 +53,8 @@ export async function reloadEditableFile(source: EditSource, path: string): Prom
   if (source.kind === 'local') return loadLocal(source.root, path)
   const target = headRepoRef(source.snapshot.pull)
   if (!target) return { kind: 'unavailable', message: UNEDITABLE.missing }
-  const branch = await readBranchFile(source.gh, { repo: target, branch: source.snapshot.pull.headRef }, path)
-  return { kind: 'ready', file: { text: branch.text, format: branch.format, base: { kind: 'github', sha: branch.sha } } }
+  const { sha, bytes } = await source.gh.fileAt(target, path, source.snapshot.pull.headRef)
+  return blobText(bytes, sha)
 }
 
 export function editAccess(source: EditSource): Promise<PrAccess | null> {

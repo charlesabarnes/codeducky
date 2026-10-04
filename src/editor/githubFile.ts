@@ -1,7 +1,7 @@
 import type { GitHubClient } from '../github/client'
 import { isGitHubError } from '../github/errors'
 import type { PullDetail, RepoRef } from '../github/types'
-import { decodeText, encodeText, type TextFormat } from './textFormat'
+import { encodeText, type TextFormat } from './textFormat'
 
 /** Where saving a pull request's file commits to: its head branch, in the fork for fork PRs. */
 export interface PrEditTarget {
@@ -13,16 +13,10 @@ export type PrAccess = { kind: 'ok'; target: PrEditTarget } | { kind: 'blocked';
 
 export type CommitResult =
   | { kind: 'committed'; commitSha: string; blobSha: string }
-  /** The branch moved on (409) or GitHub refused the update (422): reload and edit again. */
+  /** The file on the branch is not the blob the edits started from: reload and edit again. */
   | { kind: 'conflict'; message: string }
   /** The token cannot write to the repository. */
   | { kind: 'forbidden'; message: string }
-
-export interface BranchText {
-  sha: string
-  text: string
-  format: TextFormat
-}
 
 const label = (repo: RepoRef) => `${repo.owner}/${repo.name}`
 const sameRepo = (a: RepoRef, b: RepoRef) => label(a).toLowerCase() === label(b).toLowerCase()
@@ -83,7 +77,8 @@ export async function commitFile(
     return { kind: 'committed', ...result }
   } catch (error) {
     if (!isGitHubError(error)) throw error
-    if (error.status === 409 || error.status === 422) {
+    // 409 is a stale blob sha; a 422 only when GitHub names the sha (other 422s are validation errors).
+    if (error.status === 409 || (error.status === 422 && /\bsha\b/i.test(error.message))) {
       return {
         kind: 'conflict',
         message: `${path} changed on ${target.branch} since you opened it, so GitHub refused the commit (${error.status}). Reload to get the branch's version.`,
@@ -92,10 +87,4 @@ export async function commitFile(
     if (error.kind === 'forbidden' || error.kind === 'not-found') return { kind: 'forbidden', message: permissionMessage(target.repo) }
     throw error
   }
-}
-
-/** The file as it is on the head branch now, for reloading after a conflict. */
-export async function readBranchFile(gh: GitHubClient, target: PrEditTarget, path: string): Promise<BranchText> {
-  const { sha, bytes } = await gh.fileAt(target.repo, path, target.branch)
-  return { sha, ...decodeText(bytes) }
 }

@@ -44,6 +44,7 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT'
   query?: Record<string, string | number>
   body?: unknown
+  accept?: string
 }
 
 interface Response<T> {
@@ -303,11 +304,14 @@ async function orNull<T>(promise: Promise<T>, ...statuses: number[]): Promise<T 
 export function createGitHubClient({ token, fetch: fetchImpl = globalThis.fetch, baseUrl = GITHUB_API }: GitHubClientOptions) {
   const doFetch = fetchImpl.bind(globalThis)
 
-  async function request<T>(path: string, { method = 'GET', query, body }: RequestOptions = {}): Promise<Response<T>> {
+  async function request<T>(
+    path: string,
+    { method = 'GET', query, body, accept = 'application/vnd.github+json' }: RequestOptions = {},
+  ): Promise<Response<T>> {
     const url = new URL(path.startsWith('http') ? path : `${baseUrl}${path}`)
     for (const [key, value] of Object.entries(query ?? {})) url.searchParams.set(key, String(value))
     const headers: Record<string, string> = {
-      Accept: 'application/vnd.github+json',
+      Accept: accept,
       Authorization: `Bearer ${token}`,
       'X-GitHub-Api-Version': API_VERSION,
     }
@@ -399,11 +403,12 @@ export function createGitHubClient({ token, fetch: fetchImpl = globalThis.fetch,
       }
     },
 
-    /** A file as it is on a branch now. Files over 1 MB come without content, so those are read as blobs. */
+    /** A file as it is on a branch now. */
     async fileAt(repo: RepoRef, path: string, branch: string): Promise<BranchFile> {
       const { data } = await request<{ sha: string; content?: string; encoding?: string }>(
         `${repoPath(repo)}/contents/${encodePath(path)}`,
-        { query: { ref: branch } },
+        // Files over 1 MB need the object media type; they come without content and are read as blobs.
+        { query: { ref: branch }, accept: 'application/vnd.github.object+json' },
       )
       const bytes = data.encoding === 'base64' && data.content !== undefined ? decodeBase64(data.content) : await blob(repo, data.sha)
       return { sha: data.sha, bytes }

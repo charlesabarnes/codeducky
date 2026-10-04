@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { commitFile, defaultCommitMessage, prEditAccess, readBranchFile } from '../../src/editor/githubFile'
+import { commitFile, defaultCommitMessage, prEditAccess } from '../../src/editor/githubFile'
 import { createGitHubClient } from '../../src/github/client'
 import type { PullDetail } from '../../src/github/types'
 import { mockFetch, type MockRoute } from '../github/mockFetch'
@@ -58,13 +58,21 @@ describe('commitFile', () => {
     })
   })
 
-  it('turns 409 and 422 into a conflict to reload from', async () => {
-    for (const status of [409, 422]) {
-      const { gh } = client([{ method: 'PUT', match: CONTENTS, status, body: { message: 'src/a b.ts does not match oldblob' } }])
+  it('turns a stale blob sha (409, or a 422 about the sha) into a conflict to reload from', async () => {
+    for (const [status, message] of [
+      [409, 'src/a b.ts does not match oldblob'],
+      [422, 'Invalid request. "sha" wasn\'t supplied.'],
+    ] as const) {
+      const { gh } = client([{ method: 'PUT', match: CONTENTS, status, body: { message } }])
       const result = await commitFile(gh, target, 'src/a b.ts', { text: 'x', format: LF, sha: 'oldblob', message: 'm' })
       expect(result.kind).toBe('conflict')
       if (result.kind === 'conflict') expect(result.message).toContain('Reload')
     }
+  })
+
+  it('reports other 422s as errors, not conflicts', async () => {
+    const { gh } = client([{ method: 'PUT', match: CONTENTS, status: 422, body: { message: 'Validation Failed' } }])
+    await expect(commitFile(gh, target, 'src/a b.ts', { text: 'x', format: LF, sha: 'oldblob', message: 'm' })).rejects.toThrow(/422.*Validation Failed/)
   })
 
   it('explains a missing Contents: write permission', async () => {
@@ -88,16 +96,20 @@ describe('commitFile', () => {
   })
 })
 
-describe('readBranchFile', () => {
+describe('fileAt', () => {
   it('reads the file on the head branch, falling back to the blob for large files', async () => {
-    const small = client([{ match: /\/contents\/src\/a%20b\.ts\?ref=feature%2Fretry$/, body: { sha: 's1', encoding: 'base64', content: Buffer.from('a\r\nb\r\n').toString('base64') } }])
-    expect(await readBranchFile(small.gh, target, 'src/a b.ts')).toEqual({ sha: 's1', text: 'a\nb\n', format: { bom: false, eol: '\r\n' } })
+    const content = Buffer.from('a\r\nb\r\n').toString('base64')
+    const small = client([{ match: /\/contents\/src\/a%20b\.ts\?ref=feature%2Fretry$/, body: { sha: 's1', encoding: 'base64', content } }])
+    const file = await small.gh.fileAt(base, 'src/a b.ts', 'feature/retry')
+    expect(file.sha).toBe('s1')
+    expect(new TextDecoder().decode(file.bytes)).toBe('a\r\nb\r\n')
+    expect(small.calls[0]!.headers.Accept).toBe('application/vnd.github.object+json')
 
     const large = client([
       { match: /\/contents\//, body: { sha: 's2', encoding: 'none', content: '' } },
       { match: /\/git\/blobs\/s2$/, body: { encoding: 'base64', content: Buffer.from('big\n').toString('base64') } },
     ])
-    expect((await readBranchFile(large.gh, target, 'src/a b.ts')).text).toBe('big\n')
+    expect(new TextDecoder().decode((await large.gh.fileAt(base, 'src/a b.ts', 'feature/retry')).bytes)).toBe('big\n')
   })
 })
 
