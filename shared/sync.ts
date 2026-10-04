@@ -115,6 +115,7 @@ const FIELDS: Record<SyncKind, Record<string, Check>> = {
     source: optional(oneOf('local', 'github-pr')),
     pr: optional(shape({ owner: str, name: str, number: num })),
     review: optional(shape({ state: oneOf('APPROVED', 'CHANGES_REQUESTED', 'COMMENTED'), at: num })),
+    lastReview: optional(shape({ headSha: str, at: num })),
   },
   notes: {
     sessionId: str,
@@ -127,10 +128,19 @@ const FIELDS: Record<SyncKind, Record<string, Check>> = {
     createdAt: num,
     updatedAt: num,
     resolution: optional(shape({ by: str, text: str, at: num })),
+    commit: optional(str),
   },
   checklists: { scope: str, title: str, items: arrayOf(shape({ id: str, text: str })), required: optional(bool) },
   checklistState: { sessionId: str, itemId: str, checked: bool },
-  fileViews: { sessionId: str, path: str, contentHash: str, viewed: bool },
+  fileViews: {
+    sessionId: str,
+    path: str,
+    contentHash: str,
+    viewed: bool,
+    reviewedOid: optional(str),
+    reviewedHead: optional(str),
+    reviewedAt: optional(num),
+  },
   inbox: {
     fetchedAt: num,
     items: arrayOf(shape({ repo: str, number: num, title: str, author: str, url: str, updatedAt: str, section: str })),

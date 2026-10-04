@@ -2,7 +2,7 @@ import { buildLines, type DiffLine } from '../diff/hunks'
 import { changedRuns, detectMovedBlocks, MAX_MOVE_LINES, type MovedIndex, type MoveInput } from '../diff/moved'
 import { readFileContents } from './contents'
 import type { GitContext } from './context'
-import type { FileChange, FileSide, FileStats } from './types'
+import type { FileChange, FileContents, FileSide, FileStats } from './types'
 
 export interface ChangeAnalysis {
   stats: Record<string, FileStats>
@@ -23,12 +23,17 @@ function count(lines: readonly DiffLine[]): FileStats {
 }
 
 /** Line counts for every file and moved blocks across the change set, from one read of each file. */
-export async function analyzeChanges(ctx: GitContext, changes: readonly FileChange[], maxBytes?: number): Promise<ChangeAnalysis> {
+export async function analyzeChanges(
+  ctx: GitContext,
+  changes: readonly FileChange[],
+  maxBytes?: number,
+  read: (ctx: GitContext, change: FileChange, maxBytes?: number) => Promise<FileContents> = readFileContents,
+): Promise<ChangeAnalysis> {
   const stats: Record<string, FileStats> = {}
   const changed: MoveInput[] = []
   let changedLines = 0
   for (const change of changes) {
-    const contents = await readFileContents(ctx, change, maxBytes)
+    const contents = await read(ctx, change, maxBytes)
     const sides = [contents.old, contents.new]
     if (sides.some((side) => side?.kind === 'binary')) {
       stats[change.path] = { binary: true }

@@ -72,6 +72,13 @@ export interface Session extends Synced {
   pr?: SessionPullRequest
   /** The review submitted from this session, which archived it. */
   review?: { state: SubmittedReviewState; at: number; url?: string }
+  /** The head commit when a file was last marked viewed, or the session was archived or submitted: "since last look" starts here. */
+  lastReview?: LastReview
+}
+
+export interface LastReview {
+  headSha: string
+  at: number
 }
 
 export interface SessionPullRequest {
@@ -91,6 +98,24 @@ export interface FileView extends Synced {
   path: string
   contentHash: string
   viewed: boolean
+  /**
+   * The blob oid of the content last reviewed (marked viewed, or covered by a submitted review). Kept when the file
+   * is unmarked or changes, so "since last look" can diff from it. Only the hash syncs; uncommitted content is
+   * snapshotted on this device in `reviewSnapshots`.
+   */
+  reviewedOid?: string
+  /** The head commit at that moment. */
+  reviewedHead?: string
+  reviewedAt?: number
+}
+
+/** Uncommitted file content as it was when reviewed, keyed by blob oid. Local only, never synced; pruned by size and age. */
+export interface ReviewSnapshot {
+  oid: string
+  bytes: Uint8Array
+  size: number
+  /** Last written or read, for LRU pruning. */
+  at: number
 }
 
 export interface NoteAnchor {
@@ -124,6 +149,11 @@ export interface Note extends Synced {
   github?: { reviewId?: number; commentId?: number }
   /** A reply that closed the note, e.g. from Claude Code over MCP. */
   resolution?: NoteResolution
+  /**
+   * Set when the note was made on a commit's version of the file and its line is gone from the final content:
+   * the anchor is on that commit's lines, so it is shown when that commit is picked, and never re-anchored.
+   */
+  commit?: string
 }
 
 export const NOTE_SEVERITIES: readonly NoteSeverity[] = ['nit', 'suggestion', 'issue', 'blocker']

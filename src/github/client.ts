@@ -1,4 +1,5 @@
 import { errorFromResponse, GitHubError, isGitHubError } from './errors'
+import type { BranchCommit } from '../git/types'
 import type {
   AnnotationLevel,
   CheckAnnotation,
@@ -56,6 +57,21 @@ interface RawFile {
   additions?: number
   deletions?: number
 }
+
+interface RawCommit {
+  sha: string
+  parents: { sha: string }[]
+  commit: { message: string; author: { name?: string; date?: string } | null }
+  author?: RawUser | null
+}
+
+const toBranchCommit = (raw: RawCommit): BranchCommit => ({
+  sha: raw.sha,
+  parents: raw.parents.map((parent) => parent.sha),
+  message: raw.commit.message.trimEnd(),
+  author: raw.commit.author?.name ?? raw.author?.login ?? 'unknown',
+  date: raw.commit.author?.date ? Date.parse(raw.commit.author.date) : 0,
+})
 
 interface RawPull {
   number: number
@@ -405,6 +421,19 @@ export function createGitHubClient({ token, fetch: fetchImpl = globalThis.fetch,
         query: { head: `${repo.owner}:${branch}`, state: 'open', per_page: 10 },
       })
       return data[0] ? toPull(data[0]) : null
+    },
+
+    /** The pull request's commits, oldest first (GitHub lists at most 250). */
+    async pullCommits(repo: RepoRef, number: number): Promise<BranchCommit[]> {
+      return (await paginate<RawCommit>(`${repoPath(repo)}/pulls/${number}/commits`)).map(toBranchCommit)
+    },
+
+    /** The files between two commits, with line counts and patches (three-dot: from their merge base). */
+    async compareFiles(repo: RepoRef, base: string, head: string): Promise<PullFile[]> {
+      const { data } = await request<{ files?: RawFile[] }>(
+        `${repoPath(repo)}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`,
+      )
+      return (data.files ?? []).map(toPullFile)
     },
 
     async pullFiles(repo: RepoRef, number: number): Promise<PullFile[]> {

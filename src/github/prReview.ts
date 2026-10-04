@@ -1,4 +1,6 @@
 import type { SkelbertDb } from '../db/db'
+import { recordReviewedFiles } from '../db/fileViews'
+import type { FileChange } from '../git/types'
 import type { Note, SubmittedReviewState } from '../db/schema'
 import { compareNotes } from '../review/summary'
 import type { GitHubClient } from './client'
@@ -155,6 +157,19 @@ export function needsBody(input: SubmitInput, pendingComments: number): boolean 
   return input.event !== 'APPROVE' && comments === 0 && !submitBody(input)
 }
 
-export async function archiveWithReview(db: SkelbertDb, sessionId: string, result: SubmitResult, now = Date.now()): Promise<void> {
+/** The pull request files a submitted review covered, so "since last look" starts from them. */
+export interface ReviewedHead {
+  headSha: string
+  files: readonly Pick<FileChange, 'path' | 'oldOid' | 'newOid'>[]
+}
+
+export async function archiveWithReview(
+  db: SkelbertDb,
+  sessionId: string,
+  result: SubmitResult,
+  now = Date.now(),
+  reviewed?: ReviewedHead,
+): Promise<void> {
+  if (reviewed) await recordReviewedFiles(db, sessionId, reviewed.headSha, reviewed.files, now)
   await db.sessions.update(sessionId, { status: 'archived', review: { state: result.state, at: now, url: result.review.htmlUrl } })
 }

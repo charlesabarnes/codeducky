@@ -48,6 +48,8 @@ export interface FileContents {
   path: string
   old: FileSide | null
   new: FileSide | null
+  /** Why the diff is not the one asked for, e.g. the reviewed version could not be read. */
+  notice?: string
 }
 
 export interface LineCounts {
@@ -56,3 +58,22 @@ export interface LineCounts {
 }
 
 export type FileStats = LineCounts | { binary: true } | { tooLarge: true }
+
+/** One commit of a branch or pull request, as the commit picker lists it. */
+export interface BranchCommit {
+  sha: string
+  parents: string[]
+  /** The full message; the first line is the summary. */
+  message: string
+  author: string
+  /** Author date, in ms. */
+  date: number
+}
+
+export const isMergeCommit = (commit: Pick<BranchCommit, 'parents'>) => commit.parents.length > 1
+
+/** How the head moved since a review: the number of commits on top, or null when the old head is not an ancestor (history rewritten). */
+export interface HeadMove {
+  commits: number | null
+  rewritten: boolean
+}

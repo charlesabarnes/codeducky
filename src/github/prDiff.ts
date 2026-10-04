@@ -70,9 +70,19 @@ const hasNew = (file: PullFile) => file.status !== 'removed'
  * large and truncated diffs. They only feed moved-block detection, where they are present.
  */
 export async function buildPrChanges(gh: GitHubClient, snapshot: PrSnapshot): Promise<PrChanges> {
-  const { ref, pull, mergeBaseSha, files } = snapshot
-  const oldExpr = (file: PullFile) => `${mergeBaseSha}:${oldPathOf(file)}`
-  const newExpr = (file: PullFile) => `${pull.headSha}:${file.path}`
+  return buildChangesBetween(gh, snapshot.ref, snapshot.mergeBaseSha, snapshot.pull.headSha, snapshot.files)
+}
+
+/** The same, between any two commits whose changed files are listed (a pull request, a commit or a range of them). */
+export async function buildChangesBetween(
+  gh: GitHubClient,
+  ref: RepoRef,
+  fromSha: string,
+  toSha: string,
+  files: readonly PullFile[],
+): Promise<PrChanges> {
+  const oldExpr = (file: PullFile) => `${fromSha}:${oldPathOf(file)}`
+  const newExpr = (file: PullFile) => `${toSha}:${file.path}`
   const found = await blobMetas(gh, ref, [...files.filter(hasOld).map(oldExpr), ...files.filter(hasNew).map(newExpr)])
 
   const metas = new Map<string, BlobMeta>()
