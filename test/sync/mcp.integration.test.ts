@@ -11,6 +11,7 @@ import { startOrResumeSession } from '../../src/db/sessions'
 import { acceptSuggestion } from '../../src/db/suggestions'
 import { SyncController } from '../../src/sync/controller'
 import { signInDevice } from '../support/deviceSignIn'
+import { challengeFor, decideConsent, fakeConsent, fakeSignIn, fetchSend, newVerifier } from '../support/fakeSignIn'
 import { startServer } from '../support/realServer'
 
 let base = ''
@@ -94,6 +95,69 @@ describe('MCP against the real server', () => {
     } finally {
       controller.dispose()
       await db.delete()
+    }
+  })
+
+  it('connects an MCP client through GitHub consent, acting only on the data of the user who approved', async () => {
+    for (const login of ['carol', 'dave']) {
+      const { token } = await fakeSignIn(fetchSend, base, login)
+      const repo = { owner: login, name: `${login}-app`, folderName: `${login}-app`, baseBranch: 'main', lastOpenedAt: 1, checklistIds: [] }
+      const pushed = await fetch(`${base}/api/sync`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cursor: 0, changes: [{ kind: 'repos', id: `gh:${login}/${login}-app`, changedAt: 1, deleted: false, data: repo }] }),
+      })
+      expect(pushed.status).toBe(200)
+    }
+
+    const redirectUri = 'http://127.0.0.1:53682/callback'
+    const registered = await fetch(`${base}/oauth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_name: 'Claude Code (integration)', redirect_uris: [redirectUri], token_endpoint_auth_method: 'none' }),
+    })
+    const { client_id: clientId } = (await registered.json()) as { client_id: string }
+    const verifier = newVerifier()
+    const authorizeUrl = `${base}/oauth/authorize?${new URLSearchParams({
+      response_type: 'code',
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      code_challenge: challengeFor(verifier),
+      code_challenge_method: 'S256',
+      state: 'xyz',
+      resource: `${base}/mcp`,
+    })}`
+
+    const page = await fakeConsent(fetchSend, authorizeUrl, 'carol')
+    expect(page.status).toBe(200)
+    expect(page.html).toContain('@carol')
+    expect(page.html).toContain('Claude Code (integration)')
+    const approved = new URL((await decideConsent(fetchSend, base, page, 'approve')).headers.get('location')!)
+    expect(approved.searchParams.get('state')).toBe('xyz')
+
+    const tokenRes = await fetch(`${base}/oauth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: approved.searchParams.get('code')!,
+        code_verifier: verifier,
+        client_id: clientId,
+        redirect_uri: redirectUri,
+      }).toString(),
+    })
+    expect(tokenRes.status).toBe(200)
+    const { access_token: accessToken } = (await tokenRes.json()) as { access_token: string }
+
+    const client = new Client({ name: 'integration-oauth', version: '1.0.0' })
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers: { Authorization: `Bearer ${accessToken}` } } }),
+    )
+    try {
+      const { repos } = await callTool<{ repos: { repo: string }[] }>(client, 'list_repos')
+      expect(repos.map((r) => r.repo)).toEqual(['carol/carol-app'])
+    } finally {
+      await client.close()
     }
   })
 })

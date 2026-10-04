@@ -54,5 +54,40 @@ export async function fakeSignIn(send: Send, base: string, login: string, name =
   return (await res.json()) as SignedIn
 }
 
+export interface ConsentPage {
+  status: number
+  headers: Headers
+  html: string
+  /** The hidden fields of the consent form; absent on an error page. */
+  flow?: string
+  ticket?: string
+}
+
+const hiddenField = (html: string, name: string) => html.match(new RegExp(`<input type="hidden" name="${name}" value="([^"]*)">`))?.[1]
+
+/**
+ * Opens an MCP client's authorization URL in a browser that signs in to the fake GitHub as
+ * `login`, and returns the page the GitHub callback shows: the consent page, or an error.
+ */
+export async function fakeConsent(send: Send, authorizationUrl: string, login: string): Promise<ConsentPage> {
+  const start = await send(authorizationUrl)
+  const authorize = new URL(location(start, 'authorize'), authorizationUrl)
+  authorize.searchParams.set('login', login)
+  authorize.searchParams.set('auto', '1')
+  const page = await send(location(await send(authorize.toString()), 'fake authorize'), { headers: { Cookie: cookies(start) } })
+  const html = await page.text()
+  return { status: page.status, headers: page.headers, html, flow: hiddenField(html, 'flow'), ticket: hiddenField(html, 'ticket') }
+}
+
+/** Submits the consent form; returns the response, usually a redirect to the client. */
+export function decideConsent(send: Send, base: string, fields: { flow?: string; ticket?: string }, decision: 'approve' | 'deny') {
+  const body = new URLSearchParams({ flow: fields.flow ?? '', ticket: fields.ticket ?? '', decision })
+  return send(`${base}/oauth/authorize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  })
+}
+
 /** fetch against a real server, leaving redirects to the caller. */
 export const fetchSend: Send = (url, init) => fetch(url, { ...init, redirect: 'manual' })

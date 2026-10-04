@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'bun:test'
 import { challengeFor, newVerifier } from '../test/support/fakeSignIn'
 import type { IdentityProvider } from './auth/github'
 import { GitHubError } from './auth/github'
+import { MAX_FLOWS, MAX_FLOWS_PER_IP } from './auth/flows'
 import { DEFAULT_SIGNUPS } from './config'
 import { DEFAULT_RATE_LIMITS } from './limits'
 import type { LogEntry } from './log'
@@ -244,6 +245,60 @@ describe('GitHub sign-in', () => {
     const carol = createUserSession(otherDb, 'carol')
     otherDb.query("UPDATE users SET status = 'disabled' WHERE id = ?").run(carol.user.id)
     expect((await exchange(other, { handoff: pending.fragment.get('handoff'), verifier: pending.verifier })).status).toBe(403)
+  })
+})
+
+describe('stored flows', () => {
+  const unlimited = { ...DEFAULT_RATE_LIMITS, githubStart: { limit: 1000, windowSec: 600, burst: 1000 } }
+  const flowCount = (db: ReturnType<typeof setup>['db']) => db.query<{ n: number }, []>('SELECT COUNT(*) AS n FROM auth_flows').get()!.n
+
+  async function startFrom(app: App, ip: string) {
+    const res = await app.request(`/api/auth/github/start?challenge=${challengeFor(newVerifier())}`, { headers: { 'X-Forwarded-For': ip } })
+    return { res, cookie: (res.headers.get('set-cookie') ?? '').split(';')[0]!, authorize: res.status === 302 ? new URL(redirectOf(res)) : null }
+  }
+
+  const finish = async (app: App, flow: Awaited<ReturnType<typeof startFrom>>) =>
+    (await callback(app, await authorize(app, flow.authorize!, { login: 'alice', auto: '1' }), flow.cookie)).fragment
+
+  it('keeps a few live flows per client address, dropping the oldest', async () => {
+    const { app, db } = setup({ limits: unlimited })
+    const other = await startFrom(app, '10.0.0.2')
+    const oldest = await startFrom(app, '10.0.0.1')
+    let newest = oldest
+    for (let i = 0; i < MAX_FLOWS_PER_IP; i++) newest = await startFrom(app, '10.0.0.1')
+    expect(flowCount(db)).toBe(MAX_FLOWS_PER_IP + 1)
+    expect((await finish(app, oldest)).get('error')).toBe('invalid_state')
+    expect((await finish(app, newest)).get('handoff')).toBeTruthy()
+    expect((await finish(app, other)).get('handoff')).toBeTruthy()
+  })
+
+  it('drops the oldest flow once every slot is taken, keeps pending consents, and prunes expired ones', async () => {
+    let now = 1_000_000
+    const { app, db } = setup({ now: () => now, limits: unlimited })
+    const alice = createUserSession(db, 'alice')
+    const insert = db.query(
+      `INSERT INTO auth_flows (id_hash, state_hash, purpose, github_verifier, user_id, consent_hash, created_at, expires_at)
+       VALUES (?, 's', 'oauth', 'v', ?, ?, ?, ?)`,
+    )
+    const fill = (consent: boolean) =>
+      db.transaction(() => {
+        for (let i = 0; i < MAX_FLOWS; i++) insert.run(`filler-${i}`, consent ? alice.user.id : null, consent ? 'ticket' : null, now + i, now + 60_000)
+      })()
+
+    fill(false)
+    expect((await startFrom(app, '10.0.0.1')).res.status).toBe(302)
+    expect(flowCount(db)).toBe(MAX_FLOWS)
+    expect(db.query("SELECT 1 FROM auth_flows WHERE id_hash = 'filler-0'").get()).toBeNull()
+
+    db.query('DELETE FROM auth_flows').run()
+    fill(true)
+    const refused = await startFrom(app, '10.0.0.1')
+    expect(refused.res.status).toBe(429)
+    expect(Number(refused.res.headers.get('Retry-After'))).toBeGreaterThan(0)
+
+    now += 60_000
+    expect((await startFrom(app, '10.0.0.1')).res.status).toBe(302)
+    expect(flowCount(db)).toBe(1)
   })
 })
 
