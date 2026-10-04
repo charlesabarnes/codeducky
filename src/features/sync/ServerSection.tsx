@@ -1,39 +1,17 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import {
-  Ban,
-  Copy,
-  KeyRound,
-  Laptop,
-  LogIn,
-  LogOut,
-  RefreshCw,
-  RotateCcw,
-  Trash2,
-} from 'lucide-react'
+import { Ban, Copy, KeyRound, RefreshCw, RotateCcw, Trash2 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { db } from '../../db/db'
 import { syncController, useSyncState } from '../../sync/client'
-import type { SignInResult, TokenSummary } from '../../sync/controller'
+import type { TokenSummary } from '../../sync/controller'
 import { listRejected } from '../../sync/rejected'
-import { syncSummary } from '../../sync/summary'
 import { Panel } from '../../ui/Panel'
 import { ChannelSettings } from '../claude/ChannelSettings'
-import { SYNC_ICONS } from './syncIcons'
 import { ConnectClaudeCode } from './ConnectClaudeCode'
 import { PrePushGate } from './PrePushGate'
+import { SignedIn } from './SignedIn'
+import { SignInForm } from './SignInForm'
 import './sync.css'
-
-const SIGN_IN_ERRORS: Record<Exclude<SignInResult, 'ok'>, string> = {
-  invalid: 'Wrong passphrase.',
-  throttled: 'Too many attempts. Wait a few minutes and try again.',
-  offline: 'Could not reach the server.',
-  error: 'The server could not sign you in.',
-}
-
-function defaultDeviceName(): string {
-  const platform = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform
-  return `Code Ducky on ${platform || 'this browser'}`
-}
 
 const formatTime = (ms: number | null) => (ms ? new Date(ms).toLocaleString() : 'never')
 
@@ -45,8 +23,8 @@ export function ServerSection() {
     <>
       <Panel icon={RefreshCw} title="sync server" id="sync">
         <p>
-          Repos, sessions, notes, checklists and viewed files sync between your devices through the Code Ducky server. The GitHub
-          token and these settings never leave this browser.
+          Sign in with GitHub and your repos, sessions, notes, checklists and viewed files sync to your account, so every device
+          you sign in on sees them. Only you can see your data. The GitHub token and these settings never leave this browser.
         </p>
         {signedIn ? <SignedIn /> : <SignInForm expired={state.auth === 'expired'} />}
         {state.rejected > 0 && <RejectedList />}
@@ -56,83 +34,6 @@ export function ServerSection() {
       <PrePushGate signedIn={signedIn} onMinted={() => setTokensVersion((v) => v + 1)} />
       <ChannelSettings signedIn={signedIn} onMinted={() => setTokensVersion((v) => v + 1)} />
     </>
-  )
-}
-
-function SignInForm({ expired }: { expired: boolean }) {
-  const [passphrase, setPassphrase] = useState('')
-  const [name, setName] = useState(defaultDeviceName)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault()
-    setBusy(true)
-    setError(null)
-    const result = await syncController.signIn(passphrase, name.trim() || defaultDeviceName())
-    setBusy(false)
-    if (result === 'ok') setPassphrase('')
-    else setError(SIGN_IN_ERRORS[result])
-  }
-
-  return (
-    <form className="stack" onSubmit={submit}>
-      {expired && <p className="error">This device's sign-in was revoked or expired. Sign in again to resume syncing.</p>}
-      <label className="field">
-        <span>passphrase</span>
-        <input
-          type="password"
-          value={passphrase}
-          autoComplete="current-password"
-          onChange={(e) => setPassphrase(e.target.value)}
-          required
-        />
-      </label>
-      <label className="field">
-        <span>device name</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
-        <small>Shown in the token list, so you can revoke this device later.</small>
-      </label>
-      <div className="row">
-        <button type="submit" disabled={busy || !passphrase}>
-          <LogIn size={13} aria-hidden />
-          {busy ? 'signing in…' : 'sign in'}
-        </button>
-        {error && <span className="error">{error}</span>}
-      </div>
-    </form>
-  )
-}
-
-function SignedIn() {
-  const state = useSyncState()
-  const summary = syncSummary(state)
-  const Icon = SYNC_ICONS[summary.tone]
-  const signOut = () => {
-    const unsent = state.pending > 0 ? `\n\n${state.pending} change(s) have not uploaded yet. They stay on this device and upload when you sign in again.` : ''
-    if (window.confirm(`Sign out of the sync server?${unsent}`)) void syncController.signOut()
-  }
-  return (
-    <div className="row sync-status">
-      <span className="status-item">
-        <Laptop size={13} aria-hidden className="muted" />
-        {state.deviceName}
-      </span>
-      <span className={`status-item sync-tone ${summary.tone}`}>
-        <Icon size={13} aria-hidden />
-        {summary.label.toLowerCase()}
-      </span>
-      {summary.detail && <span className="muted">· {summary.detail}</span>}
-      <span className="spacer" />
-      <button type="button" className="secondary" onClick={() => void syncController.sync()} disabled={state.status === 'syncing'}>
-        <RefreshCw size={13} aria-hidden />
-        sync now
-      </button>
-      <button type="button" className="secondary" onClick={signOut}>
-        <LogOut size={13} aria-hidden />
-        sign out
-      </button>
-    </div>
   )
 }
 

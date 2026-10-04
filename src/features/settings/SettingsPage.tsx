@@ -38,7 +38,7 @@ export function SettingsPage() {
   return (
     <section className="page narrow stack settings-page">
       <StatusBar mode="settings">
-        <span className="strong">{sync.auth === 'signedIn' ? `signed in as ${sync.deviceName}` : 'local only'}</span>
+        <span className="strong">{sync.auth === 'signedIn' ? `signed in as ${sync.user ? `@${sync.user.login}` : sync.deviceName}` : 'local only'}</span>
       </StatusBar>
       <PageHeader icon={Settings2} title="settings">
         <p>Stored only in this browser (IndexedDB). Nothing is sent anywhere until you use a feature that needs it.</p>

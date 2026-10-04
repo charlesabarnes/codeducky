@@ -2,6 +2,8 @@ import { FolderGit2, Inbox, ListChecks, Settings2 } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useKeys, useShortcuts } from '../keys/context'
+import { AccountChip } from '../features/sync/AccountChip'
+import { AccountSwitchDialog } from '../features/sync/AccountSwitchDialog'
 import { SyncIndicator } from '../features/sync/SyncIndicator'
 import { KeyboardProvider, ShortcutsHint } from '../keys/KeyboardProvider'
 import { ChromeContext } from './chromeContext'
@@ -39,9 +41,11 @@ export function Layout() {
             <div className="crumbs" ref={setCrumbs} />
             <span className="spacer" />
             <SyncIndicator />
+            <AccountChip />
             <ShortcutsHint />
           </header>
           <GlobalShortcuts />
+          <AccountSwitchDialog />
           <main className="app-main">
             <Outlet />
           </main>

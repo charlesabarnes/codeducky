@@ -8,6 +8,7 @@ import { RepoPage } from '../features/repos/RepoPage'
 import { ReposPage } from '../features/repos/ReposPage'
 import { SessionPage } from '../features/session/SessionPage'
 import { SettingsPage } from '../features/settings/SettingsPage'
+import { SignInCallback } from '../features/sync/SignInCallback'
 
 export const routes: RouteObject[] = [
   {
@@ -20,6 +21,7 @@ export const routes: RouteObject[] = [
       { id: 'session', path: 'sessions/:sessionId', element: <SessionPage /> },
       { id: 'settings', path: 'settings', element: <SettingsPage /> },
       { id: 'inbox', path: 'inbox', element: <InboxPage /> },
+      { id: 'signin-callback', path: 'signin/callback', element: <SignInCallback /> },
       { id: 'pr', path: 'pr/:owner/:repo/:number', element: <PrOpenPage /> },
       // github.com's PR paths, so replacing the host in a PR URL opens it here. Static routes rank above it.
       { id: 'pr-mirror', path: ':owner/:repo/pull/:number/*', element: <PrOpenPage /> },

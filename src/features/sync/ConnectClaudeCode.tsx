@@ -37,7 +37,7 @@ export function ConnectClaudeCode({ signedIn, onMinted }: ConnectClaudeCodeProps
         add notes as suggestions and tick checklist items. Changes reach this app on the next sync.
       </p>
       <CopyField label="MCP URL" value={url} />
-      <CopyField label="Add with OAuth (approve in the browser with your passphrase)" value={claudeAddCommand(url)} />
+      <CopyField label="Add with OAuth (approve in the browser by signing in with GitHub)" value={claudeAddCommand(url)} />
       {token ? (
         <div className="stack">
           <CopyField label="Or add with a token" value={claudeAddCommand(url, token)} />
@@ -75,8 +75,8 @@ export function ConnectClaudeCode({ signedIn, onMinted }: ConnectClaudeCodeProps
         </dl>
       </div>
       <p>
-        claude.ai custom connectors use OAuth with the same URL: add a custom connector with <code>{url}</code> and approve it with
-        your passphrase. Connected clients are listed under Access tokens as OAuth.
+        claude.ai custom connectors use OAuth with the same URL: add a custom connector with <code>{url}</code> and approve it by
+        signing in with GitHub. Connected clients are listed under Access tokens as OAuth.
       </p>
     </Panel>
   )
