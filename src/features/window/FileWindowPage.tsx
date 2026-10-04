@@ -139,6 +139,7 @@ function FileWindow({ session, repo, source, path, edit, head }: FileWindowProps
   })
 
   const label = isPatchSession(session) ? session.branch : repoLabel(repo)
+  const openNotes = fileNotes.filter((note) => note.status === 'open').length
   return (
     <div className="file-window">
       <Crumbs>
@@ -149,7 +150,7 @@ function FileWindow({ session, repo, source, path, edit, head }: FileWindowProps
       <StatusBar mode={editing ? 'edit' : 'file'}>
         {dirty && <span>unsaved</span>}
         <span>
-          {fileNotes.filter((note) => note.status === 'open').length} open notes
+          {openNotes} open {openNotes === 1 ? 'note' : 'notes'}
         </span>
       </StatusBar>
       <section className={editing ? 'session-content editing' : 'session-content'}>
