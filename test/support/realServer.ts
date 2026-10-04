@@ -17,6 +17,7 @@ export async function startServer() {
   const dataDir = mkdtempSync(join(tmpdir(), 'codeducky-int-'))
   const env: NodeJS.ProcessEnv = {
     ...process.env,
+    NODE_ENV: 'test',
     PORT: String(port),
     DATA_DIR: dataDir,
     WEB_DIST: join(dataDir, 'no-dist'),
