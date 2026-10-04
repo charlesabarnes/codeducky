@@ -16,6 +16,8 @@ RUN npm ci --omit=dev
 
 FROM oven/bun:1.4.2-slim
 WORKDIR /app
+# Production also needs CODEDUCKY_PUBLIC_URL and the GitHub OAuth App (CODEDUCKY_GITHUB_CLIENT_ID and
+# CODEDUCKY_GITHUB_CLIENT_SECRET) at run time; CODEDUCKY_ADMIN_PASSPHRASE enables admin sign-in.
 ENV NODE_ENV=production \
     PORT=8787 \
     DATA_DIR=/data \
