@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
+import { CLIENT_HEADER } from '../../shared/clientVersion'
 import { matchSessions, type ChannelSessionView, type ChannelState } from '../../shared/channel'
 import { ChannelClient } from '../../src/channel/client'
+import { CLIENT_BUILD } from '../../src/update/handshake'
+import { updates } from '../../src/update/updates'
 
 const session = (overrides: Partial<ChannelSessionView>): ChannelSessionView => ({
   id: 's',
@@ -53,6 +56,7 @@ describe('ChannelClient', () => {
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe('/api/channel/events')
     expect(new Headers(init.headers).get('authorization')).toBe('Bearer device-token')
+    expect(new Headers(init.headers).get(CLIENT_HEADER)).toBe(CLIENT_BUILD)
     unsubscribe()
     expect((init.signal as AbortSignal).aborted).toBe(true)
   })
@@ -77,6 +81,16 @@ describe('ChannelClient', () => {
     authListener()
     await vi.waitFor(() => expect(client.getSnapshot().status).toBe('live'))
     unsubscribe()
+  })
+
+  it('starts the update when the server refuses this build', async () => {
+    const outdated = vi.spyOn(updates, 'clientOutdated').mockImplementation(() => undefined)
+    const fetchMock = vi.fn(async () => Response.json({ error: 'client_outdated', minimum: '20300101000000' }, { status: 426 }))
+    const client = new ChannelClient({ token: () => 't', onAuthChange: () => () => undefined, request: vi.fn(), fetch: fetchMock as unknown as typeof fetch })
+    const unsubscribe = client.subscribe(() => undefined)
+    await vi.waitFor(() => expect(outdated).toHaveBeenCalledWith('20300101000000'))
+    unsubscribe()
+    outdated.mockRestore()
   })
 
   it('sends tasks and verdicts through the authenticated request helper', async () => {

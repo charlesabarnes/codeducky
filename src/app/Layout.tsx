@@ -2,6 +2,7 @@ import { FolderGit2, Inbox, ListChecks, Settings2 } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useKeys, useShortcuts } from '../keys/context'
+import { UpdateBanner } from '../features/pwa/UpdateBanner'
 import { SyncIndicator } from '../features/sync/SyncIndicator'
 import { KeyboardProvider, ShortcutsHint } from '../keys/KeyboardProvider'
 import { ChromeContext } from './chromeContext'
@@ -41,6 +42,7 @@ export function Layout() {
             <SyncIndicator />
             <ShortcutsHint />
           </header>
+          <UpdateBanner />
           <GlobalShortcuts />
           <main className="app-main">
             <Outlet />
