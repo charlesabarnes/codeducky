@@ -1,5 +1,6 @@
 import { Keyboard } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { readStorage, writeStorage } from '../app/storage'
 import { KeysContext, useKeys, type KeysApi } from './context'
 import { ShortcutDispatcher } from './dispatcher'
 import { HelpOverlay } from './HelpOverlay'
@@ -32,7 +33,7 @@ interface Message {
 
 export function KeyboardProvider({ children }: { children: ReactNode }) {
   const [dispatcher] = useState(() => new ShortcutDispatcher())
-  const [enabled, setEnabled] = useState(() => localStorage.getItem(ENABLED_KEY) !== 'off')
+  const [enabled, setEnabled] = useState(() => readStorage(ENABLED_KEY) !== 'off')
   const [help, setHelp] = useState<ReadonlySet<string> | null>(null)
   const [message, setMessage] = useState<Message | null>(null)
 
@@ -47,7 +48,7 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
   const openHelp = useCallback(() => setHelp(dispatcher.activeIds()), [dispatcher])
   const changeEnabled = (next: boolean) => {
     setEnabled(next)
-    localStorage.setItem(ENABLED_KEY, next ? 'on' : 'off')
+    writeStorage(ENABLED_KEY, next ? 'on' : 'off')
   }
 
   useEffect(() => {
