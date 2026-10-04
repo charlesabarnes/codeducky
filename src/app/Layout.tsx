@@ -2,6 +2,7 @@ import { FolderGit2, Inbox, ListChecks, Settings2 } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useKeys, useShortcuts } from '../keys/context'
+import { InstallHint } from '../features/pwa/InstallHint'
 import { UpdateBanner } from '../features/pwa/UpdateBanner'
 import { AccountChip } from '../features/sync/AccountChip'
 import { AccountSwitchDialog } from '../features/sync/AccountSwitchDialog'
@@ -41,6 +42,7 @@ export function Layout() {
             </nav>
             <div className="crumbs" ref={setCrumbs} />
             <span className="spacer" />
+            <InstallHint />
             <SyncIndicator />
             <AccountChip />
             <ShortcutsHint />
