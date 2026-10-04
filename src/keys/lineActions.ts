@@ -1,4 +1,5 @@
 import type { DiffSide } from '../diff/hunks'
+import type { LineRange } from './selection'
 
 export type NoteAction = 'edit' | 'resolve' | 'accept' | 'dismiss'
 
@@ -12,7 +13,8 @@ export interface ActionResult {
 export interface LineActions {
   /** Line keys that carry a visible note. */
   noted: ReadonlySet<string>
-  comment: (side: DiffSide, line: number) => void
+  /** Opens the note editor on a line or a range of lines. */
+  comment: (range: LineRange) => void
   /** Acts on the first suitable note on the given line keys (nearest first); null if none. */
   act: (action: NoteAction, keys: readonly string[]) => ActionResult | null
 }

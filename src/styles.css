@@ -1416,6 +1416,56 @@ tr.current .repo-link {
   color: var(--accent);
 }
 
+/* Selected lines, and the lines of the note under the pointer or in focus: a wash over the add and remove colours. */
+.diff-table tr.selected > td,
+.diff-table td.selected {
+  background-image: linear-gradient(var(--range-selected), var(--range-selected));
+}
+
+.diff-table tr.tinted > td,
+.diff-table td.tinted {
+  background-image: linear-gradient(var(--range-tint), var(--range-tint));
+}
+
+.diff-table tr.selected > td.ln,
+.diff-table td.selected.ln {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.diff-table {
+  --range-selected: color-mix(in srgb, var(--accent) 24%, transparent);
+  --range-tint: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* The gutter "+": shown on the hovered line and at the end of a selection. */
+.diff-table td.marker {
+  position: relative;
+}
+
+.diff-table .add-note {
+  position: absolute;
+  inset: 0;
+  display: none;
+  padding: 0;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font: inherit;
+  font-weight: 700;
+  line-height: var(--code-line);
+  cursor: pointer;
+}
+
+.diff-table.unified tr:hover .add-note,
+.diff-table.unified tr.selection-end .add-note,
+.diff-table.split td.marker:hover .add-note,
+.diff-table.split td.ln:hover + td.marker .add-note,
+.diff-table.split td.marker:has(+ td.code:hover) .add-note,
+.diff-table.split td.marker.selection-end .add-note {
+  display: block;
+}
+
 .diff-table tr.annotation > td {
   padding: 6px 12px 8px 108px;
   background: var(--bg);
@@ -1553,6 +1603,11 @@ tr.current .repo-link {
   max-width: 640px;
   border: 1px solid var(--accent);
   background: var(--bg);
+}
+
+.note-editor-label {
+  padding: 2px 8px 0;
+  font-size: 0.85em;
 }
 
 .note-editor textarea {
