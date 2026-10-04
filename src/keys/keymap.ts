@@ -12,8 +12,8 @@ export type KeyScope = 'global' | 'session' | 'file' | 'diff' | 'split'
 /** Higher wins when two active registrations claim the same key. */
 export const SCOPE_PRIORITY: Record<KeyScope, number> = { global: 0, session: 1, file: 2, diff: 3, split: 4 }
 
-export type KeyGroup = 'Navigation' | 'Notes' | 'Pull request' | 'View' | 'Editor' | 'Inbox' | 'General'
-export const GROUP_ORDER: readonly KeyGroup[] = ['Navigation', 'Notes', 'Pull request', 'View', 'Editor', 'Inbox', 'General']
+export type KeyGroup = 'Navigation' | 'Notes' | 'Pull request' | 'View' | 'Note editor' | 'File editor' | 'Inbox' | 'General'
+export const GROUP_ORDER: readonly KeyGroup[] = ['Navigation', 'Notes', 'Pull request', 'View', 'Note editor', 'File editor', 'Inbox', 'General']
 
 export interface KeyBinding {
   id: string
@@ -22,7 +22,7 @@ export interface KeyBinding {
   group: KeyGroup
   /** Fires on auto-repeat while the key is held. */
   repeat?: boolean
-  /** Listed in help but handled locally (the note editor); never dispatched. */
+  /** Listed in help but handled locally (the note editor, the file editor); never dispatched. */
   docOnly?: boolean
   /** For docOnly entries: list them whenever this binding is active. */
   shownWith?: string
@@ -70,8 +70,18 @@ export const KEYMAP = [
   { id: 'tab.notes', keys: ['g n'], label: 'Notes tab', group: 'View' },
   { id: 'tab.checklists', keys: ['g c'], label: 'Checklists tab', group: 'View' },
 
-  { id: 'editor.save', keys: ['mod+Enter'], label: 'Save the note', group: 'Editor', docOnly: true, shownWith: 'note.comment' },
-  { id: 'editor.cancel', keys: ['Escape'], label: 'Cancel the note, or leave a text field', group: 'Editor', docOnly: true, shownWith: 'note.comment' },
+  { id: 'editor.save', keys: ['mod+Enter'], label: 'Save the note', group: 'Note editor', docOnly: true, shownWith: 'note.comment' },
+  { id: 'editor.cancel', keys: ['Escape'], label: 'Cancel the note, or leave a text field', group: 'Note editor', docOnly: true, shownWith: 'note.comment' },
+
+  // `e` edits notes, so the file editor takes Shift+E. Inside the editor every key is the editor's own.
+  { id: 'file.edit', keys: ['E'], label: 'Switch between the diff and the file editor', group: 'File editor' },
+  { id: 'file.save', keys: ['mod+s'], label: 'Save the file (commits to the branch in a pull request)', group: 'File editor' },
+  { id: 'file.find', keys: ['mod+f'], label: 'Find and replace in the file', group: 'File editor', docOnly: true, shownWith: 'file.save' },
+  { id: 'file.undo', keys: ['mod+z'], label: 'Undo', group: 'File editor', docOnly: true, shownWith: 'file.save' },
+  { id: 'file.redo', keys: ['mod+shift+z'], label: 'Redo', group: 'File editor', docOnly: true, shownWith: 'file.save' },
+  { id: 'file.indent', keys: ['Tab'], label: 'Indent the line or selection', group: 'File editor', docOnly: true, shownWith: 'file.save' },
+  { id: 'file.outdent', keys: ['shift+Tab'], label: 'Outdent the line or selection', group: 'File editor', docOnly: true, shownWith: 'file.save' },
+  { id: 'file.leave', keys: ['Escape Tab'], label: 'Move focus out of the editor', group: 'File editor', docOnly: true, shownWith: 'file.save' },
 
   { id: 'inbox.next', keys: ['j'], label: 'Next pull request', group: 'Inbox', repeat: true },
   { id: 'inbox.prev', keys: ['k'], label: 'Previous pull request', group: 'Inbox', repeat: true },
@@ -87,7 +97,7 @@ export type ShortcutId = (typeof KEYMAP)[number]['id']
 export const BINDINGS: ReadonlyMap<string, KeyBinding> = new Map(KEYMAP.map((binding) => [binding.id, binding]))
 
 /** Tokens that still work while typing in a field. */
-export const ALWAYS_ON = new Set(['Escape', 'mod+Enter'])
+export const ALWAYS_ON = new Set(['Escape', 'mod+Enter', 'mod+s'])
 
 export function parseSequence(keys: string): string[] {
   return keys.split(' ').filter(Boolean)

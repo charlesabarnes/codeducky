@@ -38,6 +38,8 @@ interface FileListProps {
   badges?: ReadonlyMap<string, FileBadge> | null
   /** Files that can be marked viewed (in commit mode, only those in the branch's diff). */
   canView?: (path: string) => boolean
+  /** The file with unsaved edits in the editor. */
+  dirtyPath?: string | null
 }
 
 export function FileList(props: FileListProps) {
@@ -99,7 +101,7 @@ function rowTitle(file: FileChange, risk: Risk | undefined): string {
   return lines.join('\n')
 }
 
-function FileRows({ files, stats, selected, noteCounts, viewed, onSelect, onToggleViewed, risks, badges, canView }: FileListProps) {
+function FileRows({ files, stats, selected, noteCounts, viewed, onSelect, onToggleViewed, risks, badges, canView, dirtyPath }: FileListProps) {
   return (
     <ul className="file-list">
       {files.map((file) => {
@@ -136,6 +138,7 @@ function FileRows({ files, stats, selected, noteCounts, viewed, onSelect, onTogg
                   </span>
                 )}
                 <NoteCount count={noteCounts.get(file.path)} />
+                {file.path === dirtyPath && <span className="dirty-mark" title="Unsaved changes in the editor" aria-label="unsaved changes" />}
               </span>
               <Counts stats={stats[file.path]} />
             </button>

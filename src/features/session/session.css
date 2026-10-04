@@ -10,3 +10,31 @@
   font-weight: 400;
   color: var(--fg-2);
 }
+
+.session-content.editing {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.session-content.editing > * {
+  flex: none;
+}
+
+.session-content.editing > .editor-pane {
+  flex: 1;
+}
+
+.dirty-mark {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: middle;
+}
+
+.segmented.inverted button[aria-pressed='true'] .dirty-mark {
+  background: var(--bg);
+}

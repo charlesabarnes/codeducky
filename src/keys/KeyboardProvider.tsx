@@ -4,7 +4,7 @@ import { readStorage, writeStorage } from '../app/storage'
 import { KeysContext, useKeys, type KeysApi } from './context'
 import { ShortcutDispatcher } from './dispatcher'
 import { HelpOverlay } from './HelpOverlay'
-import { eventToken, isEditableTarget } from './tokens'
+import { eventToken, isEditableTarget, ownsKeys } from './tokens'
 import './keys.css'
 
 const ENABLED_KEY = 'rubberduck.shortcuts'
@@ -61,6 +61,7 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
       const handled = dispatcher.handle({
         token: eventToken(event),
         editable: isEditableTarget(event.target),
+        owned: ownsKeys(event.target),
         repeat: event.repeat,
         now: performance.now(),
       })

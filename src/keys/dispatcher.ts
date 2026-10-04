@@ -16,6 +16,8 @@ export interface KeyInput {
   token: string | null
   /** The event target is a text field (see isEditableTarget). */
   editable: boolean
+  /** The event target handles every key itself (see ownsKeys), so nothing is dispatched. */
+  owned?: boolean
   repeat: boolean
   now: number
 }
@@ -40,7 +42,7 @@ export class ShortcutDispatcher {
     this.timeout = timeout
   }
 
-  /** When off, only Esc and Cmd/Ctrl+Enter work (WCAG 2.1.4: character shortcuts can be turned off). */
+  /** When off, only Esc, Cmd/Ctrl+Enter and Cmd/Ctrl+S work (WCAG 2.1.4: character shortcuts can be turned off). */
   setEnabled(enabled: boolean): void {
     this.enabled = enabled
     if (!enabled) this.buffer = []
@@ -70,8 +72,9 @@ export class ShortcutDispatcher {
   }
 
   /** Returns true when the key was consumed (the caller should preventDefault). */
-  handle({ token, editable, repeat, now }: KeyInput): boolean {
-    if (token === null) return false
+  handle({ token, editable, owned = false, repeat, now }: KeyInput): boolean {
+    if (owned) this.buffer = []
+    if (token === null || owned) return false
     const always = ALWAYS_ON.has(token)
     if ((editable || !this.enabled) && !always) {
       this.buffer = []

@@ -21,6 +21,7 @@ import { useThreadAnnotations } from '../pr/useThreadAnnotations'
 import { SplitPath } from './FileList'
 import type { DiffSource } from './source'
 import { useFileContents } from './useFileContents'
+import { ViewToggle } from '../editor/ViewToggle'
 
 export interface NoteFocus {
   id: string
@@ -60,6 +61,8 @@ interface FilePaneProps {
   viewedDisabled?: boolean
   /** Says why a note cannot be made where it was asked for. */
   onNoteRefused?: (message: string) => void
+  /** Opens the file in the editor; `blocked` says why it cannot be. */
+  edit?: { onEdit: () => void; blocked: string | null; dirty: boolean }
 }
 
 const ALL: NoteView = { kind: 'all' }
@@ -67,7 +70,7 @@ const ALL: NoteView = { kind: 'all' }
 export function FilePane(props: FilePaneProps) {
   const { sessionId, change, notes, mode, onModeChange, generation, viewed, onToggleViewed, focus } = props
   const { navRequest, onBoundary, ignoreWhitespace, onIgnoreWhitespaceChange, moved, onOpenMoved, ci } = props
-  const { source, threads, threadActions, finalLines, collapseViewed = true, viewedDisabled, onNoteRefused } = props
+  const { source, threads, threadActions, finalLines, collapseViewed = true, viewedDisabled, onNoteRefused, edit } = props
   const { contents, error, loading, loadLarge } = useFileContents(source, change, generation)
   const lines = useMemo(
     () => ({ old: sideLines(contents?.old ?? null), new: sideLines(contents?.new ?? null) }),
@@ -192,6 +195,7 @@ export function FilePane(props: FilePaneProps) {
           </div>
           <span className="key">&nbsp;s</span>
         </div>
+        {edit && <ViewToggle editing={false} dirty={edit.dirty} disabledReason={edit.blocked} onChange={(editing) => editing && edit.onEdit()} />}
       </div>
       <LostNotes notes={lost} heading="Possibly resolved: the anchored line is gone" focusedId={focusedId} />
       {elsewhere.length > 0 && (
