@@ -405,7 +405,7 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
           {exportError && <p className="error">{exportError}</p>}
         </div>
         <div className="tabs" role="tablist">
-          <TabButton tab="files" current={tab} onSelect={setTab} label={`Files ${scan.files?.length ?? ''}`} />
+          <TabButton tab="files" current={tab} onSelect={setTab} label={`Files ${display.files?.length ?? ''}`} />
           <TabButton tab="notes" current={tab} onSelect={setTab} label={`Notes ${openNotes || ''}${suggested ? ` +${suggested}` : ''}`} />
           <TabButton
             tab="checklists"

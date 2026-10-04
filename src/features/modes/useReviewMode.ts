@@ -98,7 +98,7 @@ export function useReviewMode({ session, source, scan, dirHandle, pr, generation
   const commitSrc = useMemo(() => {
     if (!ends) return null
     if (gh && ref) return ends.base ? prCommitSource(gh, ref, ends.base, ends.head) : null
-    return dirHandle ? localCommitSource(dirHandle, ends.base, ends.head) : null
+    return dirHandle ? localCommitSource(ends.base, ends.head) : null
   }, [ends?.base, ends?.head, gh, ref, dirHandle]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const modeSource = mode.kind === 'since' ? sinceSrc : mode.kind === 'commits' ? commitSrc : null

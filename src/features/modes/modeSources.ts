@@ -14,13 +14,15 @@ import type { DiffSource } from '../session/source'
 /** Commits are immutable: CI and dirty paths do not apply to a commit's own diff. */
 const NO_DIRTY = async () => new Set<string>()
 
-/** A commit or a range of commits in a local checkout, read from the object store. */
-export function localCommitSource(handle: FileSystemDirectoryHandle, from: string | null, to: string): DiffSource {
+/**
+ * A commit or a range of commits in a local checkout, read from the object store. The session's scan has already
+ * opened the repo in the git worker (commits are only listed after it).
+ */
+export function localCommitSource(from: string | null, to: string): DiffSource {
   const git = gitService()
   return {
     key: `commits:${from ?? 'root'}..${to}`,
     async listFiles() {
-      await git.open(handle)
       const result = await git.commitChanges(from, to)
       return { files: result.changes, renamesLimited: result.limited }
     },
