@@ -130,8 +130,12 @@ export type ReviewSide = 'LEFT' | 'RIGHT'
 
 export interface ReviewCommentInput {
   path: string
+  /** The last line of a multi-line comment. */
   line: number
   side: ReviewSide
+  /** The first line of a multi-line comment. */
+  startLine?: number
+  startSide?: ReviewSide
   body: string
 }
 

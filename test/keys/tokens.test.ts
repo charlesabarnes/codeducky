@@ -29,6 +29,13 @@ describe('eventToken', () => {
     expect(eventToken(key('∆', { altKey: true }))).toBeNull()
     expect(eventToken(key('ArrowLeft', { metaKey: true }))).toBeNull()
     expect(eventToken(key('ArrowLeft', { shiftKey: true }))).toBeNull()
+    expect(eventToken(key('ArrowUp', { shiftKey: true, metaKey: true }))).toBeNull()
+  })
+
+  it('takes Shift+↑/↓ for line selection and leaves plain ↑/↓ to scroll', () => {
+    expect(eventToken(key('ArrowDown'))).toBeNull()
+    expect(eventToken(key('ArrowDown', { shiftKey: true }))).toBe('shift+ArrowDown')
+    expect(eventToken(key('ArrowUp', { shiftKey: true }))).toBe('shift+ArrowUp')
   })
 
   it('treats AltGr characters as plain keys', () => {
@@ -94,6 +101,7 @@ describe('keyCaps', () => {
     expect(keyCaps('mod+s', false)).toEqual(['Ctrl', 'S'])
     expect(keyCaps('mod+shift+z', true)).toEqual(['⌘', 'Shift', 'Z'])
     expect(keyCaps('shift+Tab', true)).toEqual(['Shift', 'Tab'])
+    expect(keyCaps('shift+ArrowDown', true)).toEqual(['Shift', '↓'])
     expect(keyCaps('mod+Enter', false)).toEqual(['Ctrl', 'Enter'])
   })
 

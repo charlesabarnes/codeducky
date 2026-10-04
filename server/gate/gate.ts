@@ -1,4 +1,5 @@
 import { prUrl } from '../../shared/links'
+import { lineSpan } from '../../shared/anchor'
 import { findBranchSession, isPrSession, sessionChecklists, type DataSnapshot, type NoteRecord, type SessionRecord } from '../mcp/records'
 import { headline } from '../review/patterns'
 
@@ -23,7 +24,7 @@ function branchPr(data: DataSnapshot, session: SessionRecord): SessionRecord['pr
 
 const noteLine = (note: NoteRecord) => {
   const title = headline(note)
-  return `${note.severity}: ${note.path}:${note.anchor.line}${title ? ` ${title}` : ''}`
+  return `${note.severity}: ${note.path}:${lineSpan(note.anchor)}${title ? ` ${title}` : ''}`
 }
 
 /**

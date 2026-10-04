@@ -1,3 +1,4 @@
+import { lineSpan } from '../../shared/anchor'
 import { MAX_NOTE_EXCERPT, type TaskRequest } from '../../shared/channel'
 import { prUrl } from '../../shared/links'
 import type { DataSnapshot } from '../mcp/records'
@@ -24,7 +25,7 @@ function prReview(target: TaskRequest['target']): string {
 1. Call the Code Ducky tool get_review_context with ${selector(target)}. It returns the repo's review instructions (follow them), the checklists, the changed files, notes already open or suggested on this pull request, and mistakes that recurred in past reviews. If it reports that there is no session, tell me to open the pull request in Code Ducky first and stop.
 2. Read the pull request's diff without switching this checkout's branch: \`gh pr diff ${pr}\` when the GitHub CLI is available, otherwise \`git fetch origin pull/${pr}/head\` and diff FETCH_HEAD against its merge base with the base branch. Open the surrounding code wherever you need more context.
 3. Look for bugs and wrong logic, edge cases that are not handled, missing tests, leftover debug code, and names that no longer match what the code does. Skip style nits and anything a linter would catch.
-4. For each real finding, call add_note with ${selector(target)}, the file path, the line on the new side, a severity (blocker, issue or suggestion), a short title and a body with a concrete fix. Pass lineText, before and after so the note stays anchored. Skip anything an existing note covers.
+4. For each real finding, call add_note with ${selector(target)}, the file path, the line on the new side (with endLine for a finding that spans several lines), a severity (blocker, issue or suggestion), a short title and a body with a concrete fix. Pass lineText, before and after so the note stays anchored. Skip anything an existing note covers.
 5. Do not edit files. Finish with a short summary of the notes you added.
 
 The same review is the /mcp__codeducky__review prompt for a branch; for ${repo} this task targets the pull request instead.`
@@ -52,7 +53,7 @@ function custom(request: TaskRequest): string {
     const lines = notes.map((note) => {
       const excerpt = note.body.length > MAX_NOTE_EXCERPT ? `${note.body.slice(0, MAX_NOTE_EXCERPT)}…` : note.body
       const title = note.title ? ` ${note.title}:` : ''
-      return `- [${note.severity}] ${note.path}:${note.line}${title} ${excerpt.replace(/\s+/g, ' ').trim()} (note id ${note.id})`
+      return `- [${note.severity}] ${note.path}:${lineSpan(note)}${title} ${excerpt.replace(/\s+/g, ' ').trim()} (note id ${note.id})`
     })
     parts.push(`Notes I picked for this (get_note has the full text):\n${lines.join('\n')}`)
   }
