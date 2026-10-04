@@ -14,6 +14,7 @@ export function AccountSwitchDialog() {
 function SwitchDialog({ request }: { request: SwitchRequest }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const { from, to, unsent } = request
 
   useEffect(() => {
@@ -22,8 +23,14 @@ function SwitchDialog({ request }: { request: SwitchRequest }) {
 
   const confirm = async () => {
     setBusy(true)
-    await syncController.confirmSwitch()
-    window.location.replace(request.returnTo)
+    setError(null)
+    try {
+      await syncController.confirmSwitch()
+      window.location.replace(request.returnTo)
+    } catch (err) {
+      setBusy(false)
+      setError(err instanceof Error ? err.message : String(err))
+    }
   }
 
   return (
@@ -69,6 +76,7 @@ function SwitchDialog({ request }: { request: SwitchRequest }) {
           . Signing in as <strong>@{to.login}</strong> removes it from this browser, along with cached repo content and the
           GitHub token. @{from.login}'s synced data stays on the server.
         </p>
+        {error && <p className="error">Could not remove the data: {error}</p>}
       </div>
       <footer className="modal-foot">
         <p>Appearance and keyboard settings stay.</p>
