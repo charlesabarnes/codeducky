@@ -31,6 +31,24 @@ const loadedFonts = new Set<CodeFont>()
 /** Settings picked while the startup load was pending, which it must not overwrite. */
 const chosen = new Set<AppearanceKey>()
 
+/** Storage can be blocked or full; the cache is only a first-paint hint, so carry on without it. */
+function readCache(key: AppearanceKey): string | null {
+  try {
+    return localStorage.getItem(CACHE_KEYS[key])
+  } catch (error) {
+    console.warn('Could not read the cached appearance', error)
+    return null
+  }
+}
+
+function writeCache() {
+  try {
+    for (const key of APPEARANCE_KEYS) localStorage.setItem(CACHE_KEYS[key], current[key])
+  } catch (error) {
+    console.warn('Could not cache the appearance', error)
+  }
+}
+
 export function resolveTheme(pref: ThemePreference, prefersLight: boolean): Theme {
   if (pref === 'system') return prefersLight ? 'light' : 'dark'
   return pref
@@ -57,13 +75,13 @@ function render() {
 export function applyAppearance(next: Partial<Appearance>) {
   for (const key of Object.keys(next) as AppearanceKey[]) chosen.add(key)
   current = { ...current, ...next }
-  for (const key of APPEARANCE_KEYS) localStorage.setItem(CACHE_KEYS[key], current[key])
+  writeCache()
   render()
 }
 
 /** Applies the cached appearance now, then the stored one, and follows the OS while the theme is system. */
 export function startAppearance() {
-  current = appearanceOf(Object.fromEntries(APPEARANCE_KEYS.map((key) => [key, localStorage.getItem(CACHE_KEYS[key])])))
+  current = appearanceOf(Object.fromEntries(APPEARANCE_KEYS.map((key) => [key, readCache(key)])))
   render()
   window.matchMedia(LIGHT_QUERY).addEventListener('change', () => current.theme === 'system' && render())
   loadSettings(db)
