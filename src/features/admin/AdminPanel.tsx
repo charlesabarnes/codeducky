@@ -58,7 +58,7 @@ function AdminConsole({ api }: { api: AdminApi }) {
     remove: async (user) => {
       await api.remove(user.id)
       setUsers((list) => list?.filter((u) => u.id !== user.id) ?? null)
-      setStats(await api.stats())
+      api.stats().then(setStats, (err: unknown) => setError(errorMessage(err)))
     },
     setQuota: async (user, override) => replace(await api.setQuota(user.id, override)),
   }
