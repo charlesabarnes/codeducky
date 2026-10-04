@@ -9,9 +9,9 @@ export type ConfigResult = { ok: true; config: ChannelConfig } | { ok: false; er
 
 export interface ConfigSources {
   env: Record<string, string | undefined>
-  /** `git config --get rubberduck.url`, which the pre-push gate also reads. */
+  /** `git config --get codeducky.url`, which the pre-push gate also reads. */
   gitUrl: () => string | null
-  /** The macOS Keychain item "rubberduck", which the pre-push gate also reads. */
+  /** The macOS Keychain item "codeducky", which the pre-push gate also reads. */
   keychainToken: () => string | null
 }
 
@@ -28,24 +28,24 @@ export function output(command: string, args: string[], cwd?: string): string | 
 
 export const systemSources = (cwd: string): ConfigSources => ({
   env: process.env,
-  gitUrl: () => output('git', ['config', '--get', 'rubberduck.url'], cwd),
-  keychainToken: () => (process.platform === 'darwin' ? output('security', ['find-generic-password', '-s', 'rubberduck', '-w']) : null),
+  gitUrl: () => output('git', ['config', '--get', 'codeducky.url'], cwd),
+  keychainToken: () => (process.platform === 'darwin' ? output('security', ['find-generic-password', '-s', 'codeducky', '-w']) : null),
 })
 
-/** RUBBERDUCK_URL, else git config rubberduck.url; RUBBERDUCK_TOKEN, else the Keychain. */
+/** CODEDUCKY_URL, else git config codeducky.url; CODEDUCKY_TOKEN, else the Keychain. */
 export function resolveConfig(sources: ConfigSources): ConfigResult {
-  const rawUrl = sources.env.RUBBERDUCK_URL?.trim() || sources.gitUrl()
-  if (!rawUrl) return { ok: false, error: 'No Rubberduck URL: set RUBBERDUCK_URL or `git config --global rubberduck.url <url>`.' }
+  const rawUrl = sources.env.CODEDUCKY_URL?.trim() || sources.gitUrl()
+  if (!rawUrl) return { ok: false, error: 'No Code Ducky URL: set CODEDUCKY_URL or `git config --global codeducky.url <url>`.' }
   let url: URL
   try {
     url = new URL(rawUrl)
   } catch {
-    return { ok: false, error: `RUBBERDUCK_URL is not a URL: ${rawUrl}` }
+    return { ok: false, error: `CODEDUCKY_URL is not a URL: ${rawUrl}` }
   }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') return { ok: false, error: `RUBBERDUCK_URL must be http(s): ${rawUrl}` }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return { ok: false, error: `CODEDUCKY_URL must be http(s): ${rawUrl}` }
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
-  if (url.protocol === 'http:' && !local) return { ok: false, error: 'RUBBERDUCK_URL must use https unless it points at localhost.' }
-  const token = sources.env.RUBBERDUCK_TOKEN?.trim() || sources.keychainToken()
-  if (!token) return { ok: false, error: 'No Rubberduck token: set RUBBERDUCK_TOKEN or store one in the Keychain item "rubberduck".' }
+  if (url.protocol === 'http:' && !local) return { ok: false, error: 'CODEDUCKY_URL must use https unless it points at localhost.' }
+  const token = sources.env.CODEDUCKY_TOKEN?.trim() || sources.keychainToken()
+  if (!token) return { ok: false, error: 'No Code Ducky token: set CODEDUCKY_TOKEN or store one in the Keychain item "codeducky".' }
   return { ok: true, config: { url: url.origin + url.pathname.replace(/\/+$/, ''), token } }
 }

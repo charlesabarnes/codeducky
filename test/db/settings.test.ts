@@ -1,11 +1,11 @@
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it } from 'vitest'
-import { RubberduckDb } from '../../src/db/db'
+import { CodeDuckyDb } from '../../src/db/db'
 import { appearanceOf, loadSettings, saveSettings } from '../../src/db/settings'
 
-const opened: RubberduckDb[] = []
+const opened: CodeDuckyDb[] = []
 const openDb = (name: string) => {
-  const db = new RubberduckDb(name)
+  const db = new CodeDuckyDb(name)
   opened.push(db)
   return db
 }

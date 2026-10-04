@@ -1,6 +1,6 @@
 import { Dexie } from 'dexie'
 import { SYNC_KINDS, wins, type ServerChange, type SyncRequest, type SyncResponse, type WireChange } from '../../shared/sync'
-import type { RubberduckDb } from '../db/db'
+import type { CodeDuckyDb } from '../db/db'
 import { META_CURSOR, META_LAST_SYNCED_AT, getMeta, setMeta } from './meta'
 import { markRemote } from './middleware'
 import { RECORD_SPECS, fromWire, toWire } from './records'
@@ -19,7 +19,7 @@ export interface SyncResult {
 const BATCH = 200
 const MAX_ROUNDS = 1000
 
-const syncTables = (db: RubberduckDb) => [...SYNC_KINDS.map((kind) => db.table(kind)), db.outbox, db.rejected, db.syncMeta]
+const syncTables = (db: CodeDuckyDb) => [...SYNC_KINDS.map((kind) => db.table(kind)), db.outbox, db.rejected, db.syncMeta]
 
 /**
  * Runs `fn` in a transaction whose writes are pulled changes: no clock stamping, no outbox entries.
@@ -29,7 +29,7 @@ const syncTables = (db: RubberduckDb) => [...SYNC_KINDS.map((kind) => db.table(k
  * database, `await undefined`) silently drops the transaction. Helpers called from `fn` therefore
  * start with a database read.
  */
-export function remoteTransaction<T>(db: RubberduckDb, fn: () => Promise<T>): Promise<T> {
+export function remoteTransaction<T>(db: CodeDuckyDb, fn: () => Promise<T>): Promise<T> {
   return db.transaction('rw', syncTables(db), () => {
     markRemote(Dexie.currentTransaction.idbtrans)
     return fn()
@@ -40,7 +40,7 @@ export function remoteTransaction<T>(db: RubberduckDb, fn: () => Promise<T>): Pr
  * One full sync: pushes the outbox in batches and pulls every change since the stored cursor,
  * looping while the server reports `more` or the outbox still has unsent entries.
  */
-export async function runSync(db: RubberduckDb, send: SyncSend): Promise<SyncResult> {
+export async function runSync(db: CodeDuckyDb, send: SyncSend): Promise<SyncResult> {
   let cursor = (await getMeta<number>(db, META_CURSOR)) ?? 0
   let pushed = 0
   let rejected = 0
@@ -74,7 +74,7 @@ export async function runSync(db: RubberduckDb, send: SyncSend): Promise<SyncRes
   return { pushed, rejected, pulled, cursor, syncedAt }
 }
 
-async function readChanges(db: RubberduckDb, entries: OutboxEntry[]): Promise<WireChange[]> {
+async function readChanges(db: CodeDuckyDb, entries: OutboxEntry[]): Promise<WireChange[]> {
   const changes: WireChange[] = []
   for (const entry of entries) {
     const { kind, id } = entry
@@ -90,7 +90,7 @@ async function readChanges(db: RubberduckDb, entries: OutboxEntry[]): Promise<Wi
  * Settles outbox entries that were not written again while the request was in flight:
  * accepted ones are dropped, refused ones move to `rejected` so they stop blocking the queue.
  */
-async function settlePushed(db: RubberduckDb, entries: OutboxEntry[], refused: Map<string, string>): Promise<void> {
+async function settlePushed(db: CodeDuckyDb, entries: OutboxEntry[], refused: Map<string, string>): Promise<void> {
   const at = Date.now()
   const current = await db.outbox.bulkGet(entries.map((entry) => entry.key))
   const settled = entries.filter((entry, index) => {
@@ -105,7 +105,7 @@ async function settlePushed(db: RubberduckDb, entries: OutboxEntry[], refused: M
 }
 
 /** Applies one pulled change if it beats this device's version, including an unsent local delete. */
-export async function applyRemote(db: RubberduckDb, change: ServerChange | WireChange): Promise<boolean> {
+export async function applyRemote(db: CodeDuckyDb, change: ServerChange | WireChange): Promise<boolean> {
   const okey = outboxKey(change.kind, change.id)
   const pending = await db.outbox.get(okey)
   const key = RECORD_SPECS[change.kind].keyOf(change.id)
@@ -129,7 +129,7 @@ export async function applyRemote(db: RubberduckDb, change: ServerChange | WireC
 }
 
 /** Queues every synced record, so a first sign-in uploads what this device already has. */
-export async function enqueueAll(db: RubberduckDb): Promise<number> {
+export async function enqueueAll(db: CodeDuckyDb): Promise<number> {
   let count = 0
   await db.transaction('rw', [...SYNC_KINDS.map((kind) => db.table(kind)), db.outbox], async () => {
     for (const kind of SYNC_KINDS) {

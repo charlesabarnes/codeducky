@@ -6,10 +6,10 @@ import { readStorage, writeStorage } from './storage'
 
 /** Mirrors the stored settings so the first paint already uses them; IndexedDB answers too late for that. */
 const CACHE_KEYS: Record<AppearanceKey, string> = {
-  theme: 'rubberduck.theme',
-  palette: 'rubberduck.palette',
-  density: 'rubberduck.density',
-  codeFont: 'rubberduck.codeFont',
+  theme: 'codeducky.theme',
+  palette: 'codeducky.palette',
+  density: 'codeducky.density',
+  codeFont: 'codeducky.codeFont',
 }
 /** Each palette's --bg, for the browser's title bar. */
 const THEME_COLORS: Record<Palette, Record<Theme, string>> = {

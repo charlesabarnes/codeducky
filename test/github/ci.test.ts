@@ -4,7 +4,7 @@ import { createGitHubClient } from '../../src/github/client'
 import type { CheckAnnotation, CheckRun } from '../../src/github/types'
 import { mockFetch } from './mockFetch'
 
-const ref = { owner: 'charlesabarnes', name: 'rubberduck' }
+const ref = { owner: 'charlesabarnes', name: 'codeducky' }
 const SHA = 'a'.repeat(40)
 
 const rawRun = (id: number, status: string, conclusion: string | null, annotations = 0) => ({
@@ -12,7 +12,7 @@ const rawRun = (id: number, status: string, conclusion: string | null, annotatio
   name: `job-${id}`,
   status,
   conclusion,
-  html_url: `https://github.com/charlesabarnes/rubberduck/runs/${id}`,
+  html_url: `https://github.com/charlesabarnes/codeducky/runs/${id}`,
   details_url: null,
   output: { title: null, annotations_count: annotations },
   app: { name: 'GitHub Actions' },
@@ -43,7 +43,7 @@ const run = (overrides: Partial<CheckRun>): CheckRun => ({
 
 describe('fetchCi', () => {
   it('reads paginated check runs and the annotations of runs that have any', async () => {
-    const page2 = `https://api.github.com/repos/charlesabarnes/rubberduck/commits/${SHA}/check-runs?per_page=100&page=2`
+    const page2 = `https://api.github.com/repos/charlesabarnes/codeducky/commits/${SHA}/check-runs?per_page=100&page=2`
     const { fetch, calls } = mockFetch([
       { match: /check-runs\?per_page=100&page=2$/, body: { total_count: 3, check_runs: [rawRun(3, 'in_progress', null)] } },
       {
@@ -58,7 +58,7 @@ describe('fetchCi', () => {
       {
         match: /check-runs\/1\/annotations\?per_page=100$/,
         body: [rawAnnotation('src/a.ts', 12), rawAnnotation('.github', 0)],
-        headers: { link: '<https://api.github.com/repos/charlesabarnes/rubberduck/check-runs/1/annotations?per_page=100&page=2>; rel="next"' },
+        headers: { link: '<https://api.github.com/repos/charlesabarnes/codeducky/check-runs/1/annotations?per_page=100&page=2>; rel="next"' },
       },
     ])
     const gh = createGitHubClient({ token: 't', fetch })

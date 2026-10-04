@@ -1,6 +1,6 @@
 import { errorMessage } from '../github/errors'
 import { carryOverNotes } from '../review/carryOver'
-import type { RubberduckDb } from './db'
+import type { CodeDuckyDb } from './db'
 import { recordArchivedReview } from './fileViews'
 import { isPrSession, type Session } from './schema'
 
@@ -11,7 +11,7 @@ export interface SessionStart {
   baseSha: string
 }
 
-export async function activeSession(db: RubberduckDb, repoId: string, branch: string): Promise<Session | undefined> {
+export async function activeSession(db: CodeDuckyDb, repoId: string, branch: string): Promise<Session | undefined> {
   const sessions = await db.sessions.where({ repoId, branch }).filter((s) => s.status === 'active' && !isPrSession(s)).sortBy('startedAt')
   return sessions[sessions.length - 1]
 }
@@ -23,7 +23,7 @@ export type GitHubBaseResolver = () => Promise<Pick<Session, 'headSha' | 'baseSh
  * merge base recomputed by `resolveGitHubBase`; if that fails, it goes back to the local base with a notice.
  */
 export async function startOrResumeSession(
-  db: RubberduckDb,
+  db: CodeDuckyDb,
   start: SessionStart,
   resolveGitHubBase?: GitHubBaseResolver,
 ): Promise<string> {
@@ -53,7 +53,7 @@ export async function startOrResumeSession(
   })
 }
 
-export async function startNewSession(db: RubberduckDb, start: SessionStart): Promise<string> {
+export async function startNewSession(db: CodeDuckyDb, start: SessionStart): Promise<string> {
   return db.transaction('rw', db.sessions, db.notes, db.fileViews, async () => {
     const archiving = await db.sessions
       .where({ repoId: start.repoId, branch: start.branch })
@@ -67,12 +67,12 @@ export async function startNewSession(db: RubberduckDb, start: SessionStart): Pr
   })
 }
 
-export async function latestSession(db: RubberduckDb, repoId: string, branch: string): Promise<Session | undefined> {
+export async function latestSession(db: CodeDuckyDb, repoId: string, branch: string): Promise<Session | undefined> {
   const sessions = await db.sessions.where({ repoId, branch }).filter((s) => !isPrSession(s)).sortBy('startedAt')
   return sessions[sessions.length - 1]
 }
 
-async function createSession(db: RubberduckDb, start: SessionStart): Promise<string> {
+async function createSession(db: CodeDuckyDb, start: SessionStart): Promise<string> {
   const previous = await latestSession(db, start.repoId, start.branch)
   const now = Date.now()
   const sessionId = (await db.sessions.add({

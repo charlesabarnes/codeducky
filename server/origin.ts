@@ -1,7 +1,7 @@
 import type { Context } from 'hono'
 
 /**
- * The origin clients see. Set RUBBERDUCK_PUBLIC_URL when the proxy in front rewrites the host;
+ * The origin clients see. Set CODEDUCKY_PUBLIC_URL when the proxy in front rewrites the host;
  * otherwise the forwarded protocol and host (gangway sets both) or the request URL are used.
  */
 export function publicOrigin(c: Context, configured?: string): string {

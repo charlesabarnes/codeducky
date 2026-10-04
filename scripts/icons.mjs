@@ -1,9 +1,9 @@
-// Derives every app icon from public/rubberduck.svg, a 32×32 pixel-art logo.
+// Derives every app icon from public/codeducky.svg, a 32×32 pixel-art logo.
 // Scales by whole-number multiples with nearest-neighbour so the pixels stay sharp. Run: npm run icons
 import { copyFile, writeFile } from 'node:fs/promises'
 import sharp from 'sharp'
 
-const SOURCE = 'public/rubberduck.svg'
+const SOURCE = 'public/codeducky.svg'
 const GRID = 32
 /** Solar light --bg, behind the icons that must be opaque. */
 const BACKGROUND = { r: 0xfc, g: 0xf5, b: 0xe3, alpha: 1 }

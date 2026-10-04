@@ -8,7 +8,7 @@ export function passphraseMatches(given: unknown, expected: string): boolean {
   return timingSafeEqual(sha256(given), sha256(expected))
 }
 
-export const TOKEN_PREFIX = 'skb_'
+export const TOKEN_PREFIX = 'cdb_'
 
 export const newToken = () => `${TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`
 

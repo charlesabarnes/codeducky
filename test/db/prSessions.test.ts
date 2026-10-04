@@ -1,17 +1,17 @@
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it } from 'vitest'
-import { RubberduckDb } from '../../src/db/db'
+import { CodeDuckyDb } from '../../src/db/db'
 import { activePrSession, openPrSession } from '../../src/db/prSessions'
 import { activeSession, startOrResumeSession } from '../../src/db/sessions'
 import type { PrSnapshot } from '../../src/github/prDiff'
 import type { PullDetail } from '../../src/github/types'
 
-const dbs: RubberduckDb[] = []
+const dbs: CodeDuckyDb[] = []
 afterEach(async () => {
   await Promise.all(dbs.splice(0).map((db) => db.delete()))
 })
 const fresh = () => {
-  const db = new RubberduckDb(`pr-sessions-${Math.random()}`)
+  const db = new CodeDuckyDb(`pr-sessions-${Math.random()}`)
   dbs.push(db)
   return db
 }

@@ -82,12 +82,12 @@ describe('index.html first paint', () => {
   })
 
   it('uses the cached choice over the OS', () => {
-    const cache = { 'rubberduck.theme': 'light', 'rubberduck.palette': 'terminal' }
+    const cache = { 'codeducky.theme': 'light', 'codeducky.palette': 'terminal' }
     expect(firstPaint(matchMediaFor('dark'), cache)).toEqual({ theme: 'light', palette: 'terminal' })
   })
 
   it('ignores an unknown cached palette', () => {
-    expect(firstPaint(matchMediaFor('light'), { 'rubberduck.palette': 'neon' }).palette).toBe('solar')
+    expect(firstPaint(matchMediaFor('light'), { 'codeducky.palette': 'neon' }).palette).toBe('solar')
   })
 
   it('knows the same palettes as the app', () => {
@@ -96,7 +96,7 @@ describe('index.html first paint', () => {
   })
 
   it('follows the OS when the cached theme is system', () => {
-    expect(firstPaint(matchMediaFor('dark'), { 'rubberduck.theme': 'system' }).theme).toBe('dark')
+    expect(firstPaint(matchMediaFor('dark'), { 'codeducky.theme': 'system' }).theme).toBe('dark')
   })
 
   it('still detects the OS when storage is blocked', () => {

@@ -8,10 +8,10 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon-180x180.png', 'rubberduck.svg'],
+      includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon-180x180.png', 'codeducky.svg'],
       manifest: {
-        name: 'Rubberduck',
-        short_name: 'Rubberduck',
+        name: 'Code Ducky',
+        short_name: 'Code Ducky',
         description: 'Review your own changes before you push them.',
         theme_color: '#fcf5e3',
         background_color: '#fcf5e3',
@@ -33,7 +33,7 @@ export default defineConfig({
   ],
   server: {
     proxy: Object.fromEntries(
-      SERVER_PREFIXES.map((path) => [path, `http://localhost:${process.env.RUBBERDUCK_SERVER_PORT ?? 8787}`]),
+      SERVER_PREFIXES.map((path) => [path, `http://localhost:${process.env.CODEDUCKY_SERVER_PORT ?? 8787}`]),
     ),
   },
   build: {

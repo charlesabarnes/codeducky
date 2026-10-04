@@ -5,7 +5,7 @@
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
-    <meta name="apple-mobile-web-app-title" content="Rubberduck" />
+    <meta name="apple-mobile-web-app-title" content="Code Ducky" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -17,8 +17,8 @@
         var root = document.documentElement
         var theme = null
         try {
-          theme = localStorage.getItem('rubberduck.theme')
-          var palette = localStorage.getItem('rubberduck.palette')
+          theme = localStorage.getItem('codeducky.theme')
+          var palette = localStorage.getItem('codeducky.palette')
           // Keep in step with PALETTES in src/db/schema.ts; a test checks it.
           if (['terminal', 'fjord', 'solar', 'dusk', 'contrast'].indexOf(palette) !== -1) root.dataset.palette = palette
         } catch (e) {}
@@ -33,7 +33,7 @@
       })()
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Rubberduck</title>
+    <title>Code Ducky</title>
   </head>
   <body>
     <div id="root"></div>

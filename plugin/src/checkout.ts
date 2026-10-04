@@ -33,6 +33,6 @@ export function readCheckout(cwd: string, git: Git, env: Record<string, string |
   const repo = repoFromRemote(git(['remote', 'get-url', 'origin']))
   const branch = currentBranch(git)
   const shortHost = host.replace(/\.local$/, '')
-  const label = env.RUBBERDUCK_CHANNEL_LABEL?.trim() || `${basename(top)} on ${shortHost}`
+  const label = env.CODEDUCKY_CHANNEL_LABEL?.trim() || `${basename(top)} on ${shortHost}`
   return { cwd: top, repo, branch, hostname: shortHost, label: label.slice(0, 100) }
 }

@@ -87,7 +87,7 @@ function syncedTable(kind: SyncKind, table: DBCoreTable, outbox: () => DBCoreTab
  */
 export const syncMiddleware: Middleware<DBCore> = {
   stack: 'dbcore',
-  name: 'RubberduckSync',
+  name: 'CodeDuckySync',
   create: (down) => ({
     ...down,
     transaction: (stores, mode, options) => {

@@ -3,14 +3,14 @@ import { Dexie } from 'dexie'
 import { afterEach, describe, expect, it } from 'vitest'
 import { pairId } from '../../shared/sync'
 import { setChecked } from '../../src/db/checklists'
-import { RubberduckDb } from '../../src/db/db'
+import { CodeDuckyDb } from '../../src/db/db'
 import { addNote, deleteNote, editNote } from '../../src/db/notes'
 import { startNewSession, startOrResumeSession } from '../../src/db/sessions'
 import { applyRemote, remoteTransaction } from '../../src/sync/engine'
 
-const opened: RubberduckDb[] = []
+const opened: CodeDuckyDb[] = []
 const open = (name: string) => {
-  const db = new RubberduckDb(name)
+  const db = new CodeDuckyDb(name)
   opened.push(db)
   return db
 }

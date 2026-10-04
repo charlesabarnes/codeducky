@@ -124,7 +124,7 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
       grantId: grant.id,
       expiresAt: now() + ACCESS_TOKEN_TTL_MS,
     })
-    const refreshToken = secretValue('skr_')
+    const refreshToken = secretValue('cdr_')
     db.query(
       `UPDATE oauth_grants SET previous_refresh_hash = refresh_hash, refresh_hash = ?, refreshed_at = ?, expires_at = ?
        WHERE id = ?`,
@@ -153,7 +153,7 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
       secret: string | null
     } {
       pruneClients()
-      const secret = input.authMethod === 'none' ? null : secretValue('skc_')
+      const secret = input.authMethod === 'none' ? null : secretValue('cdc_')
       const client: OAuthClient = {
         ...input,
         id: randomUUID(),
@@ -181,7 +181,7 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
     },
 
     createCode(code: AuthorizationCode): string {
-      const value = secretValue('ska_')
+      const value = secretValue('cda_')
       db.query(
         `INSERT INTO oauth_codes (code_hash, client_id, redirect_uri, code_challenge, scope, resource, expires_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,

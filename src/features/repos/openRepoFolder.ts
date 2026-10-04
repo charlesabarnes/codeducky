@@ -6,7 +6,7 @@ import { githubDefaultBase } from '../github/defaultBase'
 
 async function pickFolder(): Promise<FileSystemDirectoryHandle | null> {
   try {
-    return await window.showDirectoryPicker({ id: 'rubberduck-repo', mode: 'read' })
+    return await window.showDirectoryPicker({ id: 'codeducky-repo', mode: 'read' })
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') return null
     throw error

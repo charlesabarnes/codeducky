@@ -1,4 +1,4 @@
-import type { RubberduckDb } from './db'
+import type { CodeDuckyDb } from './db'
 
 /** Files bigger than this are not snapshotted; the diff viewer would not show them inline anyway. */
 export const MAX_SNAPSHOT_FILE_BYTES = 1024 * 1024
@@ -16,7 +16,7 @@ export interface SnapshotLimits {
  * Stores reviewed content under its blob oid. The same content is stored once (re-reviewing it only refreshes its
  * age). Returns false when the file is over the size cap.
  */
-export async function putSnapshot(db: RubberduckDb, oid: string, bytes: Uint8Array, now = Date.now(), limits: SnapshotLimits = {}): Promise<boolean> {
+export async function putSnapshot(db: CodeDuckyDb, oid: string, bytes: Uint8Array, now = Date.now(), limits: SnapshotLimits = {}): Promise<boolean> {
   if (bytes.byteLength > MAX_SNAPSHOT_FILE_BYTES) return false
   await db.transaction('rw', db.reviewSnapshots, async () => {
     const existing = await db.reviewSnapshots.where('oid').equals(oid).primaryKeys()
@@ -28,7 +28,7 @@ export async function putSnapshot(db: RubberduckDb, oid: string, bytes: Uint8Arr
 }
 
 /** The snapshot's bytes, marking it as recently used; null when this device has none. */
-export async function readSnapshot(db: RubberduckDb, oid: string, now = Date.now()): Promise<Uint8Array | null> {
+export async function readSnapshot(db: CodeDuckyDb, oid: string, now = Date.now()): Promise<Uint8Array | null> {
   const snapshot = await db.reviewSnapshots.get(oid)
   if (!snapshot) return null
   await db.reviewSnapshots.update(oid, { at: now }).catch(() => undefined)
@@ -36,7 +36,7 @@ export async function readSnapshot(db: RubberduckDb, oid: string, now = Date.now
 }
 
 /** Which of the oids have a snapshot on this device. Reads keys only. */
-export async function snapshotOids(db: RubberduckDb, oids: readonly string[]): Promise<Set<string>> {
+export async function snapshotOids(db: CodeDuckyDb, oids: readonly string[]): Promise<Set<string>> {
   if (oids.length === 0) return new Set()
   return new Set(await db.reviewSnapshots.where('oid').anyOf([...new Set(oids)]).primaryKeys())
 }
@@ -45,7 +45,7 @@ export async function snapshotOids(db: RubberduckDb, oids: readonly string[]): P
  * Drops snapshots older than the age limit, then the least recently used until the total fits the size cap.
  * Walks the [at+size] index with a key cursor, so no content is loaded.
  */
-export async function pruneSnapshots(db: RubberduckDb, now = Date.now(), limits: SnapshotLimits = {}): Promise<number> {
+export async function pruneSnapshots(db: CodeDuckyDb, now = Date.now(), limits: SnapshotLimits = {}): Promise<number> {
   const maxTotal = limits.maxTotalBytes ?? MAX_SNAPSHOT_TOTAL_BYTES
   const maxAge = limits.maxAgeMs ?? MAX_SNAPSHOT_AGE_MS
   return db.transaction('rw', db.reviewSnapshots, async () => {

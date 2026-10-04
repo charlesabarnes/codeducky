@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { Dexie } from 'dexie'
 import { afterEach, describe, expect, it } from 'vitest'
-import { RubberduckDb } from '../../src/db/db'
+import { CodeDuckyDb } from '../../src/db/db'
 import { repoHistory } from '../../src/db/history'
 import { addNote, setNoteStatus } from '../../src/db/notes'
 import { startNewSession, startOrResumeSession } from '../../src/db/sessions'
@@ -21,7 +21,7 @@ const anchor = { line: 3, side: 'new' as const, text: 'x', before: [], after: []
 
 describe('sessions', () => {
   it('carries open notes into a new session on the same branch', async () => {
-    const db = track(new RubberduckDb('carry'))
+    const db = track(new CodeDuckyDb('carry'))
     const first = await startOrResumeSession(db, start)
     const keep = await addNote(db, { sessionId: first, path: 'a.ts', anchor, body: 'keep', severity: 'issue' })
     const done = await addNote(db, { sessionId: first, path: 'a.ts', anchor, body: 'done', severity: 'nit' })
@@ -47,7 +47,7 @@ describe('sessions', () => {
   })
 
   it('resumes the active session without copying notes again', async () => {
-    const db = track(new RubberduckDb('resume'))
+    const db = track(new CodeDuckyDb('resume'))
     const first = await startOrResumeSession(db, start)
     await addNote(db, { sessionId: first, path: 'a.ts', anchor, body: 'n', severity: 'nit' })
     expect(await startOrResumeSession(db, { ...start, headSha: 'h2' })).toBe(first)
@@ -64,7 +64,7 @@ describe('sessions', () => {
     ])
     legacy.close()
 
-    const db = track(new RubberduckDb('migrate'))
+    const db = track(new CodeDuckyDb('migrate'))
     const notes = await db.notes.toArray()
     expect(notes.map((note) => note.severity)).toEqual(['suggestion', 'issue', 'blocker'])
     expect(notes.every((note) => typeof note.createdAt === 'number')).toBe(true)

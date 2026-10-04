@@ -1,5 +1,5 @@
 import type { SyncKind } from '../../shared/sync'
-import type { RubberduckDb } from '../db/db'
+import type { CodeDuckyDb } from '../db/db'
 import { META_CURSOR, setMeta } from './meta'
 import { remoteTransaction } from './engine'
 import { RECORD_SPECS } from './records'
@@ -25,18 +25,18 @@ function describe(kind: SyncKind, row: Record<string, unknown> | undefined): str
   return typeof name === 'string' && name ? `${label} · ${name}` : label
 }
 
-const rowFor = (db: RubberduckDb, entry: RejectedEntry) => {
+const rowFor = (db: CodeDuckyDb, entry: RejectedEntry) => {
   const key = RECORD_SPECS[entry.kind].keyOf(entry.id)
   return key === null ? undefined : db.table(entry.kind).get(key)
 }
 
-export async function listRejected(db: RubberduckDb): Promise<RejectedItem[]> {
+export async function listRejected(db: CodeDuckyDb): Promise<RejectedItem[]> {
   const entries = await db.rejected.orderBy('at').toArray()
   return Promise.all(entries.map(async (entry) => ({ ...entry, label: describe(entry.kind, await rowFor(db, entry)) })))
 }
 
 /** Puts a rejected change back in the outbox with the record as it is now. */
-export async function retryRejected(db: RubberduckDb, key: string): Promise<void> {
+export async function retryRejected(db: CodeDuckyDb, key: string): Promise<void> {
   await remoteTransaction(db, async () => {
     const entry = await db.rejected.get(key)
     if (!entry) return
@@ -47,7 +47,7 @@ export async function retryRejected(db: RubberduckDb, key: string): Promise<void
 }
 
 /** Drops this device's version of a rejected record; the next sync pulls the server's copy, if any, again. */
-export async function discardRejected(db: RubberduckDb, key: string): Promise<void> {
+export async function discardRejected(db: CodeDuckyDb, key: string): Promise<void> {
   await remoteTransaction(db, async () => {
     const entry = await db.rejected.get(key)
     if (!entry) return

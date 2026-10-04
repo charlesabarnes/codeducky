@@ -122,7 +122,7 @@ function StatusNotice({ status, local, folder, actions }: { status: SaveStatus; 
       <div className="editor-notice" role="alert">
         <Lock size={13} aria-hidden />
         <span>
-          Rubberduck opened <strong>{folder}</strong> read-only. To save, allow it to write to the folder; your browser asks next.
+          Code Ducky opened <strong>{folder}</strong> read-only. To save, allow it to write to the folder; your browser asks next.
         </span>
         <button type="button" onClick={actions.allowWrite}>
           <Unlock size={13} aria-hidden />

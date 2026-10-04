@@ -67,7 +67,7 @@ describe.skipIf(!existsSync(join(TSUNDOKU, '.git')))('modified clone of tsundoku
   let work = ''
 
   beforeAll(() => {
-    work = mkdtempSync(join(tmpdir(), 'rubberduck-it-'))
+    work = mkdtempSync(join(tmpdir(), 'codeducky-it-'))
     git(work, 'clone', '--quiet', '--no-local', TSUNDOKU, 'repo')
     const repo = join(work, 'repo')
     git(repo, 'remote', 'set-url', 'origin', 'git@github.com:charlesabarnes/tsundoku.git')

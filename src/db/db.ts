@@ -17,7 +17,7 @@ import type {
   Settings,
 } from './schema'
 
-export class RubberduckDb extends Dexie {
+export class CodeDuckyDb extends Dexie {
   repos!: EntityTable<Repo, 'id'>
   repoHandles!: Table<RepoHandle, string>
   sessions!: EntityTable<Session, 'id'>
@@ -33,7 +33,7 @@ export class RubberduckDb extends Dexie {
   rejected!: Table<RejectedEntry, string>
   syncMeta!: Table<MetaEntry, string>
 
-  constructor(name = 'rubberduck') {
+  constructor(name = 'codeducky') {
     super(name)
     this.version(1).stores({
       repos: '++id, [owner+name], lastOpenedAt',
@@ -95,4 +95,4 @@ export class RubberduckDb extends Dexie {
   }
 }
 
-export const db = new RubberduckDb()
+export const db = new CodeDuckyDb()

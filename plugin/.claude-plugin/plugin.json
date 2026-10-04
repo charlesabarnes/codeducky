@@ -1,16 +1,16 @@
 {
-  "name": "rubberduck",
-  "displayName": "Rubberduck",
+  "name": "codeducky",
+  "displayName": "Code Ducky",
   "version": "0.1.0",
-  "description": "Send review and fix tasks from the Rubberduck code review app into a running Claude Code session, with status and permission prompts relayed back to the browser. A research-preview channel.",
+  "description": "Send review and fix tasks from the Code Ducky code review app into a running Claude Code session, with status and permission prompts relayed back to the browser. A research-preview channel.",
   "author": { "name": "Charles Barnes" },
-  "repository": "https://github.com/charlesabarnes/rubberduck",
-  "keywords": ["rubberduck", "code-review", "channel", "mcp"],
+  "repository": "https://github.com/charlesabarnes/codeducky",
+  "keywords": ["codeducky", "code-review", "channel", "mcp"],
   "mcpServers": {
     "channel": {
       "command": "bun",
       "args": ["${CLAUDE_PLUGIN_ROOT}/server.ts"]
     }
   },
-  "channels": [{ "server": "channel", "displayName": "Rubberduck" }]
+  "channels": [{ "server": "channel", "displayName": "Code Ducky" }]
 }

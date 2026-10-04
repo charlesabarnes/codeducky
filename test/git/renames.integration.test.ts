@@ -40,7 +40,7 @@ describe('rename detection through the git service', () => {
   let base = ''
 
   beforeAll(() => {
-    work = mkdtempSync(join(tmpdir(), 'rubberduck-renames-'))
+    work = mkdtempSync(join(tmpdir(), 'codeducky-renames-'))
     repo = join(work, 'repo')
     mkdirSync(repo)
     git(repo, 'init', '--quiet', '-b', 'main')

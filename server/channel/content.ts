@@ -19,34 +19,34 @@ function selector({ repo, branch, pr }: TaskRequest['target']): string {
 
 function prReview(target: TaskRequest['target']): string {
   const { repo, pr } = target
-  return `Review ${where(target)} and record each finding in Rubberduck.
+  return `Review ${where(target)} and record each finding in Code Ducky.
 
-1. Call the Rubberduck tool get_review_context with ${selector(target)}. It returns the repo's review instructions (follow them), the checklists, the changed files, notes already open or suggested on this pull request, and mistakes that recurred in past reviews. If it reports that there is no session, tell me to open the pull request in Rubberduck first and stop.
+1. Call the Code Ducky tool get_review_context with ${selector(target)}. It returns the repo's review instructions (follow them), the checklists, the changed files, notes already open or suggested on this pull request, and mistakes that recurred in past reviews. If it reports that there is no session, tell me to open the pull request in Code Ducky first and stop.
 2. Read the pull request's diff without switching this checkout's branch: \`gh pr diff ${pr}\` when the GitHub CLI is available, otherwise \`git fetch origin pull/${pr}/head\` and diff FETCH_HEAD against its merge base with the base branch. Open the surrounding code wherever you need more context.
 3. Look for bugs and wrong logic, edge cases that are not handled, missing tests, leftover debug code, and names that no longer match what the code does. Skip style nits and anything a linter would catch.
 4. For each real finding, call add_note with ${selector(target)}, the file path, the line on the new side, a severity (blocker, issue or suggestion), a short title and a body with a concrete fix. Pass lineText, before and after so the note stays anchored. Skip anything an existing note covers.
 5. Do not edit files. Finish with a short summary of the notes you added.
 
-The same review is the /mcp__rubberduck__review prompt for a branch; for ${repo} this task targets the pull request instead.`
+The same review is the /mcp__codeducky__review prompt for a branch; for ${repo} this task targets the pull request instead.`
 }
 
 function prFix(target: TaskRequest['target']): string {
-  return `Fix the Rubberduck review notes on ${where(target)}.
+  return `Fix the Code Ducky review notes on ${where(target)}.
 
-1. Call the Rubberduck tool get_review_context with ${selector(target)} for the repo instructions and the open notes (open notes include suggestions I accepted; leave pending suggestions and dismissed notes alone).
+1. Call the Code Ducky tool get_review_context with ${selector(target)} for the repo instructions and the open notes (open notes include suggestions I accepted; leave pending suggestions and dismissed notes alone).
 2. Check that this checkout has the pull request's head branch checked out (headRef from get_review_context). If it does not, stop and tell me which branch to check out.
 3. Take the notes one at a time, blockers first: find the code from the note's anchor, make the smallest fix, run the tests that cover it, then call resolve_note with the note id and a short reply saying what changed and which tests ran.
 4. Ask me before a large refactor or a change to a public interface. Never push, and leave the changes uncommitted.
 5. Finish with the notes you resolved and the ones you left open, and why.
 
-This is the /mcp__rubberduck__fix prompt, aimed at a pull request.`
+This is the /mcp__codeducky__fix prompt, aimed at a pull request.`
 }
 
 function custom(request: TaskRequest): string {
   const { target, message = '', notes = [] } = request
   const parts = [message.trim()]
   parts.push(
-    `Context: this comes from my Rubberduck review of ${where(target)}. The Rubberduck MCP tools (get_review_context, list_notes, get_note, add_note, resolve_note) select it with ${selector(target)}.`,
+    `Context: this comes from my Code Ducky review of ${where(target)}. The Code Ducky MCP tools (get_review_context, list_notes, get_note, add_note, resolve_note) select it with ${selector(target)}.`,
   )
   if (notes.length > 0) {
     const lines = notes.map((note) => {
@@ -80,6 +80,6 @@ export function taskMeta(request: TaskRequest, origin: string): TaskMeta {
   } else if (target.sessionId) {
     meta.session_url = `${origin}/sessions/${encodeURIComponent(target.sessionId)}`
   }
-  if (target.sessionId) meta.rubberduck_session = target.sessionId
+  if (target.sessionId) meta.codeducky_session = target.sessionId
   return meta
 }

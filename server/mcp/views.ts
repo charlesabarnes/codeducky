@@ -50,7 +50,7 @@ export function checklistView(data: DataSnapshot, session: SessionRecord) {
   }
 }
 
-/** A session's pull request, with links to open it in Rubberduck and on GitHub. */
+/** A session's pull request, with links to open it in Code Ducky and on GitHub. */
 export function prView(session: SessionRecord, origin: string) {
   const pr = session.pr
   if (!pr) return undefined
@@ -63,7 +63,7 @@ export function prView(session: SessionRecord, origin: string) {
     ...(pr.baseRef ? { baseRef: pr.baseRef } : {}),
     headRef: session.branch,
     url: pr.url ?? githubPrUrl(ref),
-    rubberduckUrl: prUrl(origin, ref),
+    codeDuckyUrl: prUrl(origin, ref),
     ...(session.review ? { review: { state: session.review.state, at: iso(session.review.at), ...(session.review.url ? { url: session.review.url } : {}) } } : {}),
   }
 }

@@ -73,7 +73,7 @@ export class FakeSyncServer {
     const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status })
     if (path === '/api/auth/login') {
       if (body?.passphrase !== this.passphrase) return json({ error: 'invalid_passphrase' }, 401)
-      const issued = `skb_${this.tokens.size + 1}_${Math.random().toString(36).slice(2)}`
+      const issued = `cdb_${this.tokens.size + 1}_${Math.random().toString(36).slice(2)}`
       this.tokens.add(issued)
       return json({ token: issued, tokenId: issued })
     }

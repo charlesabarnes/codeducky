@@ -16,7 +16,7 @@ describe('auth', () => {
     const res = await request(app, 'POST', '/api/auth/login', { passphrase: PASSPHRASE, name: 'Laptop' })
     expect(res.status).toBe(200)
     const { token, tokenId } = (await res.json()) as { token: string; tokenId: string }
-    expect(token).toStartWith('skb_')
+    expect(token).toStartWith('cdb_')
     const row = db.query<{ token_hash: string; name: string; kind: string }, [string]>('SELECT * FROM tokens WHERE id = ?').get(tokenId)!
     expect(row).toMatchObject({ name: 'Laptop', kind: 'session' })
     expect(row.token_hash).not.toContain(token)
@@ -31,7 +31,7 @@ describe('auth', () => {
     expect((await request(app, 'POST', '/api/auth/login', { passphrase: 'nope' })).status).toBe(401)
     expect((await request(app, 'POST', '/api/auth/login', {})).status).toBe(401)
     expect((await request(app, 'GET', '/api/auth/session')).status).toBe(401)
-    expect((await request(app, 'GET', '/api/auth/session', undefined, 'skb_forged')).status).toBe(401)
+    expect((await request(app, 'GET', '/api/auth/session', undefined, 'cdb_forged')).status).toBe(401)
     expect((await request(app, 'POST', '/api/sync', { cursor: 0, changes: [] })).status).toBe(401)
   })
 

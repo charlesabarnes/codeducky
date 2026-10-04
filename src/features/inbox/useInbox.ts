@@ -6,7 +6,7 @@ import { githubClient } from '../../github/connect'
 import { errorMessage, isGitHubError } from '../../github/errors'
 import { fetchInbox, inboxSnapshotItems, sameItems, type Inbox } from '../../github/inbox'
 
-const STORAGE_KEY = 'rubberduck.inbox'
+const STORAGE_KEY = 'codeducky.inbox'
 /** Refetch on focus only when the cached inbox is older than this. */
 export const INBOX_STALE_MS = 60_000
 

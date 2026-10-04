@@ -81,7 +81,7 @@ describe('get_review_context', () => {
       instructions: 'Old instructions',
       files: { scanned: false, count: 0, list: [] },
     })
-    expect((await context({ repo: REPO, branch: 'nope' })).error).toContain('No Rubberduck session')
+    expect((await context({ repo: REPO, branch: 'nope' })).error).toContain('No Code Ducky session')
   })
 })
 

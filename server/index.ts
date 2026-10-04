@@ -15,7 +15,7 @@ const { app } = createApp({
 
 // Channel streams send a heartbeat every 15 seconds; Bun's default idle timeout is 10.
 const server = Bun.serve({ port: config.port, fetch: app.fetch, idleTimeout: 60 })
-console.log(`rubberduck listening on http://localhost:${server.port}`)
+console.log(`codeducky listening on http://localhost:${server.port}`)
 
 const shutdown = () => {
   void server.stop()

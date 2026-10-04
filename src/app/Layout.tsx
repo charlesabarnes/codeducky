@@ -15,8 +15,8 @@ export function Layout() {
         <div className="app">
           <header className="app-header">
             <NavLink to="/" className="brand">
-              <img className="brand-mark" src="/rubberduck.svg" alt="" width="20" height="20" />
-              rubberduck
+              <img className="brand-mark" src="/codeducky.svg" alt="" width="20" height="20" />
+              code ducky
             </NavLink>
             <nav>
               <NavLink to="/inbox" title="Inbox (g then i)">
