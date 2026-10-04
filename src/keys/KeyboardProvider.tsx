@@ -7,7 +7,7 @@ import { HelpOverlay } from './HelpOverlay'
 import { eventToken, isEditableTarget } from './tokens'
 import './keys.css'
 
-const ENABLED_KEY = 'skelbert.shortcuts'
+const ENABLED_KEY = 'rubberduck.shortcuts'
 const TOAST_MS = 2500
 
 function modalOpen(): boolean {

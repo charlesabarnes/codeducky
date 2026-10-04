@@ -7,7 +7,7 @@ import { createFailureLimiter, passphraseMatches, type FailureLimiter } from '..
 import { consentPage, errorPage, PAGE_HEADERS } from './consent'
 import type { ClientAuthMethod, GrantType, OAuthClient, OAuthStore } from './store'
 
-export const OAUTH_SCOPE = 'skelbert'
+export const OAUTH_SCOPE = 'rubberduck'
 const AUTH_METHODS: readonly ClientAuthMethod[] = ['none', 'client_secret_post', 'client_secret_basic']
 const GRANT_TYPES: readonly GrantType[] = ['authorization_code', 'refresh_token']
 const MAX_REDIRECT_URIS = 10
@@ -147,7 +147,7 @@ export function oauthRoutes({
       authorization_servers: [iss],
       scopes_supported: [OAUTH_SCOPE],
       bearer_methods_supported: ['header'],
-      resource_name: 'Skelbert',
+      resource_name: 'Rubberduck',
     })
   }
   routes.get(PROTECTED_RESOURCE_PATH, protectedResource)

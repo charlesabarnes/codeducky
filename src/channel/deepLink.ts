@@ -30,19 +30,19 @@ export function linkPrompt(kind: LinkKind, target: LinkTarget): string {
   const { repo, branch, pr } = target
   if (kind === 'review') {
     if (pr) {
-      return `Review pull request ${repo}#${pr.number} with Skelbert. Call the Skelbert MCP tool get_review_context with ${selector(target)} for the review instructions, checklists and existing notes, read the diff with \`gh pr diff ${pr.number}\` without switching branches, and record each finding with add_note (${selector(target)}). Do not edit files.`
+      return `Review pull request ${repo}#${pr.number} with Rubberduck. Call the Rubberduck MCP tool get_review_context with ${selector(target)} for the review instructions, checklists and existing notes, read the diff with \`gh pr diff ${pr.number}\` without switching branches, and record each finding with add_note (${selector(target)}). Do not edit files.`
     }
-    return `Review branch ${branch} of ${repo} with Skelbert, as the /mcp__skelbert__review prompt does (\`/mcp__skelbert__review ${repo} ${branch}\`). Call the Skelbert MCP tool get_review_context with ${selector(target)}, review the diff against the merge base, and record each finding with add_note. Do not edit files.`
+    return `Review branch ${branch} of ${repo} with Rubberduck, as the /mcp__rubberduck__review prompt does (\`/mcp__rubberduck__review ${repo} ${branch}\`). Call the Rubberduck MCP tool get_review_context with ${selector(target)}, review the diff against the merge base, and record each finding with add_note. Do not edit files.`
   }
   if (pr) {
-    return `Fix my accepted Skelbert notes on pull request ${repo}#${pr.number} (head branch ${pr.headRef}, which must be checked out here). Call the Skelbert MCP tool get_review_context with ${selector(target)}, fix the open notes one at a time (blockers first), run the tests that cover each change, and close each note with resolve_note and a short reply. Never push.`
+    return `Fix my accepted Rubberduck notes on pull request ${repo}#${pr.number} (head branch ${pr.headRef}, which must be checked out here). Call the Rubberduck MCP tool get_review_context with ${selector(target)}, fix the open notes one at a time (blockers first), run the tests that cover each change, and close each note with resolve_note and a short reply. Never push.`
   }
-  return `Fix my accepted Skelbert notes on branch ${branch} of ${repo}, as the /mcp__skelbert__fix prompt does (\`/mcp__skelbert__fix ${repo} ${branch}\`). Call the Skelbert MCP tool get_review_context with ${selector(target)}, fix the open notes one at a time (blockers first), run the tests that cover each change, and close each note with resolve_note and a short reply. Never push.`
+  return `Fix my accepted Rubberduck notes on branch ${branch} of ${repo}, as the /mcp__rubberduck__fix prompt does (\`/mcp__rubberduck__fix ${repo} ${branch}\`). Call the Rubberduck MCP tool get_review_context with ${selector(target)}, fix the open notes one at a time (blockers first), run the tests that cover each change, and close each note with resolve_note and a short reply. Never push.`
 }
 
-/** A custom prompt with the context Claude needs to find the review in Skelbert. */
+/** A custom prompt with the context Claude needs to find the review in Rubberduck. */
 export function customPrompt(message: string, target: LinkTarget): string {
   const where = target.pr ? `pull request ${target.repo}#${target.pr.number}` : `branch ${target.branch} of ${target.repo}`
-  const context = `\n\n(Context: my Skelbert review of ${where}. The Skelbert MCP tools get_review_context, list_notes, add_note and resolve_note take ${selector(target)}.)`
+  const context = `\n\n(Context: my Rubberduck review of ${where}. The Rubberduck MCP tools get_review_context, list_notes, add_note and resolve_note take ${selector(target)}.)`
   return `${message.trim().slice(0, MAX_PROMPT - context.length)}${context}`
 }

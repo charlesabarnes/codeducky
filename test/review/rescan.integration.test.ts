@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { SkelbertDb } from '../../src/db/db'
+import { RubberduckDb } from '../../src/db/db'
 import { addNote, applyReanchoring } from '../../src/db/notes'
 import { startNewSession, startOrResumeSession } from '../../src/db/sessions'
 import { createGitService } from '../../src/git/service'
@@ -51,7 +51,7 @@ describe('notes across edits and rescans', () => {
   }
 
   beforeAll(async () => {
-    repo = mkdtempSync(join(tmpdir(), 'skelbert-notes-'))
+    repo = mkdtempSync(join(tmpdir(), 'rubberduck-notes-'))
     git(repo, 'init', '--quiet', '-b', 'main')
     git(repo, 'config', 'user.email', 'test@example.com')
     git(repo, 'config', 'user.name', 'Test')
@@ -72,7 +72,7 @@ describe('notes across edits and rescans', () => {
   })
 
   it('follows a moved line, flags a deleted one, resets viewed and carries notes over', async () => {
-    const db = new SkelbertDb('rescan-checkpoint')
+    const db = new RubberduckDb('rescan-checkpoint')
     try {
       const first = await scan()
       const lines = first.lines!

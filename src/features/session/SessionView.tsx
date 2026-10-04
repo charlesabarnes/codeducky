@@ -443,7 +443,7 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
                   <>
                     <MetaLabel icon={GitPullRequest} label="pr" />
                     <dd className="row branch-pull">
-                      <Link to={prPath({ owner: repo.owner, name: repo.name, number: branchPull.number })} title="Open PR in Skelbert">
+                      <Link to={prPath({ owner: repo.owner, name: repo.name, number: branchPull.number })} title="Open PR in Rubberduck">
                         #{branchPull.number}
                       </Link>
                       <a href={branchPull.htmlUrl} target="_blank" rel="noreferrer" className="icon-link muted">

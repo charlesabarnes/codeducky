@@ -21,7 +21,7 @@ describe('diffing against a GitHub base that is not in the local object store', 
   let baseSha = ''
 
   beforeAll(() => {
-    work = mkdtempSync(join(tmpdir(), 'skelbert-ghbase-'))
+    work = mkdtempSync(join(tmpdir(), 'rubberduck-ghbase-'))
     upstream = join(work, 'upstream')
     mkdirSync(join(upstream, 'lib'), { recursive: true })
     git(upstream, 'init', '--quiet', '-b', 'main')

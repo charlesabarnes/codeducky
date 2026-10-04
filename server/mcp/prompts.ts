@@ -35,10 +35,10 @@ const clean = ({ repo, branch }: Target): Target => ({ repo: repo?.trim() || und
 const message = (text: string): GetPromptResult => ({ messages: [{ role: 'user', content: { type: 'text', text } }] })
 
 export function reviewPrompt(data: DataSnapshot, target: Target): GetPromptResult {
-  return message(`Review my branch before I push it, the way I would review my own change, and record each finding in Skelbert.
+  return message(`Review my branch before I push it, the way I would review my own change, and record each finding in Rubberduck.
 
 1. ${locate(target)}
-2. Call the Skelbert tool get_review_context with repo and branch. It returns this repo's review instructions, the checklists, the files Skelbert saw changed, notes that are already open or suggested, and patterns that recurred in past reviews of this repo. If it reports that there is no session, tell me to open the branch in Skelbert first and stop.
+2. Call the Rubberduck tool get_review_context with repo and branch. It returns this repo's review instructions, the checklists, the files Rubberduck saw changed, notes that are already open or suggested, and patterns that recurred in past reviews of this repo. If it reports that there is no session, tell me to open the branch in Rubberduck first and stop.
 3. Read the diff in the local checkout: run \`git merge-base HEAD origin/<baseBranch>\` (baseBranch comes from get_review_context; fall back to the remote's default branch), then \`git diff <merge-base>\`, which includes uncommitted changes. Open the surrounding code wherever you need more context.
 4. Look for:
    - bugs and wrong logic;
@@ -54,10 +54,10 @@ export function reviewPrompt(data: DataSnapshot, target: Target): GetPromptResul
 }
 
 export function fixPrompt(data: DataSnapshot, target: Target): GetPromptResult {
-  return message(`Work through the Skelbert review notes on my branch and fix them in the code.
+  return message(`Work through the Rubberduck review notes on my branch and fix them in the code.
 
 1. ${locate(target)}
-2. Call the Skelbert tool get_review_context with repo and branch for the repo instructions and the open notes. Open notes include suggestions I accepted. Leave pending suggestions (status "suggested") and dismissed notes alone unless I say otherwise.
+2. Call the Rubberduck tool get_review_context with repo and branch for the repo instructions and the open notes. Open notes include suggestions I accepted. Leave pending suggestions (status "suggested") and dismissed notes alone unless I say otherwise.
 3. Take the notes one at a time, blockers first, then issues, suggestions and nits:
    - Find the code from the note's anchor (the line text plus the lines around it); line numbers may have moved. If the anchor is lost or the code is gone, check whether it is already fixed.
    - Make the smallest change that fixes it, following the repo instructions and the code's existing style.
@@ -73,7 +73,7 @@ export function registerPrompts(server: McpServer, data: () => DataSnapshot) {
     'review',
     {
       title: 'Review this branch',
-      description: 'Self-review the current branch against its merge base and add findings to Skelbert as suggested notes.',
+      description: 'Self-review the current branch against its merge base and add findings to Rubberduck as suggested notes.',
       argsSchema: args,
     },
     (target) => reviewPrompt(data(), clean(target)),
@@ -82,7 +82,7 @@ export function registerPrompts(server: McpServer, data: () => DataSnapshot) {
     'fix',
     {
       title: 'Fix review notes',
-      description: 'Fix the open and accepted Skelbert notes on the current branch, run the tests, and resolve each note with a reply.',
+      description: 'Fix the open and accepted Rubberduck notes on the current branch, run the tests, and resolve each note with a reply.',
       argsSchema: args,
     },
     (target) => fixPrompt(data(), clean(target)),

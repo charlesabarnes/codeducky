@@ -1,6 +1,6 @@
 import { liveQuery, type Subscription } from 'dexie'
 import type { SyncResponse } from '../../shared/sync'
-import type { SkelbertDb } from '../db/db'
+import type { RubberduckDb } from '../db/db'
 import { apiRequest, HttpError, NetworkError, UnauthorizedError, type ApiOptions } from './api'
 import { enqueueAll, runSync } from './engine'
 import { META_AUTH, META_CURSOR, META_LAST_SYNCED_AT, getMeta, setMeta, type StoredAuth } from './meta'
@@ -74,9 +74,9 @@ export class SyncController {
   private inFlight: Promise<void> | null = null
   private rerun = false
 
-  private readonly db: SkelbertDb
+  private readonly db: RubberduckDb
 
-  constructor(db: SkelbertDb, options: ControllerOptions = {}) {
+  constructor(db: RubberduckDb, options: ControllerOptions = {}) {
     this.db = db
     this.api = { baseUrl: options.baseUrl ?? '', fetch: options.fetch ?? ((...args) => fetch(...args)) }
     this.debounceMs = options.debounceMs ?? 1500

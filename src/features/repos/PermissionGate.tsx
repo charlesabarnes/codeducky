@@ -32,7 +32,7 @@ export function PermissionGate({ handle, children }: PermissionGateProps) {
     <div className="page narrow stack">
       <Panel icon={Lock} title="folder access">
       <p>
-        Skelbert needs read access to <strong>{handle.name}</strong> again. Browsers ask each time the app is reopened.
+        Rubberduck needs read access to <strong>{handle.name}</strong> again. Browsers ask each time the app is reopened.
       </p>
       {state === 'denied' && <p className="error">Access was not granted.</p>}
       <div>

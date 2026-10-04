@@ -1,10 +1,10 @@
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SkelbertDb } from '../../src/db/db'
+import { RubberduckDb } from '../../src/db/db'
 import { startOrResumeSession } from '../../src/db/sessions'
 import { GitHubError } from '../../src/github/errors'
 
-const opened: SkelbertDb[] = []
+const opened: RubberduckDb[] = []
 afterEach(async () => {
   await Promise.all(opened.splice(0).map((db) => db.delete()))
 })
@@ -12,7 +12,7 @@ afterEach(async () => {
 const start = { repoId: 'r1', branch: 'feature', headSha: 'h1', baseSha: 'local-mb' }
 
 async function githubSession() {
-  const db = new SkelbertDb(`github-base-${opened.length}`)
+  const db = new RubberduckDb(`github-base-${opened.length}`)
   opened.push(db)
   const id = await startOrResumeSession(db, start)
   await db.sessions.update(id, {

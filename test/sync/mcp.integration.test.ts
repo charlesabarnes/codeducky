@@ -4,7 +4,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { checkedItems, createChecklist } from '../../src/db/checklists'
-import { SkelbertDb } from '../../src/db/db'
+import { RubberduckDb } from '../../src/db/db'
 import { addNote } from '../../src/db/notes'
 import { saveOpenedRepo } from '../../src/db/repos'
 import { startOrResumeSession } from '../../src/db/sessions'
@@ -34,7 +34,7 @@ async function callTool<T>(client: Client, name: string, args: Record<string, un
 
 describe('MCP against the real server', () => {
   it('resolves and adds notes over MCP, and a synced device receives both', async () => {
-    const db = new SkelbertDb('mcp-int')
+    const db = new RubberduckDb('mcp-int')
     const controller = new SyncController(db, { baseUrl: base, listenToBrowser: false, debounceMs: 60_000, intervalMs: 3_600_000 })
     try {
       const repoId = await saveOpenedRepo(db, folder('invoice-service'), { owner: 'acme', name: 'invoice-service', defaultBase: 'main' })

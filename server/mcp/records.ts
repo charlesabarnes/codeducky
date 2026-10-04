@@ -154,7 +154,7 @@ export function loadData(db: Database) {
 
 export type DataSnapshot = ReturnType<typeof loadData>
 
-/** The repos matching a query and the current session for the branch, if Skelbert has one. */
+/** The repos matching a query and the current session for the branch, if Rubberduck has one. */
 export function findBranchSession(data: DataSnapshot, repoQuery: string, branch: string) {
   const repos = data.repos.filter((repo) => repoMatches(repo, repoQuery))
   const repoIds = new Set(repos.map((repo) => repo.id))

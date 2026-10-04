@@ -1,4 +1,4 @@
-import type { SkelbertDb } from '../db/db'
+import type { RubberduckDb } from '../db/db'
 import type { GitHubClient } from './client'
 import type { RepoRef } from './types'
 
@@ -9,7 +9,7 @@ const MAX_CACHED_BYTES = 5 * 1024 * 1024
 const MAX_MEMORY_BLOBS = 300
 const memory = new Map<string, Promise<Uint8Array>>()
 
-async function prune(db: SkelbertDb): Promise<void> {
+async function prune(db: RubberduckDb): Promise<void> {
   const extra = (await db.githubBlobs.count()) - MAX_CACHED_BLOBS
   if (extra > 0) await db.githubBlobs.orderBy('at').limit(extra).delete()
 }
@@ -18,7 +18,7 @@ async function prune(db: SkelbertDb): Promise<void> {
  * Loads blobs by id: from memory, then IndexedDB, then the GitHub API. A blob id names its
  * content, so cached entries never go stale. Very large blobs are kept in memory only.
  */
-export function cachedBlobLoader(db: SkelbertDb, gh: GitHubClient, ref: RepoRef) {
+export function cachedBlobLoader(db: RubberduckDb, gh: GitHubClient, ref: RepoRef) {
   return (oid: string): Promise<Uint8Array> => {
     let pending = memory.get(oid)
     if (!pending) {

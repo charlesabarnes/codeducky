@@ -62,8 +62,8 @@ export function PrePushGate({ signedIn, onMinted }: PrePushGateProps) {
           )}
           <CopyField label="Then run this and paste the token when asked" value={keychainCommand()} />
           <p>
-            Elsewhere than macOS, export <code>SKELBERT_TOKEN</code> instead. The scripts use this server unless{' '}
-            <code>git config skelbert.url</code> says otherwise.
+            Elsewhere than macOS, export <code>RUBBERDUCK_TOKEN</code> instead. The scripts use this server unless{' '}
+            <code>git config rubberduck.url</code> says otherwise.
           </p>
         </Step>
         <Step number={2} title="Install the git hook in a repo">

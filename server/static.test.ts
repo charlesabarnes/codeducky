@@ -8,9 +8,9 @@ let dist: string
 let made: ReturnType<typeof makeApp>
 
 beforeAll(() => {
-  dist = mkdtempSync(join(tmpdir(), 'skelbert-dist-'))
+  dist = mkdtempSync(join(tmpdir(), 'rubberduck-dist-'))
   mkdirSync(join(dist, 'assets'))
-  writeFileSync(join(dist, 'index.html'), '<!doctype html><title>Skelbert</title>')
+  writeFileSync(join(dist, 'index.html'), '<!doctype html><title>Rubberduck</title>')
   writeFileSync(join(dist, 'sw.js'), 'self.addEventListener("fetch", () => {})')
   writeFileSync(join(dist, 'manifest.webmanifest'), '{}')
   writeFileSync(join(dist, 'assets', 'index-AbC123xy.js'), 'console.log(1)')
@@ -42,7 +42,7 @@ describe('static', () => {
   it('falls back to index.html for app routes and 404s missing files and API paths', async () => {
     const route = await made.app.request('/sessions/0190-abc')
     expect(route.status).toBe(200)
-    expect(await route.text()).toContain('<title>Skelbert</title>')
+    expect(await route.text()).toContain('<title>Rubberduck</title>')
     expect((await made.app.request('/assets/missing-12345678.js')).status).toBe(404)
     expect((await made.app.request('/../package.json')).status).toBe(404)
     const api = await made.app.request('/api/nope')
@@ -52,10 +52,10 @@ describe('static', () => {
   })
 
   it('serves the app for pull request deep links, including github.com-shaped ones', async () => {
-    for (const path of ['/pr/charlesabarnes/skelbert/12', '/charlesabarnes/skelbert/pull/12', '/charlesabarnes/skelbert/pull/12/files', '/charlesabarnes/skelbert/pull/12/commits', '/inbox']) {
+    for (const path of ['/pr/charlesabarnes/rubberduck/12', '/charlesabarnes/rubberduck/pull/12', '/charlesabarnes/rubberduck/pull/12/files', '/charlesabarnes/rubberduck/pull/12/commits', '/inbox']) {
       const res = await made.app.request(path)
       expect(res.status, path).toBe(200)
-      expect(await res.text()).toContain('<title>Skelbert</title>')
+      expect(await res.text()).toContain('<title>Rubberduck</title>')
     }
   })
 })

@@ -58,7 +58,7 @@ const abortableSleep = (ms: number, signal: AbortSignal) =>
   })
 
 /**
- * The outbound connection to the Skelbert server: POST /api/channel/stream registers this session and
+ * The outbound connection to the Rubberduck server: POST /api/channel/stream registers this session and
  * holds an SSE stream of tasks and permission verdicts. Reconnects with backoff, and gives up on a
  * stream that has been silent for three heartbeats.
  */
@@ -99,12 +99,12 @@ export function createConnection({
         signal: abort.signal,
       })
       if (res.status === 401 || res.status === 403) {
-        log(`Skelbert refused the token (HTTP ${res.status}). Check SKELBERT_TOKEN or the Keychain item "skelbert".`)
+        log(`Rubberduck refused the token (HTTP ${res.status}). Check RUBBERDUCK_TOKEN or the Keychain item "rubberduck".`)
         await res.body?.cancel()
         return 'auth'
       }
       if (!res.ok || !res.body) {
-        log(`Skelbert answered HTTP ${res.status} to the channel registration.`)
+        log(`Rubberduck answered HTTP ${res.status} to the channel registration.`)
         await res.body?.cancel()
         return 'error'
       }
@@ -131,10 +131,10 @@ export function createConnection({
           if (parsed.success) await onVerdict(parsed.data).catch((error: unknown) => log(`Could not relay a verdict: ${String(error)}`))
         }
       }
-      if (!stopped.signal.aborted) log('The Skelbert stream ended; reconnecting.')
+      if (!stopped.signal.aborted) log('The Rubberduck stream ended; reconnecting.')
       return ready ? 'ok' : 'error'
     } catch (error) {
-      if (!stopped.signal.aborted) log(`Lost the Skelbert connection: ${error instanceof Error ? error.message : String(error)}`)
+      if (!stopped.signal.aborted) log(`Lost the Rubberduck connection: ${error instanceof Error ? error.message : String(error)}`)
       return ready ? 'ok' : 'error'
     } finally {
       clearTimeout(watchdog)

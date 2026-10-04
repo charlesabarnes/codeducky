@@ -10,12 +10,12 @@ import { githubBaseChanges } from '../../src/github/remoteBase'
 import { nodeDirectoryHandle } from '../support/nodeHandle'
 
 /**
- * Runs against the real charlesabarnes/skelbert repo, so it is opt-in: SKELBERT_REAL_GITHUB=1.
+ * Runs against the real charlesabarnes/rubberduck repo, so it is opt-in: RUBBERDUCK_REAL_GITHUB=1.
  * Pushes two temporary branches, which are deleted afterwards. The token comes from `gh auth token`.
  */
-const enabled = process.env.SKELBERT_REAL_GITHUB === '1'
-const URL = 'https://github.com/charlesabarnes/skelbert.git'
-const ref = { owner: 'charlesabarnes', name: 'skelbert' }
+const enabled = process.env.RUBBERDUCK_REAL_GITHUB === '1'
+const URL = 'https://github.com/charlesabarnes/rubberduck.git'
+const ref = { owner: 'charlesabarnes', name: 'rubberduck' }
 const BASE = 'e2e/base-check-base'
 const FEATURE = 'e2e/base-check'
 
@@ -33,7 +33,7 @@ function clone(work: string, name: string) {
   git(work, 'clone', '--quiet', URL, name)
   const dir = join(work, name)
   git(dir, 'config', 'user.email', 'test@example.com')
-  git(dir, 'config', 'user.name', 'Skelbert e2e')
+  git(dir, 'config', 'user.name', 'Rubberduck e2e')
   return dir
 }
 
@@ -45,7 +45,7 @@ describe.skipIf(!enabled)('GitHub base against the real repo', () => {
 
   beforeAll(() => {
     expect(git(process.cwd(), 'ls-remote', URL, `refs/heads/${BASE}`, `refs/heads/${FEATURE}`)).toBe('')
-    work = mkdtempSync(join(tmpdir(), 'skelbert-real-'))
+    work = mkdtempSync(join(tmpdir(), 'rubberduck-real-'))
     other = clone(work, 'other')
     git(other, 'checkout', '--quiet', '-b', BASE, 'origin/main')
     commit(other, 'e2e-b0.txt', 'base 0')

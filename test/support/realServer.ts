@@ -12,9 +12,9 @@ const bunPath = () => {
 export async function startServer(passphrase: string) {
   const port = 18000 + Math.floor(Math.random() * 1000)
   const base = `http://127.0.0.1:${port}`
-  const dataDir = mkdtempSync(join(tmpdir(), 'skelbert-int-'))
+  const dataDir = mkdtempSync(join(tmpdir(), 'rubberduck-int-'))
   const server: ChildProcess = spawn(bunPath(), [resolve('server/index.ts')], {
-    env: { ...process.env, PORT: String(port), SKELBERT_PASSPHRASE: passphrase, DATA_DIR: dataDir, WEB_DIST: join(dataDir, 'no-dist') },
+    env: { ...process.env, PORT: String(port), RUBBERDUCK_PASSPHRASE: passphrase, DATA_DIR: dataDir, WEB_DIST: join(dataDir, 'no-dist') },
     stdio: 'ignore',
   })
   const stop = () => {

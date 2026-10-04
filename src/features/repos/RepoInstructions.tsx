@@ -21,7 +21,7 @@ export function RepoInstructions({ repo }: { repo: Repo & { id: string } }) {
   return (
     <Panel icon={Sparkles} title="review instructions" className="repo-instructions">
       <p>
-        Claude reads these through <code>/mcp__skelbert__review</code> and <code>get_review_context</code>, e.g. what to skip or
+        Claude reads these through <code>/mcp__rubberduck__review</code> and <code>get_review_context</code>, e.g. what to skip or
         conventions this repo follows.
       </p>
       <textarea

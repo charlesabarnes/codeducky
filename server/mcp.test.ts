@@ -236,7 +236,7 @@ describe('mcp auth', () => {
     const missing = await post(app)
     expect(missing.status).toBe(401)
     expect(missing.headers.get('WWW-Authenticate')).toBe(
-      `Bearer resource_metadata="${TEST_ORIGIN}/.well-known/oauth-protected-resource/mcp", scope="skelbert"`,
+      `Bearer resource_metadata="${TEST_ORIGIN}/.well-known/oauth-protected-resource/mcp", scope="rubberduck"`,
     )
     const invalid = await post(app, 'skb_forged')
     expect(invalid.status).toBe(401)

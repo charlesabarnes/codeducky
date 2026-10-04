@@ -1,11 +1,11 @@
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it } from 'vitest'
-import { SkelbertDb } from '../../src/db/db'
+import { RubberduckDb } from '../../src/db/db'
 import { MAX_SNAPSHOT_FILE_BYTES, pruneSnapshots, putSnapshot, readSnapshot, snapshotOids } from '../../src/db/reviewSnapshots'
 
-const opened: SkelbertDb[] = []
+const opened: RubberduckDb[] = []
 const open = (name: string) => {
-  const db = new SkelbertDb(`snapshots-${name}`)
+  const db = new RubberduckDb(`snapshots-${name}`)
   opened.push(db)
   return db
 }

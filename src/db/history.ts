@@ -1,5 +1,5 @@
 import { countNotes, type NoteCounts } from '../review/summary'
-import type { SkelbertDb } from './db'
+import type { RubberduckDb } from './db'
 import type { Session } from './schema'
 
 export interface SessionSummary {
@@ -7,7 +7,7 @@ export interface SessionSummary {
   counts: NoteCounts
 }
 
-export async function repoHistory(db: SkelbertDb, repoId: string): Promise<SessionSummary[]> {
+export async function repoHistory(db: RubberduckDb, repoId: string): Promise<SessionSummary[]> {
   const sessions = await db.sessions.where({ repoId }).toArray()
   sessions.sort((a, b) => b.startedAt - a.startedAt)
   return Promise.all(

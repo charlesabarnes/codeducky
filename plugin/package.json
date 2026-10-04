@@ -1,9 +1,9 @@
 {
-  "name": "skelbert-channel",
+  "name": "rubberduck-channel",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Claude Code channel plugin for Skelbert",
+  "description": "Claude Code channel plugin for Rubberduck",
   "scripts": {
     "start": "bun server.ts",
     "test": "bun test"

@@ -32,7 +32,7 @@ const isDraft = (value: unknown): value is ChecklistDraft =>
 export function parseChecklistJson(text: string): ChecklistDraft[] {
   const parsed: unknown = JSON.parse(text)
   const list = Array.isArray(parsed) ? parsed : (parsed as Partial<ChecklistFile> | null)?.checklists
-  if (!Array.isArray(list) || !list.every(isDraft)) throw new Error('Not a Skelbert checklist file.')
+  if (!Array.isArray(list) || !list.every(isDraft)) throw new Error('Not a Rubberduck checklist file.')
   return list.map(({ title, items, required }) => ({
     title: title.trim() || 'Untitled',
     items: items.map((item) => item.trim()).filter(Boolean),
