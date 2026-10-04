@@ -306,7 +306,8 @@ const CROSS_USER: Record<string, () => Promise<void>> = {
   },
 
   async 'DELETE /api/auth/tokens/:id'() {
-    for (const id of [alice.signedIn.tokenId, alice.apiId, alice.grantId]) {
+    const oauthTokenId = ctx.tokens.verify(alice.access)!.id
+    for (const id of [alice.signedIn.tokenId, alice.apiId, alice.grantId, oauthTokenId]) {
       expect((await send('DELETE', `/api/auth/tokens/${id}`, bob.session)).status).toBe(404)
     }
   },
