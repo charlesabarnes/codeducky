@@ -6,7 +6,7 @@ export interface Order {
 }
 
 export function payable(order: Order): number {
-  return order.totalCents - order.discountCents
+  return Math.max(0, order.totalCents - order.discountCents)
 }
 
 export function describe(order: Order): string {
