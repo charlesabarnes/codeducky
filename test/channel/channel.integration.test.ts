@@ -11,6 +11,7 @@ import { ChannelClient } from '../../src/channel/client'
 import { CodeDuckyDb } from '../../src/db/db'
 import { SyncController } from '../../src/sync/controller'
 import { signInDevice } from '../support/deviceSignIn'
+import { fakeSignIn, fetchSend } from '../support/fakeSignIn'
 import { startServer } from '../support/realServer'
 
 const bun = process.env.BUN_PATH ?? (existsSync(join(homedir(), '.bun/bin/bun')) ? join(homedir(), '.bun/bin/bun') : 'bun')
@@ -102,6 +103,44 @@ describe('Send to Claude against the real server', () => {
       unsubscribe()
       await client.close().catch(() => undefined)
       controller.dispose()
+    }
+  })
+
+  it('keeps one user\'s plugin sessions, tasks and prompts away from another', async () => {
+    const alice = await fakeSignIn(fetchSend, base, 'chan-alice')
+    const bob = await fakeSignIn(fetchSend, base, 'chan-bob')
+    const call = (method: string, path: string, token: string, body?: unknown) =>
+      fetch(`${base}/api/channel${path}`, {
+        method,
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      })
+    const minted = (await (await fetch(`${base}/api/auth/tokens`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${alice.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Alice channel' }),
+    }).then((res) => res.json())) as { token: string }).token
+    const registration = { id: 'chan-int-alice-01', label: 'alice laptop', cwd: '/src', repo: 'acme/invoice-service', branch: 'b', hostname: 'h', pluginVersion: '0.1.0' }
+    const stream = await call('POST', '/stream', minted, registration)
+    expect(stream.status).toBe(200)
+    const reader = stream.body!.getReader()
+    try {
+      await reader.read()
+      const target = { kind: 'review', target: { repo: 'acme/invoice-service', branch: 'b' } }
+      expect((await call('POST', `/sessions/${registration.id}/tasks`, alice.token, target)).status).toBe(200)
+      const prompt = { type: 'permission_request', requestId: 'pqrst', toolName: 'Bash', description: '', inputPreview: '' }
+      expect((await call('POST', `/sessions/${registration.id}/events`, minted, prompt)).status).toBe(200)
+
+      expect(await (await call('GET', '/sessions', bob.token)).json()).toEqual({ sessions: [], tasks: [], permissions: [] })
+      expect((await call('POST', `/sessions/${registration.id}/tasks`, bob.token, target)).status).toBe(404)
+      expect((await call('POST', `/sessions/${registration.id}/permissions/pqrst`, bob.token, { behavior: 'allow' })).status).toBe(404)
+
+      const own = (await (await call('GET', '/sessions', alice.token)).json()) as { sessions: unknown[]; tasks: unknown[]; permissions: { state: string }[] }
+      expect(own.sessions).toHaveLength(1)
+      expect(own.tasks).toHaveLength(1)
+      expect(own.permissions).toMatchObject([{ state: 'pending' }])
+    } finally {
+      await reader.cancel()
     }
   })
 })

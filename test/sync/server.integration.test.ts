@@ -124,4 +124,31 @@ describe('sync against the real server', () => {
     expect(((await admin.json()) as { user: { role: string } }).user.role).toBe('admin')
     expect((await fetch(`${BASE}/api/auth/login`, { method: 'POST', body: '{}' })).status).toBe(401)
   })
+
+  it('signs a disabled user\'s device out on its next sync and keeps the other user syncing', async () => {
+    const a = device('disable-alice')
+    const b = device('disable-bob')
+    try {
+      await signInDevice(a.controller, a.db, BASE, 'dis-alice', 'Alice laptop')
+      const bob = await signInDevice(b.controller, b.db, BASE, 'dis-bob', 'Bob laptop')
+      const login = await fetch(`${BASE}/api/auth/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passphrase: ADMIN_PASSPHRASE, name: 'Admin' }),
+      })
+      const { token } = (await login.json()) as { token: string }
+      const disabled = await fetch(`${BASE}/api/admin/users/${bob.id}/disable`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+      expect(disabled.status).toBe(200)
+
+      await b.controller.sync()
+      expect(b.controller.getSnapshot().auth).toBe('expired')
+      await a.controller.sync()
+      expect(a.controller.getSnapshot()).toMatchObject({ auth: 'signedIn', status: 'idle' })
+    } finally {
+      for (const d of [a, b]) {
+        d.controller.dispose()
+        await d.db.delete()
+      }
+    }
+  })
 })
