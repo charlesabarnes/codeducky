@@ -80,7 +80,7 @@ function SwitchDialog({ request }: { request: SwitchRequest }) {
       </div>
       <footer className="modal-foot">
         <p>Appearance and keyboard settings stay.</p>
-        <button type="button" className="secondary" disabled={busy} onClick={() => void syncController.cancelSwitch()}>
+        <button type="button" className="secondary" autoFocus disabled={busy} onClick={() => void syncController.cancelSwitch()}>
           cancel
         </button>
         <button type="button" className="danger-button" disabled={busy} onClick={() => void confirm()}>

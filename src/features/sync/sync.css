@@ -200,7 +200,7 @@
 }
 
 .account-menu [role='menuitem']::before {
-  content: '>';
+  content: '>' / '';
   width: 1ch;
   color: transparent;
 }
