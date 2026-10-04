@@ -1,4 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
+import { Download, FileText, ListChecks, MessageSquare } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { db } from '../../db/db'
@@ -9,7 +10,10 @@ import { SessionChecklists } from '../checklists/SessionChecklists'
 import { AnchorExcerpt } from '../notes/AnchorExcerpt'
 import { NoteCard } from '../notes/NoteCard'
 import { exportSessionReport } from './exportReport'
+import { Crumbs, StatusBar } from '../../app/chrome'
 import { repoHistoryPath } from '../../app/paths'
+import { PageHeader } from '../../ui/PageHeader'
+import { Panel } from '../../ui/Panel'
 import { prPath } from '../../../shared/links'
 
 function groupByFile(notes: Note[]): [string, Note[]][] {
@@ -29,15 +33,23 @@ export function SessionReport({ session, repo }: { session: Session; repo: Repo 
 
   return (
     <section className="page stack report-page">
-      <div>
-        <Link to={repoHistoryPath(repo.id!)}>← History</Link>
-        <h1>
-          {repoLabel(repo)} · {session.branch}
-        </h1>
+      <Crumbs>
+        <Link to={repoHistoryPath(repo.id!)}>{repoLabel(repo)}</Link>
+        <span>/</span>
+        <strong>{session.branch}</strong>
+      </Crumbs>
+      <StatusBar mode="report">
+        <span className="strong">{session.branch}</span>
+        <span>read-only</span>
+        <span className="status-item">
+          <MessageSquare size={12} aria-hidden />
+          {counts.total} {counts.total === 1 ? 'note' : 'notes'}
+        </span>
+      </StatusBar>
+      <PageHeader icon={FileText} title={`${repoLabel(repo)} · ${session.branch}`} back={{ to: repoHistoryPath(repo.id!), label: 'history' }}>
         <p className="muted">
           Read-only {session.status === 'archived' ? 'archived ' : ''}session started {new Date(session.startedAt).toLocaleString()}.
-          Head <span className="mono">{session.headSha.slice(0, 7)}</span>, merge base{' '}
-          <span className="mono">{session.baseSha.slice(0, 7)}</span>.
+          Head <code>{session.headSha.slice(0, 7)}</code>, merge base <code>{session.baseSha.slice(0, 7)}</code>.
         </p>
         {session.pr && session.source === 'github-pr' && (
           <p>
@@ -66,28 +78,31 @@ export function SessionReport({ session, repo }: { session: Session; repo: Repo 
           {counts.total} notes: {counts.byStatus.open} open, {counts.byStatus.resolved} resolved,{' '}
           {counts.possiblyResolved} possibly resolved.
         </p>
-        <div className="row">
-          <button type="button" className="secondary" onClick={exportReport}>
-            Export markdown
-          </button>
-        </div>
-        {error && <p className="error">{error}</p>}
+      </PageHeader>
+      <div className="row">
+        <button type="button" className="secondary" onClick={exportReport}>
+          <Download size={13} aria-hidden />
+          export markdown
+        </button>
+        {error && <span className="error">{error}</span>}
       </div>
-      <h2>Checklists</h2>
-      <SessionChecklists sessionId={sessionId} repoId={session.repoId} readOnly />
-      <h2>Notes</h2>
-      {notes.length === 0 && <p className="muted">No notes.</p>}
-      {groupByFile(notes).map(([path, fileNotes]) => (
-        <section key={path} className="stack" style={{ gap: '0.5rem' }}>
-          <h3 className="mono">{path}</h3>
-          {fileNotes.map((note) => (
-            <div key={note.id} className="stack" style={{ gap: '0.25rem' }}>
-              <NoteCard note={note} readOnly />
-              <AnchorExcerpt note={note} />
-            </div>
-          ))}
-        </section>
-      ))}
+      <Panel icon={ListChecks} title="checklists">
+        <SessionChecklists sessionId={sessionId} repoId={session.repoId} readOnly />
+      </Panel>
+      <Panel icon={MessageSquare} title="notes">
+        {notes.length === 0 && <p>No notes.</p>}
+        {groupByFile(notes).map(([path, fileNotes]) => (
+          <section key={path} className="report-file">
+            <h3>{path}</h3>
+            {fileNotes.map((note) => (
+              <div key={note.id} className="lost-note">
+                <NoteCard note={note} readOnly />
+                <AnchorExcerpt note={note} />
+              </div>
+            ))}
+          </section>
+        ))}
+      </Panel>
     </section>
   )
 }

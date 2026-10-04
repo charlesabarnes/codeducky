@@ -1,4 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
+import { ArrowRight, Inbox as InboxIcon, RefreshCw } from 'lucide-react'
 import { useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { parsePrReference, prPath } from '../../../shared/links'
@@ -9,11 +10,16 @@ import { useKeys, useShortcuts } from '../../keys/context'
 import { withShortcut } from '../../keys/help'
 import { PrLinks } from '../pr/PrLinks'
 import { shortAge, timeAgo } from '../pr/time'
+import { StatusBar } from '../../app/chrome'
 import { useInbox } from './useInbox'
 import './inbox.css'
 
 const CI_ICON: Record<InboxCi, string> = { pass: '✓', fail: '✕', pending: '●', none: '○' }
 const CI_LABEL: Record<InboxCi, string> = { pass: 'CI passing', fail: 'CI failing', pending: 'CI running', none: 'No CI checks' }
+const INBOX_HINTS = [
+  { keys: 'j/k', label: 'move' },
+  { keys: 'o', label: 'open a pr' },
+]
 const REVIEW_LABEL: Record<string, string> = {
   APPROVED: 'you approved',
   CHANGES_REQUESTED: 'you requested changes',
@@ -47,8 +53,14 @@ export function InboxPage() {
 
   return (
     <section className="page inbox-page stack">
+      <StatusBar mode="inbox" hints={INBOX_HINTS}>
+        {inbox && <span className="strong">{SECTIONS.reduce((sum, section) => sum + inbox.sections[section].length, 0)} pull requests</span>}
+      </StatusBar>
       <div className="row inbox-head">
-        <h1>Inbox</h1>
+        <h1>
+          <InboxIcon size={16} aria-hidden />
+          inbox
+        </h1>
         <span className="spacer" />
         {state.status === 'ready' && (
           <span className="muted" aria-live="polite">
@@ -56,7 +68,8 @@ export function InboxPage() {
           </span>
         )}
         <button type="button" className="secondary" onClick={() => void refresh()} disabled={state.status === 'ready' && state.refreshing}>
-          Refresh
+          <RefreshCw size={13} aria-hidden />
+          refresh
         </button>
       </div>
       <OpenPrForm inputRef={openInput} />
@@ -104,7 +117,7 @@ function Section({ section, rows, total }: { section: InboxSection; rows: InboxR
   return (
     <section className="inbox-section" aria-labelledby={`inbox-${section}`}>
       <h2 id={`inbox-${section}`}>
-        {SECTION_TITLES[section]} <span className="muted">{total > rows.length ? `${rows.length} of ${total}` : rows.length}</span>
+        {SECTION_TITLES[section].toLowerCase()} <span className="muted">{total > rows.length ? `${rows.length} of ${total}` : rows.length}</span>
       </h2>
       {rows.length === 0 ? (
         <p className="muted">Nothing here.</p>
@@ -141,9 +154,9 @@ function Row({ row }: { row: InboxRow }) {
             <span className="add">+{row.additions}</span> <span className="del">−{row.deletions}</span> · {row.changedFiles}{' '}
             {row.changedFiles === 1 ? 'file' : 'files'}
           </span>
-          {row.draft && <span className="badge muted">draft</span>}
-          {row.state !== 'OPEN' && <span className="badge muted">{row.state.toLowerCase()}</span>}
-          {row.viaTeam && <span className="badge muted">team request</span>}
+          {row.draft && <span className="badge">draft</span>}
+          {row.state !== 'OPEN' && <span className="badge">{row.state.toLowerCase()}</span>}
+          {row.viaTeam && <span className="badge">team request</span>}
           {row.pendingReview && <span className="badge pending-badge">your review is pending</span>}
           {row.myReview && REVIEW_LABEL[row.myReview] && <span className={`badge review-${row.myReview}`}>{REVIEW_LABEL[row.myReview]}</span>}
         </div>
@@ -197,7 +210,8 @@ function OpenPrForm({ inputRef }: { inputRef: React.RefObject<HTMLInputElement |
         autoComplete="off"
       />
       <button type="submit" className="secondary" disabled={!value.trim()}>
-        Open
+        <ArrowRight size={13} aria-hidden />
+        open
       </button>
       {error && <span className="error">{error}</span>}
     </form>

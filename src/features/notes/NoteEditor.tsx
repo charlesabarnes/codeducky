@@ -49,23 +49,20 @@ export function NoteEditor({ initial, submitLabel, onSubmit, onCancel }: NoteEdi
         aria-label="Note"
         onChange={(event) => setBody(event.target.value)}
       />
-      <div className="row">
-        <select value={severity} aria-label="Severity" onChange={(event) => setSeverity(event.target.value as NoteSeverity)}>
+      <div className="note-editor-bar">
+        <div className="severity-picker" role="group" aria-label="Severity">
           {NOTE_SEVERITIES.map((option) => (
-            <option key={option} value={option}>
+            <button key={option} type="button" aria-pressed={severity === option} onClick={() => setSeverity(option)}>
               {option}
-            </option>
+            </button>
           ))}
-        </select>
+        </div>
         <span className="spacer" />
-        <span className="muted editor-keys" aria-hidden="true">
-          <kbd>{isMac() ? '⌘' : 'Ctrl'}</kbd>+<kbd>Enter</kbd> to save, <kbd>Esc</kbd> to cancel
-        </span>
-        <button type="button" className="secondary" onClick={onCancel} aria-keyshortcuts="Escape">
-          Cancel
+        <button type="button" className="link" disabled={!canSubmit} onClick={submit} aria-keyshortcuts="Meta+Enter Control+Enter">
+          <span className="key">{isMac() ? '⌘↵' : 'Ctrl+↵'}</span> {submitLabel}
         </button>
-        <button type="button" disabled={!canSubmit} onClick={submit} aria-keyshortcuts="Meta+Enter Control+Enter">
-          {submitLabel}
+        <button type="button" className="link" onClick={onCancel} aria-keyshortcuts="Escape">
+          <span className="key">esc</span> cancel
         </button>
       </div>
     </div>

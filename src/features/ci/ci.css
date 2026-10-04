@@ -5,83 +5,72 @@
 .ci-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.1rem 0.6rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: 12px;
-  cursor: pointer;
+  gap: 5px;
+  width: fit-content;
   list-style: none;
   user-select: none;
-  width: fit-content;
 }
 
 .ci-chip::-webkit-details-marker {
   display: none;
 }
 
+.ci-chip > .lucide {
+  color: var(--fg-2);
+}
+
 .ci-chip.state-pass {
   color: var(--add-fg);
-  border-color: var(--add-fg);
 }
 
 .ci-chip.state-fail {
   color: var(--del-fg);
-  border-color: var(--del-fg);
 }
 
 .ci-chip.state-pending {
   color: var(--mod-fg);
-  border-color: var(--mod-fg);
 }
 
 .ci-chip.state-none,
 .ci-chip.state-error {
-  color: var(--fg-muted);
+  color: var(--fg-2);
 }
 
 .ci-popover {
   position: absolute;
   z-index: 10;
-  top: calc(100% + 0.35rem);
-  left: 0;
-  width: min(32rem, 80vw);
-  max-height: 60vh;
-  overflow: auto;
-  padding: 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+  top: calc(100% + 4px);
+  left: -92px;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-}
-
-.ci-popover h3 {
-  margin: 0.25rem 0 0;
-  font-size: 13px;
+  gap: 8px;
+  width: 296px;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  box-shadow: var(--shadow);
 }
 
 .ci-runs {
+  display: flex;
+  flex-direction: column;
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
 }
 
 .ci-run {
   display: flex;
-  gap: 0.5rem;
   align-items: baseline;
+  gap: 8px;
 }
 
 .ci-run-icon {
   width: 1em;
-  text-align: center;
   font-weight: 700;
+  text-align: center;
 }
 
 .run-pass .ci-run-icon {
@@ -97,24 +86,23 @@
 }
 
 .run-skipped .ci-run-icon {
-  color: var(--fg-muted);
+  color: var(--fg-2);
+}
+
+.ci-elsewhere {
+  gap: 6px;
 }
 
 .ci-annotation {
-  --level: var(--accent);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--level);
-  border-radius: 6px;
+  --level: var(--sev-s);
+  max-width: 640px;
+  border: 1px solid var(--line);
   background: var(--bg);
-  padding: 0.4rem 0.6rem;
-  font-family: system-ui, sans-serif;
-  font-size: 13px;
-  line-height: 1.45;
   white-space: normal;
 }
 
 .ci-annotation + .ci-annotation {
-  margin-top: 0.35rem;
+  margin-top: 6px;
 }
 
 .ci-annotation.level-failure {
@@ -127,9 +115,12 @@
 
 .ci-annotation-head {
   display: flex;
-  gap: 0.5rem;
-  align-items: baseline;
   flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 12px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
 }
 
 .ci-annotation-head .spacer {
@@ -137,49 +128,45 @@
 }
 
 .ci-level {
-  display: inline-grid;
-  place-items: center;
-  width: 1.1rem;
-  height: 1.1rem;
-  border-radius: 50%;
-  background: var(--level);
-  color: var(--bg);
-  font-size: 11px;
+  color: var(--level);
   font-weight: 700;
 }
 
 .ci-annotation strong {
   color: var(--level);
+  font-weight: 400;
 }
 
 .ci-message {
+  padding: 4px 8px;
   white-space: pre-wrap;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  margin-top: 0.2rem;
   overflow-wrap: anywhere;
 }
 
+.ci-details {
+  padding: 0 8px 4px;
+}
+
 .ci-details pre {
-  margin: 0.25rem 0 0;
+  margin: 4px 0 0;
   white-space: pre-wrap;
-  font-size: 11px;
 }
 
 .line-ci + .line-notes {
-  margin-top: 0.35rem;
+  margin-top: 8px;
 }
 
 .ci-unplaced {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-subtle);
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
 }
 
-.ci-unplaced h3 {
-  margin: 0;
-  font-size: 13px;
+.ci-unplaced-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }

@@ -1,3 +1,4 @@
+import { Check, ChevronDown, ChevronRight, ExternalLink, Reply, RotateCcw } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { errorMessage } from '../../github/errors'
 import type { ReviewThread } from '../../github/threads'
@@ -55,31 +56,35 @@ export function ThreadCard({ thread, actions, showWhere }: ThreadCardProps) {
   const classes = ['thread-card', thread.isResolved && 'resolved', thread.isOutdated && 'outdated', focused && 'focused'].filter(Boolean).join(' ')
   return (
     <article className={classes} id={`thread-${thread.id}`} onClick={() => actions.onFocus(thread)} aria-label={`Review thread by ${first?.author ?? 'unknown'}`}>
-      <header className="row">
+      <header className="note-head">
         <button type="button" className="link thread-toggle" aria-expanded={open} onClick={() => setExpanded(!open)}>
-          {open ? '▾' : '▸'} {first?.author ?? 'unknown'}
+          {open ? <ChevronDown size={12} aria-hidden /> : <ChevronRight size={12} aria-hidden />}
+          {first?.author ?? 'unknown'}
         </button>
         <span className="muted">
           {thread.comments.length} {thread.comments.length === 1 ? 'comment' : 'comments'}
         </span>
-        {showWhere && <span className="muted mono">{whereLabel(thread)}</span>}
-        {thread.isOutdated && <span className="badge muted">outdated</span>}
+        {showWhere && <span className="muted">{whereLabel(thread)}</span>}
+        {thread.isOutdated && <span className="badge">outdated</span>}
         {thread.isResolved && <span className="badge resolved-badge">resolved{thread.resolvedBy ? ` by ${thread.resolvedBy}` : ''}</span>}
         {thread.comments.some((comment) => comment.pending) && <span className="badge pending-badge">pending</span>}
         <span className="spacer" />
         {thread.canReply && (
           <button type="button" className="link" title="Reply (Shift+R)" onClick={() => actions.onReplyingChange(thread.id)}>
-            Reply
+            <Reply size={12} aria-hidden />
+            reply <span className="key">R</span>
           </button>
         )}
         {(thread.isResolved ? thread.canUnresolve : thread.canResolve) && (
           <button type="button" className="link" disabled={busy} title="Resolve or unresolve (Shift+X)" onClick={toggleResolved}>
-            {thread.isResolved ? 'Unresolve' : 'Resolve'}
+            {thread.isResolved ? <RotateCcw size={12} aria-hidden /> : <Check size={12} aria-hidden />}
+            {thread.isResolved ? 'unresolve' : 'resolve'} <span className="key">X</span>
           </button>
         )}
         {url && (
-          <a href={url} target="_blank" rel="noreferrer" className="muted">
-            GitHub
+          <a href={url} target="_blank" rel="noreferrer" className="icon-link muted">
+            github
+            <ExternalLink size={11} aria-hidden />
           </a>
         )}
       </header>
@@ -137,17 +142,14 @@ function ReplyEditor({ onSubmit, onCancel }: { onSubmit: (body: string) => Promi
   return (
     <div className="note-editor thread-reply" onKeyDown={onKeyDown} onClick={(event) => event.stopPropagation()}>
       <textarea ref={textarea} rows={3} value={body} placeholder="Reply on GitHub (markdown)" aria-label="Reply" onChange={(event) => setBody(event.target.value)} />
-      <div className="row">
-        <span className="muted">Posts to GitHub right away.</span>
+      <div className="note-editor-bar">
+        <span className="muted">posts to github right away</span>
         <span className="spacer" />
-        <span className="muted editor-keys" aria-hidden="true">
-          <kbd>{isMac() ? '⌘' : 'Ctrl'}</kbd>+<kbd>Enter</kbd> to send, <kbd>Esc</kbd> to cancel
-        </span>
-        <button type="button" className="secondary" onClick={onCancel}>
-          Cancel
+        <button type="button" className="link" disabled={!body.trim() || busy} onClick={submit}>
+          <span className="key">{isMac() ? '⌘↵' : 'Ctrl+↵'}</span> {busy ? 'sending…' : 'reply'}
         </button>
-        <button type="button" disabled={!body.trim() || busy} onClick={submit}>
-          {busy ? 'Sending…' : 'Reply'}
+        <button type="button" className="link" onClick={onCancel}>
+          <span className="key">esc</span> cancel
         </button>
       </div>
       {error && <p className="error">{error}</p>}

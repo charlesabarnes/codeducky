@@ -105,7 +105,7 @@ export function useNoteAnnotations({ sessionId, path, notes, lines, focusedId, a
           ))}
           {editing && (
             <NoteEditor
-              submitLabel="Add note"
+              submitLabel="save"
               onCancel={() => setDraft(null)}
               onSubmit={async ({ body, severity }) => {
                 const sideLines = lines[side]

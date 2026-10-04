@@ -1,10 +1,12 @@
 import { useLiveQuery } from 'dexie-react-hooks'
+import { FolderOpen } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { db } from '../../db/db'
 import { repoLabel } from '../../db/repos'
 import type { OpenedRepo, Repo } from '../../db/schema'
 import { supportsFileSystemAccess } from '../../fs/permission'
 import { locateRepoFolder } from './openRepoFolder'
+import { Panel } from '../../ui/Panel'
 import { PermissionGate } from './PermissionGate'
 
 interface RepoFolderGateProps {
@@ -35,7 +37,8 @@ function LocateFolder({ repo }: { repo: Repo }) {
     }
   }
   return (
-    <div className="page card stack" style={{ margin: '1.5rem', maxWidth: '36rem' }}>
+    <div className="page narrow stack">
+      <Panel icon={FolderOpen} title="open the checkout">
       <p>
         <strong>{repoLabel(repo)}</strong> was synced from another device. Open your checkout of it on this device to
         continue.
@@ -44,10 +47,12 @@ function LocateFolder({ repo }: { repo: Repo }) {
       {supportsFileSystemAccess() && (
         <div>
           <button type="button" onClick={locate} disabled={busy}>
-            {busy ? 'Opening…' : 'Open repo folder'}
+            <FolderOpen size={13} aria-hidden />
+            {busy ? 'opening…' : 'open repo folder'}
           </button>
         </div>
       )}
+      </Panel>
     </div>
   )
 }

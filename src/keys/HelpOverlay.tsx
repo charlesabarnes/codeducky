@@ -1,3 +1,4 @@
+import { Keyboard } from 'lucide-react'
 import { Fragment, useEffect, useRef } from 'react'
 import { helpGroups } from './help'
 import type { KeyBinding } from './keymap'
@@ -17,13 +18,16 @@ export function HelpOverlay({ active, enabled, onEnabledChange, onClose }: HelpO
 
   useEffect(() => {
     const element = dialog.current
-    if (element && !element.open) element.showModal()
+    if (!element || element.open) return
+    element.showModal()
+    element.focus()
   }, [])
 
   return (
     <dialog
       ref={dialog}
-      className="help-overlay"
+      tabIndex={-1}
+      className="modal help-overlay"
       aria-labelledby="help-title"
       onClose={onClose}
       onClick={(event) => event.target === dialog.current && dialog.current?.close()}
@@ -34,11 +38,12 @@ export function HelpOverlay({ active, enabled, onEnabledChange, onClose }: HelpO
         }
       }}
     >
-      <header className="row">
-        <h2 id="help-title">Keyboard shortcuts</h2>
+      <header className="modal-bar">
+        <Keyboard size={14} aria-hidden />
+        <h2 id="help-title">keyboard shortcuts</h2>
         <span className="spacer" />
-        <button type="button" className="secondary" onClick={() => dialog.current?.close()}>
-          Close
+        <button type="button" className="link" onClick={() => dialog.current?.close()}>
+          <span className="key">?</span> or <span className="key">esc</span> close
         </button>
       </header>
       {!enabled && <p className="notice">Single-key shortcuts are off. Only Esc and {mod}+Enter work.</p>}
@@ -59,13 +64,13 @@ export function HelpOverlay({ active, enabled, onEnabledChange, onClose }: HelpO
           </section>
         ))}
       </div>
-      {!active.has('line.next') && <p className="muted">Open a review session for diff and note shortcuts.</p>}
-      <footer className="row">
-        <label className="row" style={{ gap: '0.35rem' }}>
+      {!active.has('line.next') && <p className="muted help-note">Open a review session for diff and note shortcuts.</p>}
+      <footer className="modal-foot">
+        <label>
           <input type="checkbox" checked={enabled} onChange={(event) => onEnabledChange(event.target.checked)} />
-          Single-key shortcuts
+          single-key shortcuts
         </label>
-        <span className="muted">Shortcuts never use Ctrl, ⌘ or Alt, except {mod}+Enter, and pause while you type.</span>
+        <small>Shortcuts never use Ctrl, ⌘ or Alt, except {mod}+Enter, and pause while you type.</small>
       </footer>
     </dialog>
   )
@@ -80,7 +85,7 @@ function Keys({ binding }: { binding: KeyBinding }) {
           {step > 0 && <span className="muted"> then </span>}
           {chord.map((cap, index) => (
             <Fragment key={index}>
-              {index > 0 && '+'}
+              {index > 0 && <span className="muted">+</span>}
               <kbd>{cap}</kbd>
             </Fragment>
           ))}

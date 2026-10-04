@@ -1,3 +1,4 @@
+import { ChevronDown } from 'lucide-react'
 import { runState } from '../../github/ci'
 import type { CheckRun } from '../../github/types'
 import { CiAnnotationCard } from './CiAnnotationCard'
@@ -12,14 +13,15 @@ function chipText(view: CiView): { state: keyof typeof CHIP_ICON; text: string }
   const { status, summary } = view
   switch (status.kind) {
     case 'off':
-    case 'loading':
       return null
+    case 'loading':
+      return { state: 'none', text: 'checking…' }
     case 'not-pushed':
-      return { state: 'none', text: 'No checks: HEAD is not on GitHub' }
+      return { state: 'none', text: 'no checks: HEAD is not on GitHub' }
     case 'error':
-      return { state: 'error', text: 'Checks unavailable' }
+      return { state: 'error', text: 'checks unavailable' }
     case 'ready':
-      if (!summary || summary.state === 'none') return { state: 'none', text: 'No checks' }
+      if (!summary || summary.state === 'none') return { state: 'none', text: 'no checks' }
       if (summary.state === 'fail') return { state: 'fail', text: `${summary.failed} failing` }
       if (summary.state === 'pending') return { state: 'pending', text: `${summary.pending} running` }
       return { state: 'pass', text: `${summary.passed} passed` }
@@ -58,7 +60,8 @@ export function CiChip({ view }: { view: CiView }) {
   return (
     <details className="ci-chip-wrap">
       <summary className={`ci-chip state-${chip.state}`} title="CI checks for HEAD">
-        <span aria-hidden="true">{CHIP_ICON[chip.state]}</span> CI {chip.text}
+        <span aria-hidden="true">{CHIP_ICON[chip.state]}</span> {chip.text}
+        <ChevronDown size={12} aria-hidden />
       </summary>
       <div className="ci-popover">
         {status.kind === 'error' && <p className="error">{status.message}</p>}
@@ -75,7 +78,7 @@ export function CiChip({ view }: { view: CiView }) {
             </p>
             {runs.length === 0 ? <p className="muted">No check runs reported for this commit.</p> : <ul className="ci-runs">{runs.map((run) => <RunRow key={run.id} run={run} />)}</ul>}
             {elsewhere.length > 0 && (
-              <div className="stack" style={{ gap: '0.35rem' }}>
+              <div className="stack ci-elsewhere">
                 <h3>Annotations outside the changed files ({elsewhere.length})</h3>
                 {elsewhere.map((annotation, index) => (
                   <CiAnnotationCard key={index} annotation={annotation} run={view.runs.get(annotation.checkRunId)} showWhere />

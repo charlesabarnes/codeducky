@@ -1,11 +1,24 @@
 import { useLiveQuery } from 'dexie-react-hooks'
+import {
+  Ban,
+  Copy,
+  KeyRound,
+  Laptop,
+  LogIn,
+  LogOut,
+  RefreshCw,
+  RotateCcw,
+  Trash2,
+} from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { db } from '../../db/db'
 import { syncController, useSyncState } from '../../sync/client'
 import type { SignInResult, TokenSummary } from '../../sync/controller'
 import { listRejected } from '../../sync/rejected'
 import { syncSummary } from '../../sync/summary'
+import { Panel } from '../../ui/Panel'
 import { ChannelSettings } from '../claude/ChannelSettings'
+import { SYNC_ICONS } from './syncIcons'
 import { ConnectClaudeCode } from './ConnectClaudeCode'
 import { PrePushGate } from './PrePushGate'
 import './sync.css'
@@ -30,18 +43,15 @@ export function ServerSection() {
   const [tokensVersion, setTokensVersion] = useState(0)
   return (
     <>
-      <section className="sync-section stack" id="sync">
-        <div>
-          <h2>Sync server</h2>
-          <p className="muted">
-            Repos, sessions, notes, checklists and viewed files sync between your devices through the Skelbert server. The
-            GitHub token and these settings never leave this browser.
-          </p>
-        </div>
+      <Panel icon={RefreshCw} title="sync server" id="sync">
+        <p>
+          Repos, sessions, notes, checklists and viewed files sync between your devices through the Skelbert server. The GitHub
+          token and these settings never leave this browser.
+        </p>
         {signedIn ? <SignedIn /> : <SignInForm expired={state.auth === 'expired'} />}
         {state.rejected > 0 && <RejectedList />}
         {signedIn && <Tokens version={tokensVersion} />}
-      </section>
+      </Panel>
       <ConnectClaudeCode signedIn={signedIn} onMinted={() => setTokensVersion((v) => v + 1)} />
       <PrePushGate signedIn={signedIn} onMinted={() => setTokensVersion((v) => v + 1)} />
       <ChannelSettings signedIn={signedIn} onMinted={() => setTokensVersion((v) => v + 1)} />
@@ -69,7 +79,7 @@ function SignInForm({ expired }: { expired: boolean }) {
     <form className="stack" onSubmit={submit}>
       {expired && <p className="error">This device's sign-in was revoked or expired. Sign in again to resume syncing.</p>}
       <label className="field">
-        <span>Passphrase</span>
+        <span>passphrase</span>
         <input
           type="password"
           value={passphrase}
@@ -79,13 +89,14 @@ function SignInForm({ expired }: { expired: boolean }) {
         />
       </label>
       <label className="field">
-        <span>Device name</span>
+        <span>device name</span>
         <input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
-        <small className="muted">Shown in the token list, so you can revoke this device later.</small>
+        <small>Shown in the token list, so you can revoke this device later.</small>
       </label>
       <div className="row">
         <button type="submit" disabled={busy || !passphrase}>
-          {busy ? 'Signing in…' : 'Sign in'}
+          <LogIn size={13} aria-hidden />
+          {busy ? 'signing in…' : 'sign in'}
         </button>
         {error && <span className="error">{error}</span>}
       </div>
@@ -96,24 +107,31 @@ function SignInForm({ expired }: { expired: boolean }) {
 function SignedIn() {
   const state = useSyncState()
   const summary = syncSummary(state)
+  const Icon = SYNC_ICONS[summary.tone]
   const signOut = () => {
     const unsent = state.pending > 0 ? `\n\n${state.pending} change(s) have not uploaded yet. They stay on this device and upload when you sign in again.` : ''
     if (window.confirm(`Sign out of the sync server?${unsent}`)) void syncController.signOut()
   }
   return (
-    <div className="stack">
-      <p>
-        Signed in as <strong>{state.deviceName}</strong>. <span className={summary.tone === 'error' ? 'error' : 'muted'}>{summary.label}</span>
-        {summary.detail && <span className="muted"> · {summary.detail}</span>}
-      </p>
-      <div className="row">
-        <button type="button" className="secondary" onClick={() => void syncController.sync()} disabled={state.status === 'syncing'}>
-          Sync now
-        </button>
-        <button type="button" className="secondary" onClick={signOut}>
-          Sign out
-        </button>
-      </div>
+    <div className="row sync-status">
+      <span className="status-item">
+        <Laptop size={13} aria-hidden className="muted" />
+        {state.deviceName}
+      </span>
+      <span className={`status-item sync-tone ${summary.tone}`}>
+        <Icon size={13} aria-hidden />
+        {summary.label.toLowerCase()}
+      </span>
+      {summary.detail && <span className="muted">· {summary.detail}</span>}
+      <span className="spacer" />
+      <button type="button" className="secondary" onClick={() => void syncController.sync()} disabled={state.status === 'syncing'}>
+        <RefreshCw size={13} aria-hidden />
+        sync now
+      </button>
+      <button type="button" className="secondary" onClick={signOut}>
+        <LogOut size={13} aria-hidden />
+        sign out
+      </button>
     </div>
   )
 }
@@ -121,9 +139,9 @@ function SignedIn() {
 function RejectedList() {
   const items = useLiveQuery(() => listRejected(db), []) ?? []
   return (
-    <div className="stack">
-      <h3>Changes the server refused</h3>
-      <p className="muted">These stay on this device. Retry after fixing the cause, or discard this device's version.</p>
+    <div className="sub-section">
+      <h3>changes the server refused</h3>
+      <p>These stay on this device. Retry after fixing the cause, or discard this device's version.</p>
       <ul className="stack">
         {items.map((item) => (
           <li key={item.key} className="row">
@@ -132,14 +150,16 @@ function RejectedList() {
             </span>
             <span className="spacer" />
             <button type="button" className="link" onClick={() => void syncController.retryRejected(item.key)}>
-              Retry
+              <RotateCcw size={12} aria-hidden />
+              retry
             </button>
             <button
               type="button"
               className="link danger"
               onClick={() => window.confirm('Discard this device\'s version?') && void syncController.discardRejected(item.key)}
             >
-              Discard
+              <Trash2 size={12} aria-hidden />
+              discard
             </button>
           </li>
         ))}
@@ -204,21 +224,21 @@ function Tokens({ version: outside }: { version: number }) {
   }
 
   return (
-    <div className="stack">
-      <h3>Access tokens</h3>
-      <p className="muted">
+    <div className="sub-section">
+      <h3>access tokens</h3>
+      <p>
         Each signed-in device has one. Create a named token for tools such as Claude Code; it can read and write your
         review data but cannot manage tokens. OAuth entries are MCP clients you approved, such as claude.ai connectors.
       </p>
       {error && <p className="error">{error}</p>}
       {tokens && (
-        <table className="token-table">
+        <table className="data-table token-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Type</th>
-              <th>Created</th>
-              <th>Last used</th>
+              <th>name</th>
+              <th>type</th>
+              <th>created</th>
+              <th>last used</th>
               <th />
             </tr>
           </thead>
@@ -229,12 +249,13 @@ function Tokens({ version: outside }: { version: number }) {
                   {token.name}
                   {token.current && <span className="muted"> (this device)</span>}
                 </td>
-                <td>{KIND_LABELS[token.kind]}</td>
-                <td>{formatTime(token.createdAt)}</td>
-                <td>{formatTime(token.lastUsedAt)}</td>
-                <td>
+                <td className="muted">{KIND_LABELS[token.kind]}</td>
+                <td className="muted">{formatTime(token.createdAt)}</td>
+                <td className="muted">{formatTime(token.lastUsedAt)}</td>
+                <td className="num">
                   <button type="button" className="link danger" onClick={() => void revoke(token)}>
-                    Revoke
+                    <Ban size={12} aria-hidden />
+                    revoke
                   </button>
                 </td>
               </tr>
@@ -245,7 +266,8 @@ function Tokens({ version: outside }: { version: number }) {
       <form className="row" onSubmit={mint}>
         <input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} aria-label="Token name" />
         <button type="submit" className="secondary" disabled={!name.trim()}>
-          Create token
+          <KeyRound size={13} aria-hidden />
+          create token
         </button>
       </form>
       {minted && (
@@ -253,13 +275,14 @@ function Tokens({ version: outside }: { version: number }) {
           <p>
             Token for <strong>{minted.name}</strong>. Copy it now; it is not shown again.
           </p>
-          <code className="mono minted-token">{minted.token}</code>
+          <code className="copy-value minted-token">{minted.token}</code>
           <div className="row">
             <button type="button" className="secondary" onClick={() => void copy()}>
-              {copied ? 'Copied' : 'Copy'}
+              <Copy size={13} aria-hidden />
+              {copied ? 'copied' : 'copy'}
             </button>
             <button type="button" className="link" onClick={() => setMinted(null)}>
-              Done
+              done
             </button>
           </div>
         </div>

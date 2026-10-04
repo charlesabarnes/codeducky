@@ -1,3 +1,4 @@
+import { ExternalLink, Link2 } from 'lucide-react'
 import { useState } from 'react'
 import { githubPrUrl, prPath, type PullRef } from '../../../shared/links'
 
@@ -18,10 +19,12 @@ export function PrLinks({ pull, compact }: { pull: PullRef; compact?: boolean })
   return (
     <span className="pr-links row" onClick={(event) => event.stopPropagation()}>
       <button type="button" className="link" onClick={copy} title={skelbertPrUrl(pull)} aria-live="polite">
-        {copied ? 'Copied' : compact ? 'Copy link' : 'Copy Skelbert link'}
+        <Link2 size={12} aria-hidden />
+        {copied ? 'copied' : compact ? 'copy link' : 'copy skelbert link'}
       </button>
-      <a href={githubPrUrl(pull)} target="_blank" rel="noreferrer">
-        {compact ? 'GitHub' : 'Open on GitHub'}
+      <a href={githubPrUrl(pull)} target="_blank" rel="noreferrer" className="icon-link">
+        {compact ? 'github' : 'open on github'}
+        <ExternalLink size={11} aria-hidden />
       </a>
     </span>
   )

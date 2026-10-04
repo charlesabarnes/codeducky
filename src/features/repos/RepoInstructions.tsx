@@ -1,8 +1,10 @@
+import { Save, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import { MAX_INSTRUCTIONS, repoInstructions } from '../../../shared/instructions'
 import { db } from '../../db/db'
 import { saveRepoInstructions } from '../../db/repos'
 import type { Repo } from '../../db/schema'
+import { Panel } from '../../ui/Panel'
 
 /** Free-text review instructions for this repo; they sync and reach Claude through the MCP review prompt. */
 export function RepoInstructions({ repo }: { repo: Repo & { id: string } }) {
@@ -17,11 +19,10 @@ export function RepoInstructions({ repo }: { repo: Repo & { id: string } }) {
   }
 
   return (
-    <section className="repo-instructions stack" style={{ gap: '0.4rem' }}>
-      <h2>Review instructions</h2>
-      <p className="muted">
-        Claude reads these through <code className="mono">/mcp__skelbert__review</code> and{' '}
-        <code className="mono">get_review_context</code>, e.g. what to skip or conventions this repo follows.
+    <Panel icon={Sparkles} title="review instructions" className="repo-instructions">
+      <p>
+        Claude reads these through <code>/mcp__skelbert__review</code> and <code>get_review_context</code>, e.g. what to skip or
+        conventions this repo follows.
       </p>
       <textarea
         rows={5}
@@ -33,14 +34,15 @@ export function RepoInstructions({ repo }: { repo: Repo & { id: string } }) {
       />
       <div className="row">
         <button type="button" disabled={!dirty} onClick={() => void save()}>
-          Save instructions
+          <Save size={13} aria-hidden />
+          save instructions
         </button>
         {dirty && (
           <button type="button" className="secondary" onClick={() => setDraft(null)}>
-            Discard
+            discard
           </button>
         )}
       </div>
-    </section>
+    </Panel>
   )
 }

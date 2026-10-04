@@ -13,8 +13,8 @@ export default defineConfig({
         name: 'Skelbert',
         short_name: 'Skelbert',
         description: 'Review your own changes before you push them.',
-        theme_color: '#1f2430',
-        background_color: '#1f2430',
+        theme_color: '#0f0d0a',
+        background_color: '#0f0d0a',
         display: 'standalone',
         start_url: '/',
         icons: [

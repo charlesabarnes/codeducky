@@ -1,17 +1,21 @@
 .claude-actions {
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.claude-actions > .stack,
+.claude-menu[open] {
+  flex-basis: 100%;
 }
 
 .claude-actions .button {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.85rem;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg-subtle);
+  gap: 6px;
+  padding: 1px 10px;
+  border: 1px solid var(--line);
+  background: transparent;
   color: var(--fg);
   text-decoration: none;
   cursor: pointer;
@@ -38,14 +42,13 @@
 
 /* In-flow rather than floating: the sidebar scrolls, and a floating panel would be clipped by it. */
 .claude-popover {
-  margin-top: 0.4rem;
+  margin-top: 6px;
   min-width: 0;
   max-height: 70vh;
   overflow: auto;
-  padding: 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-subtle);
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
   gap: 0.6rem;
   overflow-wrap: anywhere;
 }
@@ -56,22 +59,14 @@
 }
 
 .claude-popover textarea {
-  font: inherit;
-  width: 100%;
-  padding: 0.35rem 0.5rem;
-  border-radius: 6px;
-  border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--fg);
-  resize: vertical;
 }
 
 .claude-hint {
-  gap: 0.35rem;
-  padding: 0.6rem 0.75rem;
-  border-radius: 6px;
+  gap: 6px;
+  padding: 8px 10px;
   background: var(--gap-bg);
-  font-size: 13px;
+  font: 13px/1.5 var(--font-sans);
 }
 
 .claude-hint ul {
@@ -87,13 +82,12 @@
   flex-direction: column;
   gap: 0.1rem;
   padding: 0.45rem 0.6rem;
-  border-radius: 6px;
   color: var(--fg);
   text-decoration: none;
 }
 
 a.claude-menu-item:hover {
-  background: var(--bg-subtle);
+  background: var(--bg-2);
 }
 
 .claude-menu-item.stack {
@@ -112,18 +106,25 @@ a.claude-menu-item:hover {
 
 .claude-sessions legend,
 .claude-kinds legend {
-  padding: 0;
-  margin-bottom: 0.2rem;
-  font-weight: 600;
   width: 100%;
+  margin-bottom: 2px;
+  padding: 0;
+  color: var(--fg-2);
+}
+
+.claude-sessions label,
+.claude-kinds label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  cursor: pointer;
 }
 
 .claude-dot {
   display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  background: var(--fg-muted);
+  width: 8px;
+  height: 8px;
+  background: var(--fg-2);
   opacity: 0.6;
 }
 
@@ -141,15 +142,13 @@ a.claude-menu-item:hover {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  font-size: 13px;
 }
 
 .claude-chip {
-  font-size: 11px;
-  padding: 0 0.45rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  color: var(--fg-muted);
+  line-height: 16px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  color: var(--fg-2);
   white-space: nowrap;
 }
 
@@ -176,16 +175,15 @@ a.claude-menu-item:hover {
   list-style: none;
   margin: 0;
   padding: 0.5rem 0 0;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--line);
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  font-size: 13px;
 }
 
 .claude-task-message {
   margin: 0.15rem 0 0;
-  color: var(--fg-muted);
+  color: var(--fg-2);
   white-space: pre-wrap;
 }
 
@@ -193,9 +191,7 @@ a.claude-menu-item:hover {
   gap: 0.4rem;
   padding: 0.6rem 0.75rem;
   border: 1px solid var(--mod-fg);
-  border-radius: 6px;
-  background: var(--bg-subtle);
-  font-size: 13px;
+  background: var(--bg-2);
 }
 
 .claude-permission p {
@@ -209,7 +205,6 @@ a.claude-menu-item:hover {
   white-space: pre-wrap;
   word-break: break-word;
   padding: 0.4rem 0.5rem;
-  border-radius: 4px;
   background: var(--bg);
 }
 
@@ -218,10 +213,12 @@ a.claude-menu-item:hover {
 }
 
 .channel-preview-note {
-  padding: 0.6rem 0.75rem;
-  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
   border: 1px solid var(--mod-fg);
-  font-size: 13px;
+  font: 13px/1.5 var(--font-sans);
 }
 
 .channel-preview-note p,

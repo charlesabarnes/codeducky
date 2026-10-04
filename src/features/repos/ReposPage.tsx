@@ -1,10 +1,15 @@
 import { useLiveQuery } from 'dexie-react-hooks'
+import { Folder, FolderGit2, FolderOpen } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { db } from '../../db/db'
 import { supportsFileSystemAccess } from '../../fs/permission'
 import { openRepoFolder } from './openRepoFolder'
+import { StatusBar } from '../../app/chrome'
 import { repoPath } from '../../app/paths'
+import { repoLabel } from '../../db/repos'
+import { GithubIcon } from '../../ui/GithubIcon'
+import { PageHeader } from '../../ui/PageHeader'
 
 export function ReposPage() {
   const navigate = useNavigate()
@@ -27,14 +32,19 @@ export function ReposPage() {
 
   return (
     <section className="page narrow stack">
-      <div>
-        <h1>Repos</h1>
-        <p className="muted">Open a local checkout to review its working tree against a base branch. Access is read-only.</p>
-      </div>
+      <StatusBar mode="repos">
+        <span className="strong">
+          {repos?.length ?? 0} {repos?.length === 1 ? 'repo' : 'repos'}
+        </span>
+      </StatusBar>
+      <PageHeader icon={FolderGit2} title="repos">
+        <p>Open a local checkout to review its working tree against a base branch. Access is read-only.</p>
+      </PageHeader>
       {supportsFileSystemAccess() ? (
         <div>
           <button type="button" onClick={onOpen} disabled={opening}>
-            {opening ? 'Opening…' : 'Open repo folder'}
+            <FolderOpen size={13} aria-hidden />
+            {opening ? 'opening…' : 'open repo folder'}
           </button>
         </div>
       ) : (
@@ -42,19 +52,36 @@ export function ReposPage() {
       )}
       {error && <p className="error">{error}</p>}
       {repos && repos.length > 0 && (
-        <ul className="repo-list">
-          {repos.map((repo) => (
-            <li key={repo.id} className="card">
-              <Link to={repoPath(repo.id!)}>
-                <strong>{repo.owner ? `${repo.owner}/${repo.name}` : repo.name}</strong>
-              </Link>
-              <div className="muted">
-                {repo.folderName}
-                {repo.baseBranch && ` · base origin/${repo.baseBranch}`}
-              </div>
-            </li>
-          ))}
-        </ul>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th className="caret" />
+              <th>repo</th>
+              <th className="col-fixed">folder</th>
+              <th className="col-fixed">base</th>
+            </tr>
+          </thead>
+          <tbody>
+            {repos.map((repo) => {
+              const Icon = repo.owner ? GithubIcon : Folder
+              return (
+                <tr key={repo.id}>
+                  <td className="caret" />
+                  <td>
+                    <span className="cell-icon">
+                      <Icon size={13} aria-hidden />
+                      <Link className="repo-link" to={repoPath(repo.id!)}>
+                        {repoLabel(repo)}
+                      </Link>
+                    </span>
+                  </td>
+                  <td className="muted">{repo.folderName || '—'}</td>
+                  <td className={repo.baseBranch ? undefined : 'muted'}>{repo.baseBranch ? `origin/${repo.baseBranch}` : '—'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       )}
     </section>
   )

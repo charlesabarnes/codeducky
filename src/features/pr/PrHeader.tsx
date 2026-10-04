@@ -50,7 +50,7 @@ export function PrHeader({ snapshot, conversation, pendingReview }: PrHeaderProp
         <span>
           <strong>{pull.author}</strong> wants to merge into
         </span>
-        <span className="mono branch-pair" title="base ← head">
+        <span className="branch-pair" title="base ← head">
           {pull.baseRef} ← {pull.headRepo && pull.headRepo !== `${ref.owner}/${ref.name}` ? `${pull.headRepo.split('/')[0]}:` : ''}
           {pull.headRef}
         </span>

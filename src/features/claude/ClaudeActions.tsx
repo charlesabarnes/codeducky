@@ -1,9 +1,11 @@
+import { Bot, ChevronDown, Send } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { isFinished, matchSessions, MAX_TASK_NOTES, type ChannelTaskKind, type TaskNote } from '../../../shared/channel'
 import { channelClient, useChannel } from '../../channel/client'
 import { claudeDeepLink, customPrompt, linkPrompt, type LinkTarget } from '../../channel/deepLink'
 import type { Note, Repo, Session } from '../../db/schema'
+import { SeverityLabel } from '../notes/Severity'
 import { PermissionPrompt } from './PermissionPrompt'
 import { TaskList } from './TaskList'
 import './claude.css'
@@ -41,7 +43,9 @@ function OpenInClaude({ target }: { target: LinkTarget }) {
   return (
     <details className="claude-menu">
       <summary className="button secondary" title="Open a new Claude Code terminal session with a prompt typed in">
-        Open in Claude Code ▾
+        <Bot size={12} aria-hidden />
+        open in claude code
+        <ChevronDown size={12} aria-hidden />
       </summary>
       <div className="claude-popover stack" role="menu">
         {!hintSeen && (
@@ -57,8 +61,8 @@ function OpenInClaude({ target }: { target: LinkTarget }) {
                 The prompts call the Skelbert MCP tools, so <Link to="/settings#connect-claude-code">connect Claude Code</Link> first.
               </li>
             </ul>
-            <button type="button" className="link" onClick={dismiss}>
-              Got it
+            <button type="button" className="link accent" onClick={dismiss}>
+              got it
             </button>
           </div>
         )}
@@ -78,7 +82,7 @@ function OpenInClaude({ target }: { target: LinkTarget }) {
             aria-disabled={!custom.trim()}
             href={custom.trim() ? claudeDeepLink(target.repo, customPrompt(custom, target)) : undefined}
           >
-            Open with this prompt
+            open with this prompt
           </a>
         </div>
       </div>
@@ -146,7 +150,10 @@ function SendToClaude({ session, target, notes }: { session: Session; target: Li
   return (
     <details className="claude-menu">
       <summary className="button secondary" title="Send a task to a running Claude Code session (research preview)">
-        Send to Claude ▾{chip && <span className={`claude-chip state-${latest && !isFinished(latest.state) ? latest.state : 'idle'}`}>{chip}</span>}
+        <Send size={12} aria-hidden />
+        send to claude
+        <ChevronDown size={12} aria-hidden />
+        {chip && <span className={`claude-chip state-${latest && !isFinished(latest.state) ? latest.state : 'idle'}`}>{chip}</span>}
       </summary>
       <div className="claude-popover stack">
         <div className="row">
@@ -199,8 +206,8 @@ function SendToClaude({ session, target, notes }: { session: Session; target: Li
                         <li key={note.id}>
                           <label>
                             <input type="checkbox" checked={included.has(note.id!)} onChange={() => toggle(note.id!)} />{' '}
-                            <span className={`badge severity-${note.severity}`}>{note.severity}</span>{' '}
-                            <span className="mono">
+                            <SeverityLabel severity={note.severity} />{' '}
+                            <span>
                               {note.path}:{note.anchor.line}
                             </span>{' '}
                             {note.title ?? note.body.slice(0, 80)}
@@ -214,7 +221,8 @@ function SendToClaude({ session, target, notes }: { session: Session; target: Li
             )}
             <div className="row">
               <button type="button" disabled={!channelId || busy || (kind === 'custom' && !message.trim())} onClick={() => void send()}>
-                {busy ? 'Sending…' : 'Send'}
+                <Send size={13} aria-hidden />
+                {busy ? 'sending…' : 'send'}
               </button>
               {error && <span className="error">{error}</span>}
             </div>

@@ -1,28 +1,12 @@
 .status-renamed {
-  color: var(--moved-fg, #8250df);
+  color: var(--moved-fg);
 }
 
 .similarity {
-  font-family: ui-monospace, monospace;
-  font-size: 11px;
-}
-
-.order-toggle {
-  margin-left: auto;
-}
-
-.order-toggle button {
-  padding: 0.1rem 0.5rem;
-  font-size: 12px;
+  color: var(--fg-2);
 }
 
 .rename-from {
   font-weight: 400;
-  color: var(--fg-muted);
-}
-
-.toolbar-toggle[aria-pressed='true'] {
-  background: var(--accent);
-  color: var(--accent-fg);
-  border-color: var(--accent);
+  color: var(--fg-2);
 }

@@ -5,13 +5,13 @@ import { SuggestionActions } from './SuggestionActions'
 import { NoteBadges } from './NoteBadges'
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
-  { value: 'active', label: 'Open and suggested' },
-  { value: 'open', label: 'Open' },
-  { value: 'suggested', label: 'Suggestions' },
-  { value: 'resolved', label: 'Resolved' },
-  { value: 'possibly-resolved', label: 'Possibly resolved' },
-  { value: 'dismissed', label: 'Dismissed' },
-  { value: 'all', label: 'All statuses' },
+  { value: 'active', label: 'open and suggested' },
+  { value: 'open', label: 'open' },
+  { value: 'suggested', label: 'suggestions' },
+  { value: 'resolved', label: 'resolved' },
+  { value: 'possibly-resolved', label: 'possibly resolved' },
+  { value: 'dismissed', label: 'dismissed' },
+  { value: 'all', label: 'all statuses' },
 ]
 
 interface NotesPanelProps {
@@ -42,7 +42,7 @@ export function NotesPanel({ notes, selectedId, onSelect }: NotesPanelProps) {
           aria-label="Severity"
           onChange={(event) => setSeverity(event.target.value as NoteSeverity | 'all')}
         >
-          <option value="all">All severities</option>
+          <option value="all">all severities</option>
           {NOTE_SEVERITIES.map((option) => (
             <option key={option} value={option}>
               {option}
@@ -51,7 +51,7 @@ export function NotesPanel({ notes, selectedId, onSelect }: NotesPanelProps) {
         </select>
       </div>
       {shown.length === 0 ? (
-        <p className="muted" style={{ padding: '0 1rem' }}>
+        <p className="muted panel-message">
           {notes.length === 0 ? 'No notes yet. Click a line in the diff to add one.' : 'No notes match.'}
         </p>
       ) : (
@@ -59,7 +59,7 @@ export function NotesPanel({ notes, selectedId, onSelect }: NotesPanelProps) {
           {shown.map((note) => (
             <li key={note.id} className={note.status === 'suggested' ? 'suggested' : undefined}>
               <button type="button" aria-current={note.id === selectedId} onClick={() => onSelect(note)}>
-                <span className="row" style={{ gap: '0.25rem' }}>
+                <span className="note-tags">
                   <NoteBadges note={note} />
                 </span>
                 <span className="note-where mono">

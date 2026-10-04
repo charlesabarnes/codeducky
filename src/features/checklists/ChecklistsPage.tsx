@@ -1,15 +1,22 @@
 import { useLiveQuery } from 'dexie-react-hooks'
+import { Braces, Download, FileText, Folder, Globe, ListChecks, Pencil, Plus, Trash2, Upload } from 'lucide-react'
 import { useState } from 'react'
 import { createChecklist, deleteChecklist } from '../../db/checklists'
 import { db } from '../../db/db'
 import { repoLabel } from '../../db/repos'
 import type { Checklist, ChecklistScope } from '../../db/schema'
 import type { FileKind } from '../../fs/pickers'
+import { StatusBar, type StatusHint } from '../../app/chrome'
+import { GithubIcon } from '../../ui/GithubIcon'
+import { PageHeader } from '../../ui/PageHeader'
+import { Panel } from '../../ui/Panel'
 import { ChecklistEditor } from './ChecklistEditor'
+import { RequiredTag } from './RequiredTag'
 import { exportChecklists, importChecklistFile } from './checklistFiles'
 
 const scopeValue = (scope: ChecklistScope) => String(scope)
 const parseScope = (value: string): ChecklistScope => (value === 'global' ? 'global' : value)
+const EDIT_HINTS: StatusHint[] = [{ keys: '↵', label: 'new item' }]
 
 export function ChecklistsPage() {
   const data = useLiveQuery(async () => ({
@@ -59,14 +66,22 @@ export function ChecklistsPage() {
       .filter((group) => group.lists.length > 0),
   ]
 
+  const editingList = checklists.find((list) => list.id === editing)
+  const repoOf = (value: ChecklistScope) => (value === 'global' ? undefined : repos.find((candidate) => candidate.id === value))
+
   return (
     <section className="page narrow stack">
-      <div>
-        <h1>Checklists</h1>
-        <p className="muted">Global checklists apply to every repo. Repo checklists apply to that repo only.</p>
-      </div>
+      <StatusBar mode="checklists" hints={editingList ? EDIT_HINTS : undefined}>
+        <span className="strong">
+          {checklists.length} {checklists.length === 1 ? 'checklist' : 'checklists'}
+        </span>
+        {editingList && <span>editing {editingList.title}</span>}
+      </StatusBar>
+      <PageHeader icon={ListChecks} title="checklists">
+        <p>Global checklists apply to every repo. Repo checklists apply to that repo only.</p>
+      </PageHeader>
       <div className="row">
-        <select value={scopeValue(scope)} aria-label="Scope" onChange={(event) => setScope(parseScope(event.target.value))}>
+        <select className="scope-select" value={scopeValue(scope)} aria-label="Scope" onChange={(event) => setScope(parseScope(event.target.value))}>
           <option value="global">Global</option>
           {repos.map((repo) => (
             <option key={repo.id} value={repo.id}>
@@ -75,50 +90,56 @@ export function ChecklistsPage() {
           ))}
         </select>
         <button type="button" onClick={create}>
-          New checklist
+          <Plus size={13} aria-hidden />
+          new checklist
         </button>
         <button type="button" className="secondary" onClick={importFile}>
-          Import…
+          <Upload size={13} aria-hidden />
+          import…
         </button>
         {checklists.length > 0 && (
           <>
             <button type="button" className="secondary" onClick={() => exportAll('json')}>
-              Export all (JSON)
+              <Download size={13} aria-hidden />
+              export all (json)
             </button>
             <button type="button" className="secondary" onClick={() => exportAll('markdown')}>
-              Export all (markdown)
+              <Download size={13} aria-hidden />
+              export all (markdown)
             </button>
           </>
         )}
       </div>
       {message && <p className={message.error ? 'error' : 'ok'}>{message.text}</p>}
       {groups.map((group) => (
-        <section key={scopeValue(group.scope)} className="stack" style={{ gap: '0.75rem' }}>
-          <h2>{scopeName(group.scope)}</h2>
-          {group.lists.length === 0 && <p className="muted">None yet.</p>}
+        <Panel
+          key={scopeValue(group.scope)}
+          icon={group.scope === 'global' ? Globe : repoOf(group.scope)?.owner ? GithubIcon : Folder}
+          title={group.scope === 'global' ? 'global' : scopeName(group.scope)}
+        >
+          {group.lists.length === 0 && <p>None yet.</p>}
           {group.lists.map((list) =>
             editing === list.id ? (
-              <div key={list.id} className="card">
-                <ChecklistEditor checklist={list} onDone={() => setEditing(null)} />
-              </div>
+              <ChecklistEditor key={list.id} checklist={list} onDone={() => setEditing(null)} />
             ) : (
-              <article key={list.id} className="card stack" style={{ gap: '0.5rem' }}>
-                <div className="row">
+              <article key={list.id} className="checklist-card">
+                <div className="checklist-actions">
                   <strong>{list.title}</strong>
-                  {list.required && (
-                    <span className="badge" title="Unticked items block a push through the pre-push gate">
-                      required
-                    </span>
-                  )}
-                  <span className="muted">{list.items.length} items</span>
+                  {list.required && <RequiredTag />}
+                  <span className="muted">
+                    {list.items.length} {list.items.length === 1 ? 'item' : 'items'}
+                  </span>
                   <span className="spacer" />
                   <button type="button" className="link" onClick={() => setEditing(list.id!)}>
-                    Edit
+                    <Pencil size={12} aria-hidden />
+                    edit
                   </button>
                   <button type="button" className="link" onClick={() => exportOne(list, 'markdown')}>
+                    <FileText size={12} aria-hidden />
                     .md
                   </button>
                   <button type="button" className="link" onClick={() => exportOne(list, 'json')}>
+                    <Braces size={12} aria-hidden />
                     .json
                   </button>
                   <button
@@ -126,7 +147,8 @@ export function ChecklistsPage() {
                     className="link danger"
                     onClick={() => window.confirm(`Delete "${list.title}"?`) && deleteChecklist(db, list.id!)}
                   >
-                    Delete
+                    <Trash2 size={12} aria-hidden />
+                    delete
                   </button>
                 </div>
                 <ul className="checklist-preview">
@@ -137,7 +159,7 @@ export function ChecklistsPage() {
               </article>
             ),
           )}
-        </section>
+        </Panel>
       ))}
     </section>
   )

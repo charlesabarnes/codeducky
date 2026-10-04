@@ -1,3 +1,4 @@
+import { Keyboard } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { KeysContext, useKeys, type KeysApi } from './context'
 import { ShortcutDispatcher } from './dispatcher'
@@ -104,7 +105,8 @@ export function ShortcutsHint() {
   const { openHelp } = useKeys()
   return (
     <button type="button" className="keys-hint" onClick={openHelp} aria-keyshortcuts="?" title="Keyboard shortcuts">
-      <kbd>?</kbd> Shortcuts
+      <Keyboard size={14} aria-hidden />
+      keys <span className="key">?</span>
     </button>
   )
 }

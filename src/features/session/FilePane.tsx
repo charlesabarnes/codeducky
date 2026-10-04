@@ -1,3 +1,4 @@
+import { Columns2, Pilcrow, Rows2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Note } from '../../db/schema'
 import type { ViewMode } from '../../diff/DiffTable'
@@ -17,6 +18,7 @@ import { useNoteAnnotations } from '../notes/useNoteAnnotations'
 import type { ReviewThread } from '../../github/threads'
 import { ThreadCard, type ThreadActions } from '../pr/ThreadCard'
 import { useThreadAnnotations } from '../pr/useThreadAnnotations'
+import { SplitPath } from './FileList'
 import { renameLabel } from './renames'
 import type { DiffSource } from './source'
 import { useFileContents } from './useFileContents'
@@ -151,21 +153,23 @@ export function FilePane(props: FilePaneProps) {
   return (
     <>
       <div className="diff-toolbar" data-sticky-header>
-        <span className="path mono" title={change.oldPath ? `Renamed from ${change.oldPath}` : undefined}>
-          {change.oldPath ? renameLabel(change.oldPath, change.path) : change.path}
+        <span className="path" title={change.oldPath ? `Renamed from ${change.oldPath}` : undefined}>
+          {change.oldPath ? renameLabel(change.oldPath, change.path) : <SplitPath path={change.path} />}
           {change.oldPath && (
             <span className="rename-from"> · renamed{change.similarity !== undefined && `, ${change.similarity}% similar`}</span>
           )}
         </span>
         <button
           type="button"
-          className="secondary toolbar-toggle"
+          className="toolbar-toggle"
           aria-pressed={ignoreWhitespace}
           aria-keyshortcuts="w"
+          aria-label="Hide whitespace"
           title={withShortcut(ignoreWhitespace ? 'Show whitespace changes' : 'Hide whitespace changes', 'view.whitespace')}
           onClick={() => onIgnoreWhitespaceChange(!ignoreWhitespace)}
         >
-          Hide whitespace
+          <Pilcrow size={13} aria-hidden />
+          {ignoreWhitespace ? 'whitespace hidden' : 'whitespace'} <span className="key">w</span>
         </button>
         <label
           className="viewed-toggle"
@@ -175,20 +179,19 @@ export function FilePane(props: FilePaneProps) {
               : withShortcut(branchWide ? 'Viewed' : 'Viewed (per file for the whole branch)', 'file.viewed')
           }
         >
-          <input type="checkbox" checked={viewed} onChange={onToggleViewed} disabled={viewedDisabled} aria-keyshortcuts="v" /> Viewed
+          <input type="checkbox" checked={viewed} onChange={onToggleViewed} disabled={viewedDisabled} aria-keyshortcuts="v" />
+          viewed <span className="key">v</span>
         </label>
-        <div className="segmented" role="group" aria-label="Diff layout" title={withShortcut('Switch layout', 'view.mode')}>
-          {(['unified', 'split'] as const).map((option) => (
-            <button
-              key={option}
-              type="button"
-              aria-pressed={mode === option}
-              aria-keyshortcuts="s"
-              onClick={() => onModeChange(option)}
-            >
-              {option === 'unified' ? 'Unified' : 'Split'}
-            </button>
-          ))}
+        <div className="layout-toggle" title={withShortcut('Switch layout', 'view.mode')}>
+          <div className="segmented inverted" role="group" aria-label="Diff layout">
+            {(['unified', 'split'] as const).map((option) => (
+              <button key={option} type="button" aria-pressed={mode === option} aria-keyshortcuts="s" onClick={() => onModeChange(option)}>
+                {option === 'unified' ? <Rows2 size={12} aria-hidden /> : <Columns2 size={12} aria-hidden />}
+                {option}
+              </button>
+            ))}
+          </div>
+          <span className="key">&nbsp;s</span>
         </div>
       </div>
       <LostNotes notes={lost} heading="Possibly resolved: the anchored line is gone" focusedId={focusedId} />
@@ -219,8 +222,8 @@ export function FilePane(props: FilePaneProps) {
       {collapsed ? (
         <p className="diff-notice muted">
           Marked as viewed.{' '}
-          <button type="button" className="link" onClick={() => setExpandedKey(paneKey)} title="Show diff (j)">
-            Show diff
+          <button type="button" className="link accent" onClick={() => setExpandedKey(paneKey)} title="Show diff (j)">
+            show diff
           </button>
         </p>
       ) : (
@@ -250,7 +253,9 @@ export function OrphanPane({ path, notes, focus }: { path: string; notes: Note[]
   return (
     <>
       <div className="diff-toolbar">
-        <span className="path mono">{path}</span>
+        <span className="path">
+          <SplitPath path={path} />
+        </span>
       </div>
       <p className="diff-notice muted">This file no longer differs from the base.</p>
       <LostNotes

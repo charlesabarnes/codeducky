@@ -1,3 +1,4 @@
+import { CircleCheck, PlugZap } from 'lucide-react'
 import { useState } from 'react'
 import { createGitHubClient } from '../../github/client'
 import { errorMessage } from '../../github/errors'
@@ -25,21 +26,25 @@ export function TokenTest({ token }: { token: string }) {
     <div className="token-test">
       <div className="row">
         <button type="button" className="secondary" disabled={!token.trim() || current.status === 'testing'} onClick={test}>
-          {current.status === 'testing' ? 'Testing…' : 'Test token'}
+          <PlugZap size={13} aria-hidden />
+          {current.status === 'testing' ? 'testing…' : 'test token'}
         </button>
         {current.status === 'ok' && (
-          <span className="ok">
-            Signed in as <strong>{current.viewer.login}</strong>
-            {current.viewer.name ? ` (${current.viewer.name})` : ''}
-          </span>
+          <>
+            <span className="ok">
+              <CircleCheck size={13} aria-hidden />
+              <span>
+                Signed in as <strong>{current.viewer.login}</strong>
+                {current.viewer.name ? ` (${current.viewer.name})` : ''}
+              </span>
+            </span>
+            <span className="muted">
+              · {current.viewer.tokenExpiresAt ? `Token expires ${current.viewer.tokenExpiresAt}.` : 'GitHub reports no expiry for this token.'}
+            </span>
+          </>
         )}
       </div>
-      {current.status === 'ok' && (
-        <small className="muted">
-          {current.viewer.tokenExpiresAt ? `Token expires ${current.viewer.tokenExpiresAt}.` : 'GitHub reports no expiry for this token.'}
-          {current.viewer.scopes && ` Scopes: ${current.viewer.scopes.join(', ') || 'none'}.`}
-        </small>
-      )}
+      {current.status === 'ok' && current.viewer.scopes && <small className="muted">Scopes: {current.viewer.scopes.join(', ') || 'none'}.</small>}
       {current.status === 'error' && <small className="error">{current.message}</small>}
     </div>
   )

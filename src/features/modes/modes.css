@@ -1,37 +1,45 @@
 .mode-bar {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  padding: 0.5rem 1rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-subtle);
+  gap: 6px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
 }
 
 .mode-row {
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 12px;
 }
 
 .mode-bar .segmented > button,
 .commit-picker > button {
-  padding: 0.2rem 0.65rem;
-  font-size: 13px;
+  gap: 5px;
+  padding: 0 8px;
+  line-height: 20px;
 }
 
 .commit-picker > button {
-  border-radius: 0 6px 6px 0;
-  background: var(--bg);
-  color: var(--fg);
-  border: 1px solid var(--border);
   max-width: 26rem;
-  display: inline-flex;
-  gap: 0.25rem;
+  border: none;
+  border-left: 1px solid var(--line);
+  background: none;
+  color: var(--fg-2);
+  font-weight: 400;
+}
+
+.commit-picker > button:hover:not(:disabled) {
+  filter: none;
+  color: var(--fg);
 }
 
 .commit-picker > button[aria-pressed='true'] {
-  background: var(--accent);
-  color: var(--accent-fg);
-  border-color: var(--accent);
+  background: var(--bg-3);
+  color: var(--fg);
+}
+
+.mode-bar .segmented > button + button {
+  border-left: 1px solid var(--line);
 }
 
 .commit-picker-label {
@@ -41,13 +49,8 @@
 }
 
 .mode-count {
-  display: inline-block;
-  margin-left: 0.35rem;
-  padding: 0 0.35rem;
-  border-radius: 999px;
-  font-size: 11px;
-  background: var(--mod-fg);
-  color: var(--bg);
+  margin-left: 2px;
+  color: var(--mod-fg);
 }
 
 .commit-picker {
@@ -62,13 +65,12 @@
   width: min(36rem, 70vw);
   max-height: 60vh;
   overflow: auto;
+  box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
   padding: 0.25rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 1px solid var(--line);
   background: var(--bg);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
 }
 
 .commit-option {
@@ -80,10 +82,9 @@
   text-align: left;
   padding: 0.35rem 0.5rem;
   border: 0;
-  border-radius: 6px;
   background: transparent;
   color: var(--fg);
-  font-size: 13px;
+  font-weight: 400;
 }
 
 .commit-option.all {
@@ -92,7 +93,7 @@
 }
 
 .commit-option:hover {
-  background: var(--bg-muted);
+  background: var(--bg-3);
 }
 
 .commit-option[aria-selected='true'] {
@@ -117,12 +118,10 @@
 
 .commit-option .commit-by {
   grid-area: by;
-  font-size: 12px;
 }
 
 .commit-note {
   margin: 0.35rem 0.5rem;
-  font-size: 12px;
 }
 
 .commit-header .commit-sha {
@@ -136,22 +135,19 @@
 .commit-body {
   margin: 0.25rem 0 0;
   white-space: pre-wrap;
-  font-size: 12px;
-  color: var(--fg-muted);
+  color: var(--fg-2);
 }
 
 .commit-meta,
 .since-summary {
   margin: 0;
-  font-size: 12px;
 }
 
 .file-badge {
-  font-size: 10px;
-  padding: 0 0.3rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  color: var(--fg-muted);
+  padding: 0 4px;
+  line-height: 14px;
+  border: 1px solid var(--line);
+  color: var(--fg-2);
   white-space: nowrap;
 }
 
@@ -171,5 +167,5 @@
 }
 
 .elsewhere-notes h3 {
-  color: var(--fg-muted);
+  color: var(--fg-2);
 }
