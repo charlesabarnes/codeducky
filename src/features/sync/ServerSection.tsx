@@ -5,6 +5,7 @@ import { syncController, useSyncState } from '../../sync/client'
 import type { SignInResult, TokenSummary } from '../../sync/controller'
 import { listRejected } from '../../sync/rejected'
 import { syncSummary } from '../../sync/summary'
+import { ChannelSettings } from '../claude/ChannelSettings'
 import { ConnectClaudeCode } from './ConnectClaudeCode'
 import { PrePushGate } from './PrePushGate'
 import './sync.css'
@@ -43,6 +44,7 @@ export function ServerSection() {
       </section>
       <ConnectClaudeCode signedIn={signedIn} onMinted={() => setTokensVersion((v) => v + 1)} />
       <PrePushGate signedIn={signedIn} onMinted={() => setTokensVersion((v) => v + 1)} />
+      <ChannelSettings signedIn={signedIn} onMinted={() => setTokensVersion((v) => v + 1)} />
     </>
   )
 }

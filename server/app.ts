@@ -8,6 +8,8 @@ import { createOAuthStore } from './auth/oauth/store'
 import { createFailureLimiter, type FailureLimiter } from './auth/passphrase'
 import { authRoutes } from './auth/routes'
 import { createTokenStore } from './auth/tokens'
+import { createChannelRegistry, type ChannelRegistry } from './channel/registry'
+import { channelRoutes } from './channel/routes'
 import { gateApi, gateScripts } from './gate/routes'
 import { logErrors, requestLog, stdoutSink, type LogSink } from './log'
 import { mcpRoutes } from './mcp/route'
@@ -25,6 +27,8 @@ export interface AppDeps {
   registrationLimiter?: FailureLimiter
   /** The public origin, when the proxy in front does not forward the host (SKELBERT_PUBLIC_URL). */
   publicUrl?: string
+  /** Connected Claude Code channel sessions; tests pass one with a fake clock. */
+  channel?: ChannelRegistry
 }
 
 const MAX_SYNC_BODY = 16 * 1024 * 1024
@@ -38,11 +42,14 @@ export function createApp({
   limiter = createFailureLimiter({ perClient: 10, global: 100, windowMs: 15 * 60_000 }),
   registrationLimiter,
   publicUrl,
+  channel,
 }: AppDeps) {
   const app = new Hono()
   const api = new Hono<AuthEnv>()
   const tokens = createTokenStore(db, now)
   const oauth = createOAuthStore(db, tokens, now)
+  const registry = channel ?? createChannelRegistry({ now })
+  if (!channel) setInterval(() => registry.sweep(), 15_000).unref()
 
   api.use('*', requestLog(log))
   api.onError(logErrors(log))
@@ -61,6 +68,7 @@ export function createApp({
   )
 
   api.route('/gate', gateApi({ db, tokens, publicUrl }))
+  api.route('/channel', channelRoutes({ db, tokens, registry, publicUrl }))
 
   api.all('*', (c) => c.json({ error: 'not_found' }, 404))
 
@@ -74,5 +82,5 @@ export function createApp({
   app.route('/api', api)
   app.route('/', server)
   if (webDist) app.use('*', serveWeb(webDist))
-  return { app, tokens, oauth }
+  return { app, tokens, oauth, channel: registry }
 }

@@ -1,0 +1,15 @@
+{
+  "name": "skelbert-channel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Claude Code channel plugin for Skelbert",
+  "scripts": {
+    "start": "bun server.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.0",
+    "zod": "^4.6.5"
+  }
+}

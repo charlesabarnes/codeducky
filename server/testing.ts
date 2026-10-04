@@ -11,11 +11,12 @@ export const PASSPHRASE = 'correct horse battery'
 export function makeApp(overrides: Partial<AppDeps> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'skelbert-server-'))
   const db = openDatabase(join(dir, 'test.db'))
-  const { app, tokens } = createApp({ db, passphrase: PASSPHRASE, log: silentSink, ...overrides })
+  const { app, tokens, channel } = createApp({ db, passphrase: PASSPHRASE, log: silentSink, ...overrides })
   return {
     app,
     db,
     tokens,
+    channel,
     cleanup: () => {
       db.close()
       rmSync(dir, { recursive: true, force: true })

@@ -1,0 +1,230 @@
+.claude-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.claude-actions .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--fg);
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  width: fit-content;
+}
+
+.claude-actions .button.disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.claude-menu > summary {
+  list-style: none;
+}
+
+.claude-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.claude-menu {
+  min-width: 0;
+}
+
+/* In-flow rather than floating: the sidebar scrolls, and a floating panel would be clipped by it. */
+.claude-popover {
+  margin-top: 0.4rem;
+  min-width: 0;
+  max-height: 70vh;
+  overflow: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  gap: 0.6rem;
+  overflow-wrap: anywhere;
+}
+
+.claude-popover p,
+.claude-popover ul {
+  margin: 0;
+}
+
+.claude-popover textarea {
+  font: inherit;
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  resize: vertical;
+}
+
+.claude-hint {
+  gap: 0.35rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 6px;
+  background: var(--gap-bg);
+  font-size: 13px;
+}
+
+.claude-hint ul {
+  padding-left: 1.1rem;
+}
+
+.claude-hint button {
+  align-self: flex-start;
+}
+
+.claude-menu-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+a.claude-menu-item:hover {
+  background: var(--bg-subtle);
+}
+
+.claude-menu-item.stack {
+  gap: 0.4rem;
+}
+
+.claude-sessions,
+.claude-kinds {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.claude-sessions legend,
+.claude-kinds legend {
+  padding: 0;
+  margin-bottom: 0.2rem;
+  font-weight: 600;
+  width: 100%;
+}
+
+.claude-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--fg-muted);
+  opacity: 0.6;
+}
+
+.claude-dot.on {
+  background: var(--add-fg);
+  opacity: 1;
+}
+
+.claude-notes {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  max-height: 12rem;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 13px;
+}
+
+.claude-chip {
+  font-size: 11px;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.claude-chip.state-acknowledged,
+.claude-chip.state-working,
+.claude-chip.state-delivered,
+.claude-chip.state-sent,
+.claude-chip.state-queued {
+  color: var(--mod-fg);
+  border-color: var(--mod-fg);
+}
+
+.claude-chip.state-done {
+  color: var(--add-fg);
+  border-color: var(--add-fg);
+}
+
+.claude-chip.state-failed {
+  color: var(--del-fg);
+  border-color: var(--del-fg);
+}
+
+.claude-tasks {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 0 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 13px;
+}
+
+.claude-task-message {
+  margin: 0.15rem 0 0;
+  color: var(--fg-muted);
+  white-space: pre-wrap;
+}
+
+.claude-permission {
+  gap: 0.4rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--mod-fg);
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  font-size: 13px;
+}
+
+.claude-permission p {
+  margin: 0;
+}
+
+.claude-preview {
+  margin: 0;
+  max-height: 10rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 0.4rem 0.5rem;
+  border-radius: 4px;
+  background: var(--bg);
+}
+
+.channel-steps h3 {
+  margin: 0;
+}
+
+.channel-preview-note {
+  padding: 0.6rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--mod-fg);
+  font-size: 13px;
+}
+
+.channel-preview-note p,
+.channel-preview-note ul {
+  margin: 0;
+}
