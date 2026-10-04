@@ -23,7 +23,7 @@ export function TaskList({ tasks, sessions }: { tasks: ChannelTaskView[]; sessio
             <span className={`claude-chip state-${task.state}`}>{STATE_LABELS[task.state]}</span>
             <span className="spacer" />
             <span className="muted" title={new Date(task.updatedAt).toLocaleString()}>
-              {sessions.find((s) => s.id === task.channelId)?.label ?? 'gone'} · {timeAgo(new Date(task.updatedAt).toISOString())}
+              {sessions.find((s) => s.id === task.channelId)?.label ?? 'session ended'} · {timeAgo(new Date(task.updatedAt).toISOString())}
             </span>
           </div>
           {task.message && <p className="claude-task-message">{task.message}</p>}

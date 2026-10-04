@@ -64,15 +64,14 @@ export function ChannelSettings({ signedIn, onMinted }: ChannelSettingsProps) {
         </div>
       </div>
 
-      <div className="channel-steps">
-        <ol>
-          <li className="stack" style={{ gap: '0.4rem' }}>
-            <strong>Add the marketplace and install the plugin</strong>
+      <div className="channel-steps stack">
+          <div className="stack" style={{ gap: '0.4rem' }}>
+            <h3>1. Add the marketplace and install the plugin</h3>
             <CopyField label="Add the marketplace (this repo; private, so git needs access to it)" value={marketplaceAddCommand()} />
             <CopyField label="Install the plugin" value={pluginInstallCommand()} />
-          </li>
-          <li className="stack" style={{ gap: '0.4rem' }}>
-            <strong>Give it a token and this server's URL</strong>
+          </div>
+          <div className="stack" style={{ gap: '0.4rem' }}>
+            <h3>2. Give it a token and this server's URL</h3>
             <p className="muted">
               It reads <span className="mono">SKELBERT_TOKEN</span>, else the Keychain item “skelbert” the pre-push gate uses; and{' '}
               <span className="mono">SKELBERT_URL</span>, else <span className="mono">git config skelbert.url</span>. If the gate is set up
@@ -91,24 +90,23 @@ export function ChannelSettings({ signedIn, onMinted }: ChannelSettingsProps) {
             )}
             <CopyField label="Store it in the Keychain (paste the token when asked)" value={keychainCommand()} />
             <CopyField label="Point it at this server" value={serverUrlCommand(origin)} />
-          </li>
-          <li className="stack" style={{ gap: '0.4rem' }}>
-            <strong>Connect the Skelbert MCP server</strong>
+          </div>
+          <div className="stack" style={{ gap: '0.4rem' }}>
+            <h3>3. Connect the Skelbert MCP server</h3>
             <p className="muted">
               Tasks use its tools (get_review_context, add_note, resolve_note). See <a href="#connect-claude-code">Connect Claude Code</a>{' '}
               above.
             </p>
-          </li>
-          <li className="stack" style={{ gap: '0.4rem' }}>
-            <strong>Start Claude Code in the repo with the channel</strong>
+          </div>
+          <div className="stack" style={{ gap: '0.4rem' }}>
+            <h3>4. Start Claude Code in the repo with the channel</h3>
             <CopyField label="Run in the repo's checkout, then choose “I am using this for local development”" value={startCommand()} />
             <p className="muted">
               <span className="mono">--allowedTools {STATUS_TOOL_ID}</span> lets Claude report status here without asking each time; drop it
               to approve those calls yourself. <span className="mono">--channels plugin:skelbert@skelbert</span> alone does not load it while
               it is off the allowlist.
             </p>
-          </li>
-        </ol>
+          </div>
       </div>
 
       <ConnectedSessions signedIn={signedIn} />

@@ -24,11 +24,9 @@ export function ClaudeActions({ session, repo, pr, notes }: ClaudeActionsProps) 
   const target: LinkTarget = { repo: `${repo.owner}/${repo.name}`, branch: pr?.headRef ?? session.branch, pr }
   return (
     <div className="claude-actions">
-      <div className="row">
-        <OpenInClaude target={target} />
-        <SendToClaude session={session} target={target} notes={notes} />
-      </div>
       <PendingPermissions sessionId={session.id!} target={target} />
+      <OpenInClaude target={target} />
+      <SendToClaude session={session} target={target} notes={notes} />
     </div>
   )
 }
@@ -181,7 +179,7 @@ function SendToClaude({ session, target, notes }: { session: Session; target: Li
                 </label>
               ))}
             </fieldset>
-            <fieldset className="claude-kinds row">
+            <fieldset className="claude-kinds">
               <legend>Task</legend>
               {(Object.keys(KIND_LABELS) as ChannelTaskKind[]).map((k) => (
                 <label key={k}>
@@ -222,13 +220,13 @@ function SendToClaude({ session, target, notes }: { session: Session; target: Li
             </div>
           </>
         )}
-        {tasks.length > 0 && <TaskList tasks={tasks.slice(0, 5)} sessions={state.sessions} />}
+        {tasks.length > 0 && <TaskList tasks={tasks.slice(0, 3)} sessions={state.sessions} />}
       </div>
     </details>
   )
 }
 
-/** Open permission prompts from Claude sessions working on this review, shown outside the menu. */
+/** Open permission prompts from Claude sessions working on this review, shown above the buttons. */
 function PendingPermissions({ sessionId, target }: { sessionId: string; target: LinkTarget }) {
   const { state } = useChannel()
   const taskIds = new Set(state.tasks.filter((t) => t.sessionId === sessionId).map((t) => t.id))

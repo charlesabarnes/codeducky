@@ -24,10 +24,6 @@
   pointer-events: none;
 }
 
-.claude-menu {
-  position: relative;
-}
-
 .claude-menu > summary {
   list-style: none;
 }
@@ -36,20 +32,22 @@
   display: none;
 }
 
+.claude-menu {
+  min-width: 0;
+}
+
+/* In-flow rather than floating: the sidebar scrolls, and a floating panel would be clipped by it. */
 .claude-popover {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 0.35rem);
-  left: 0;
-  width: min(30rem, 85vw);
-  max-height: 75vh;
+  margin-top: 0.4rem;
+  min-width: 0;
+  max-height: 70vh;
   overflow: auto;
   padding: 0.75rem;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--bg);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+  background: var(--bg-subtle);
   gap: 0.6rem;
+  overflow-wrap: anywhere;
 }
 
 .claude-popover p,
@@ -110,12 +108,6 @@ a.claude-menu-item:hover {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-}
-
-.claude-kinds {
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.9rem;
 }
 
 .claude-sessions legend,
@@ -221,12 +213,8 @@ a.claude-menu-item:hover {
   background: var(--bg);
 }
 
-.channel-steps ol {
+.channel-steps h3 {
   margin: 0;
-  padding-left: 1.2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
 }
 
 .channel-preview-note {
