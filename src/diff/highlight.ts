@@ -1,9 +1,9 @@
 import type { HighlighterCore, LanguageRegistration, ThemedToken } from 'shiki/core'
 
-export type ColorScheme = 'light' | 'dark'
 export type LineTokens = ThemedToken[][]
 
-const THEMES: Record<ColorScheme, string> = { light: 'github-light', dark: 'github-dark' }
+/** Token colours are CSS variables (--shiki-token-*, mapped in styles.css), so they follow the app theme. */
+const THEME = 'skelbert'
 const MAX_HIGHLIGHT_BYTES = 256 * 1024
 
 type LanguageLoader = () => Promise<{ default: LanguageRegistration[] }>
@@ -65,9 +65,9 @@ let highlighter: Promise<HighlighterCore> | null = null
 
 function loadHighlighter(): Promise<HighlighterCore> {
   highlighter ??= Promise.all([import('shiki/core'), import('shiki/engine/javascript')]).then(
-    ([{ createHighlighterCore }, { createJavaScriptRegexEngine }]) =>
+    ([{ createHighlighterCore, createCssVariablesTheme }, { createJavaScriptRegexEngine }]) =>
       createHighlighterCore({
-        themes: [import('@shikijs/themes/github-light'), import('@shikijs/themes/github-dark')],
+        themes: [createCssVariablesTheme({ name: THEME, variablePrefix: '--shiki-' })],
         langs: [],
         engine: createJavaScriptRegexEngine({ forgiving: true }),
       }),
@@ -75,11 +75,11 @@ function loadHighlighter(): Promise<HighlighterCore> {
   return highlighter
 }
 
-export async function highlightLines(text: string, path: string, scheme: ColorScheme): Promise<LineTokens | null> {
+export async function highlightLines(text: string, path: string): Promise<LineTokens | null> {
   const lang = languageFor(path)
   const loader = lang ? LANGUAGES[lang] : undefined
   if (!lang || !loader || text.length > MAX_HIGHLIGHT_BYTES) return null
   const core = await loadHighlighter()
   if (!core.getLoadedLanguages().includes(lang)) await core.loadLanguage(loader())
-  return core.codeToTokensBase(text, { lang, theme: THEMES[scheme] })
+  return core.codeToTokensBase(text, { lang, theme: THEME })
 }
