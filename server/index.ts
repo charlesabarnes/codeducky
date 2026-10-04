@@ -4,13 +4,14 @@ import { fakeGitHubProvider } from './auth/fakeGitHub'
 import { githubProvider } from './auth/github'
 import { loadConfig } from './config'
 import { openDatabase } from './db'
+import { stdoutSink } from './log'
 
 const config = loadConfig()
 const db = openDatabase(config.dbPath)
 if (!existsSync(config.webDist)) console.warn(`No built app at ${config.webDist}; serving the API only`)
 const { app } = createApp({
   db,
-  provider: config.github === 'fake' ? fakeGitHubProvider() : githubProvider(config.github),
+  provider: config.github === 'fake' ? fakeGitHubProvider() : githubProvider({ ...config.github, log: stdoutSink }),
   adminPassphrase: config.adminPassphrase,
   signups: config.signups,
   publicUrl: config.publicUrl,

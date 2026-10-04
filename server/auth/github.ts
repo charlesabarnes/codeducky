@@ -1,4 +1,5 @@
 import type { Hono } from 'hono'
+import { silentSink, type LogSink } from '../log'
 import type { GitHubIdentity } from '../users/store'
 
 export interface IdentityProvider {
@@ -16,6 +17,8 @@ export interface GitHubProviderOptions {
   clientSecret: string
   fetch?: typeof fetch
   timeoutMs?: number
+  /** Where a failed token revoke is reported; sign-in goes ahead regardless. */
+  log?: LogSink
 }
 
 const AUTHORIZE_URL = 'https://github.com/login/oauth/authorize'
@@ -46,7 +49,13 @@ function toIdentity(user: GitHubUser): GitHubIdentity {
  * Sign-in through a GitHub OAuth App with an empty scope: enough to read who signed in. The
  * access token is used once for /user, then revoked, and never stored or logged.
  */
-export function githubProvider({ clientId, clientSecret, fetch: fetchImpl = fetch, timeoutMs = 10_000 }: GitHubProviderOptions): IdentityProvider {
+export function githubProvider({
+  clientId,
+  clientSecret,
+  fetch: fetchImpl = fetch,
+  timeoutMs = 10_000,
+  log = silentSink,
+}: GitHubProviderOptions): IdentityProvider {
   const call = async (url: string, init: RequestInit): Promise<Response> => {
     try {
       return await fetchImpl(url, { ...init, signal: AbortSignal.timeout(timeoutMs) })
@@ -76,8 +85,9 @@ export function githubProvider({ clientId, clientSecret, fetch: fetchImpl = fetc
     return toIdentity((await res.json().catch(() => ({}))) as GitHubUser)
   }
 
+  /** Best effort, not retried: the token has no scope and expires on its own, but a failure is logged. */
   async function revoke(token: string): Promise<void> {
-    await call(`${API}/applications/${encodeURIComponent(clientId)}/token`, {
+    const res = await call(`${API}/applications/${encodeURIComponent(clientId)}/token`, {
       method: 'DELETE',
       headers: {
         Accept: 'application/vnd.github+json',
@@ -86,7 +96,10 @@ export function githubProvider({ clientId, clientSecret, fetch: fetchImpl = fetc
         'User-Agent': USER_AGENT,
       },
       body: JSON.stringify({ access_token: token }),
-    }).catch(() => undefined)
+    }).catch((error: unknown) => (error instanceof Error ? error.message : String(error)))
+    if (typeof res === 'string' || !res.ok) {
+      log({ level: 'warn', event: 'github_revoke_failed', error: typeof res === 'string' ? res : `GitHub answered ${res.status}` })
+    }
   }
 
   return {
