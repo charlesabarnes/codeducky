@@ -41,7 +41,8 @@ function keywords(text: string): Set<string> {
 
 /**
  * What keeps coming up in this repo's resolved notes: headlines that repeat, and the words that
- * appear in the most notes. Plain frequency counts; anything seen only once is left out.
+ * appear in the most notes. Plain frequency counts; anything seen only once is left out. Pure: it sees
+ * only the notes it is given, which come from one user's snapshot.
  */
 export function recurringPatterns(resolved: readonly NoteRecord[], limit = 10) {
   const byTitle = new Map<string, { title: string; notes: NoteRecord[] }>()

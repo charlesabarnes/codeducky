@@ -1,7 +1,7 @@
 import { githubPrUrl, prUrl } from '../../shared/links'
 import { repoLabel, sessionChecklists, type DataSnapshot, type NoteRecord, type SessionRecord } from './records'
 
-/** How notes and checklists look in tool results. */
+/** How notes and checklists look in tool results. Pure functions of one user's snapshot, with no database access. */
 
 export const iso = (ms: number) => new Date(ms).toISOString()
 
