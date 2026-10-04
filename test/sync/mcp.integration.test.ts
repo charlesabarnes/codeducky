@@ -42,7 +42,7 @@ describe('MCP against the real server', () => {
       const noteId = await addNote(db, { sessionId, path: 'src/tax.ts', anchor, body: 'Round before multiplying.', severity: 'issue' })
       await addNote(db, { sessionId, path: 'src/tax.ts', anchor: { ...anchor, line: 2 }, body: 'Typo', severity: 'nit' })
       const listId = await createChecklist(db, 'global', { title: 'Before push', items: ['Tests pass'] })
-      expect(await controller.signIn(PASSPHRASE, 'Laptop')).toBe('ok')
+      expect(await controller.adminSignIn(PASSPHRASE, 'Laptop')).toBe('ok')
       const { token } = await controller.mintToken('Claude Code')
 
       const client = new Client({ name: 'integration', version: '1.0.0' })

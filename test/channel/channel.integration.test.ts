@@ -57,7 +57,7 @@ describe('Send to Claude against the real server', () => {
     client.setNotificationHandler(ChannelNotification, ({ params }) => void messages.push(params))
     client.setNotificationHandler(VerdictNotification, ({ params }) => void verdicts.push(params))
     try {
-      expect(await controller.signIn(PASSPHRASE, 'Laptop')).toBe('ok')
+      expect(await controller.adminSignIn(PASSPHRASE, 'Laptop')).toBe('ok')
       await vi.waitFor(() => expect(channel.getSnapshot().status).toBe('live'), { timeout: 10_000 })
       const { token } = await controller.mintToken('Claude channel')
 

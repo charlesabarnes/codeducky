@@ -52,9 +52,9 @@ describe('sync against the real server', () => {
       const n1 = await addNote(a.db, { sessionId, path: 'server/app.ts', anchor, body: 'check auth', severity: 'issue' })
       const n2 = await addNote(a.db, { sessionId, path: 'server/app.ts', anchor, body: 'nit', severity: 'nit' })
       const listId = await createChecklist(a.db, 'global', { title: 'Push', items: ['Tests'] })
-      expect(await a.controller.signIn('wrong', 'A')).toBe('invalid')
-      expect(await a.controller.signIn(PASSPHRASE, 'Device A')).toBe('ok')
-      expect(await b.controller.signIn(PASSPHRASE, 'Device B')).toBe('ok')
+      expect(await a.controller.adminSignIn('wrong', 'A')).toBe('invalid')
+      expect(await a.controller.adminSignIn(PASSPHRASE, 'Device A')).toBe('ok')
+      expect(await b.controller.adminSignIn(PASSPHRASE, 'Device B')).toBe('ok')
       expect(await snapshot(b.db)).toEqual(await snapshot(a.db))
       expect(await saveOpenedRepo(b.db, folder('clone'), identity)).toBe(repoId)
 
