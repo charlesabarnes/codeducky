@@ -34,7 +34,7 @@
 }
 
 .pr-link-title {
-  font: 13px/20px var(--font-sans);
+  font: var(--prose-size)/var(--text-line) var(--font-sans);
 }
 
 .push-section {
@@ -48,7 +48,7 @@
 }
 
 .push-hint {
-  font: 13px var(--font-sans);
+  font: var(--prose-size) var(--font-sans);
 }
 
 .push-notes {

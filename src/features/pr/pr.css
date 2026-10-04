@@ -8,8 +8,8 @@
 }
 
 .pr-header h1 {
-  font-size: 14px;
-  line-height: 20px;
+  font-size: calc(var(--text-size) + 2px);
+  line-height: var(--text-line);
 }
 
 .pr-title {
@@ -215,7 +215,7 @@
 }
 
 .submit-review textarea {
-  font: 12px/20px var(--font-mono);
+  font: var(--text-size)/var(--text-line) var(--font-mono);
 }
 
 .submit-review .include-notes {

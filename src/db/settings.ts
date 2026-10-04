@@ -1,19 +1,40 @@
 import type { SkelbertDb } from './db'
-import { THEME_PREFERENCES, type Settings, type ThemePreference } from './schema'
+import { CODE_FONTS, DENSITIES, PALETTES, THEME_PREFERENCES, type Settings } from './schema'
 
 export type LoadedSettings = Required<Settings>
 export type SettingsInput = Partial<Omit<Settings, 'id'>>
+export type Appearance = Pick<LoadedSettings, 'theme' | 'palette' | 'density' | 'codeFont'>
+export type AppearanceKey = keyof Appearance
 
-export const DEFAULT_THEME: ThemePreference = 'dark'
+export const DEFAULT_APPEARANCE: Appearance = { theme: 'dark', palette: 'terminal', density: 'default', codeFont: 'plex' }
+export const APPEARANCE_OPTIONS: { [K in AppearanceKey]: readonly Appearance[K][] } = {
+  theme: THEME_PREFERENCES,
+  palette: PALETTES,
+  density: DENSITIES,
+  codeFont: CODE_FONTS,
+}
+export const APPEARANCE_KEYS = Object.keys(APPEARANCE_OPTIONS) as AppearanceKey[]
 
-export const defaultSettings: LoadedSettings = { id: 'app', githubPat: '', theme: DEFAULT_THEME }
+export const defaultSettings: LoadedSettings = { id: 'app', githubPat: '', ...DEFAULT_APPEARANCE }
 
-const themeOf = (value: unknown): ThemePreference =>
-  THEME_PREFERENCES.includes(value as ThemePreference) ? (value as ThemePreference) : DEFAULT_THEME
+function optionOf<K extends AppearanceKey>(key: K, value: unknown): Appearance[K] {
+  const options: readonly unknown[] = APPEARANCE_OPTIONS[key]
+  return options.includes(value) ? (value as Appearance[K]) : DEFAULT_APPEARANCE[key]
+}
+
+/** Keeps the known values and falls back to the default for anything missing or unknown. */
+export function appearanceOf(stored: Partial<Record<AppearanceKey, unknown>>): Appearance {
+  return {
+    theme: optionOf('theme', stored.theme),
+    palette: optionOf('palette', stored.palette),
+    density: optionOf('density', stored.density),
+    codeFont: optionOf('codeFont', stored.codeFont),
+  }
+}
 
 export async function loadSettings(db: SkelbertDb): Promise<LoadedSettings> {
   const stored = await db.settings.get('app')
-  return stored ? { id: 'app', githubPat: stored.githubPat ?? '', theme: themeOf(stored.theme) } : defaultSettings
+  return stored ? { id: 'app', githubPat: stored.githubPat ?? '', ...appearanceOf(stored) } : defaultSettings
 }
 
 /** Saves the given fields and keeps the others. */
@@ -23,5 +44,8 @@ export async function saveSettings(db: SkelbertDb, input: SettingsInput): Promis
     id: 'app',
     githubPat: (input.githubPat ?? current.githubPat).trim(),
     theme: input.theme ?? current.theme,
+    palette: input.palette ?? current.palette,
+    density: input.density ?? current.density,
+    codeFont: input.codeFont ?? current.codeFont,
   })
 }

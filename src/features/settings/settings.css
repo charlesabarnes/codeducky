@@ -1,0 +1,83 @@
+.appearance-grid {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: var(--stack-gap) 8px;
+  align-items: start;
+}
+
+.appearance-grid > .muted {
+  line-height: var(--text-line);
+}
+
+.appearance-grid .stack {
+  gap: 6px;
+}
+
+.appearance-grid .segmented {
+  width: fit-content;
+}
+
+.palette-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.palette-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.palette-name {
+  width: 8ch;
+}
+
+.palette-option:has(:checked) .palette-name {
+  color: var(--accent);
+}
+
+.swatch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px 3px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.swatch > span {
+  width: 6px;
+  height: 10px;
+}
+
+.swatch-fg {
+  background: var(--fg);
+}
+
+.swatch-accent {
+  background: var(--accent);
+}
+
+.swatch-add {
+  background: var(--add-fg);
+}
+
+.swatch-del {
+  background: var(--del-fg);
+}
+
+.swatch-key {
+  background: var(--sx-k);
+}
+
+.code-sample {
+  width: fit-content;
+  max-width: 100%;
+  padding: 2px 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  line-height: var(--code-line);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

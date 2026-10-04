@@ -147,7 +147,7 @@
 
 .help-row dd {
   margin: 0;
-  font: 13px/20px var(--font-sans);
+  font: var(--prose-size)/var(--text-line) var(--font-sans);
 }
 
 .help-overlay .notice,

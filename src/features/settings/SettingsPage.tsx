@@ -1,9 +1,7 @@
-import { Eye, EyeOff, Monitor, Moon, Palette, Save, Settings2, Sun } from 'lucide-react'
+import { Eye, EyeOff, Save, Settings2 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { StatusBar } from '../../app/chrome'
-import { applyTheme } from '../../app/theme'
 import { db } from '../../db/db'
-import type { ThemePreference } from '../../db/schema'
 import { loadSettings, saveSettings, type LoadedSettings } from '../../db/settings'
 import { useSyncState } from '../../sync/client'
 import { GithubIcon } from '../../ui/GithubIcon'
@@ -11,14 +9,9 @@ import { PageHeader } from '../../ui/PageHeader'
 import { Panel } from '../../ui/Panel'
 import { TokenTest } from '../github/TokenTest'
 import { ServerSection } from '../sync/ServerSection'
+import { AppearancePanel } from './AppearancePanel'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
-
-const THEMES = [
-  { value: 'dark', label: 'dark', icon: Moon },
-  { value: 'light', label: 'light', icon: Sun },
-  { value: 'system', label: 'system', icon: Monitor },
-] as const
 
 export function SettingsPage() {
   const [form, setForm] = useState<LoadedSettings | null>(null)
@@ -40,12 +33,6 @@ export function SettingsPage() {
     } catch {
       setSaveState('error')
     }
-  }
-
-  const changeTheme = (theme: ThemePreference) => {
-    setForm({ ...form, theme })
-    applyTheme(theme)
-    saveSettings(db, { theme }).catch((error: unknown) => console.error('Could not save the theme', error))
   }
 
   return (
@@ -78,20 +65,7 @@ export function SettingsPage() {
           </div>
         </form>
       </Panel>
-      <Panel icon={Palette} title="appearance">
-        <div className="row">
-          <span className="muted">theme</span>
-          <div className="segmented inverted" role="group" aria-label="Theme">
-            {THEMES.map(({ value, label, icon: Icon }) => (
-              <button key={value} type="button" aria-pressed={form.theme === value} onClick={() => changeTheme(value)}>
-                <Icon size={12} aria-hidden />
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <p>System follows your operating system's light or dark setting.</p>
-      </Panel>
+      <AppearancePanel appearance={form} onChange={(next) => setForm({ ...form, ...next })} />
       <ServerSection />
     </section>
   )

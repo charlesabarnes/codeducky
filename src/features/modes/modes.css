@@ -16,7 +16,7 @@
 .commit-picker > button {
   gap: 5px;
   padding: 0 8px;
-  line-height: 20px;
+  line-height: var(--text-line);
 }
 
 .commit-picker > button {
@@ -145,7 +145,7 @@
 
 .file-badge {
   padding: 0 4px;
-  line-height: 14px;
+  line-height: calc(var(--text-line) - 6px);
   border: 1px solid var(--line);
   color: var(--fg-2);
   white-space: nowrap;
