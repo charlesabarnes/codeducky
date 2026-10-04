@@ -48,6 +48,7 @@ const note = z.object({
   id: line(100).min(1),
   path: line(1024).min(1),
   line: z.number().int().min(0),
+  endLine: z.number().int().min(1).optional(),
   severity: z.enum(['nit', 'suggestion', 'issue', 'blocker']),
   title: line(200).optional(),
   body: z.string().transform((value) => value.slice(0, MAX_NOTE_EXCERPT * 2)),

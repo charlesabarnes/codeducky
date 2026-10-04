@@ -9,12 +9,14 @@ export interface NoteDraft {
 
 interface NoteEditorProps {
   initial?: NoteDraft
+  /** What the note is on, e.g. "lines 12–18", shown above the text. */
+  label?: string
   submitLabel: string
   onSubmit: (draft: NoteDraft) => void
   onCancel: () => void
 }
 
-export function NoteEditor({ initial, submitLabel, onSubmit, onCancel }: NoteEditorProps) {
+export function NoteEditor({ initial, label, submitLabel, onSubmit, onCancel }: NoteEditorProps) {
   const [body, setBody] = useState(initial?.body ?? '')
   const [severity, setSeverity] = useState<NoteSeverity>(initial?.severity ?? 'suggestion')
   const canSubmit = body.trim().length > 0
@@ -40,13 +42,14 @@ export function NoteEditor({ initial, submitLabel, onSubmit, onCancel }: NoteEdi
 
   return (
     <div className="note-editor" onKeyDown={onKeyDown}>
+      {label && <div className="note-editor-label muted">{label}</div>}
       <textarea
         ref={textarea}
         autoFocus
         rows={3}
         value={body}
         placeholder="Leave a note (markdown)"
-        aria-label="Note"
+        aria-label={label ? `Note on ${label}` : 'Note'}
         onChange={(event) => setBody(event.target.value)}
       />
       <div className="note-editor-bar">

@@ -11,6 +11,8 @@ export interface KeyLike {
 }
 
 const NAMED = new Set(['Escape', 'ArrowLeft', 'ArrowRight'])
+/** Plain up and down scroll the page; only Shift+↑/↓ are ours, to grow a line selection. */
+const SHIFT_ONLY = new Set(['ArrowUp', 'ArrowDown'])
 
 /** Cmd/Ctrl combos that are ours: Enter saves a note, S saves the file editor (and stays the browser's elsewhere). */
 const MOD_KEYS: Record<string, string> = { Enter: 'mod+Enter', s: 'mod+s', S: 'mod+s' }
@@ -28,6 +30,7 @@ export function eventToken(event: KeyLike): string | null {
   const altGraph = event.getModifierState?.('AltGraph') ?? false
   if (!altGraph && (event.ctrlKey || event.metaKey || event.altKey)) return null
   if (NAMED.has(key)) return event.shiftKey && key !== 'Escape' ? null : key
+  if (SHIFT_ONLY.has(key)) return event.shiftKey ? `shift+${key}` : null
   if (key.length !== 1 || key === ' ') return null
   if (/^[a-z]$/i.test(key)) return event.shiftKey ? key.toUpperCase() : key.toLowerCase()
   return key
@@ -61,7 +64,7 @@ export function ownsKeys(target: unknown): boolean {
 export const isMac = () =>
   typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
 
-const NAMED_CAPS: Record<string, string> = { Escape: 'Esc', ArrowLeft: '←', ArrowRight: '→' }
+const NAMED_CAPS: Record<string, string> = { Escape: 'Esc', ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓' }
 
 function modifierCap(modifier: string, mac: boolean): string {
   if (modifier === 'mod') return mac ? '⌘' : 'Ctrl'

@@ -33,6 +33,10 @@ export interface KeyBinding {
 export const KEYMAP = [
   { id: 'line.next', keys: ['j'], label: 'Next line', group: 'Navigation', repeat: true },
   { id: 'line.prev', keys: ['k'], label: 'Previous line', group: 'Navigation', repeat: true },
+  // Shift+J/K already step changes, so a selection grows with Shift and the arrows, as in a text editor.
+  { id: 'line.extendNext', keys: ['shift+ArrowDown'], label: 'Extend the line selection down (then c comments on it)', group: 'Navigation', repeat: true },
+  { id: 'line.extendPrev', keys: ['shift+ArrowUp'], label: 'Extend the line selection up', group: 'Navigation', repeat: true },
+  { id: 'selection.clear', keys: ['Escape'], label: 'Clear the line selection', group: 'Navigation', docOnly: true, shownWith: 'line.extendNext' },
   { id: 'change.next', keys: ['J'], label: 'Next change in this file', group: 'Navigation', repeat: true },
   { id: 'change.prev', keys: ['K'], label: 'Previous change in this file', group: 'Navigation', repeat: true },
   { id: 'hunk.next', keys: ['n'], label: 'Next change, then the next unviewed file', group: 'Navigation', repeat: true },
@@ -48,7 +52,7 @@ export const KEYMAP = [
   { id: 'commit.next', keys: ['}'], label: 'Next commit (from All changes, the first one)', group: 'Navigation', repeat: true },
   { id: 'commit.prev', keys: ['{'], label: 'Previous commit (before the first, All changes)', group: 'Navigation', repeat: true },
 
-  { id: 'note.comment', keys: ['c'], label: 'Comment on the focused line', group: 'Notes' },
+  { id: 'note.comment', keys: ['c'], label: 'Comment on the focused line or the selected lines', group: 'Notes' },
   { id: 'note.edit', keys: ['e'], label: 'Edit the note at or near the focus', group: 'Notes' },
   { id: 'note.resolve', keys: ['r'], label: 'Resolve or reopen the note at or near the focus', group: 'Notes' },
   { id: 'note.accept', keys: ['a'], label: 'Accept the suggestion at or near the focus', group: 'Notes' },
@@ -89,7 +93,7 @@ export const KEYMAP = [
 
   { id: 'nav.inbox', keys: ['g i'], label: 'Go to the inbox', group: 'General' },
   { id: 'help', keys: ['?'], label: 'Show keyboard shortcuts', group: 'General' },
-  { id: 'escape', keys: ['Escape'], label: 'Leave the text field', group: 'General', hidden: true },
+  { id: 'escape', keys: ['Escape'], label: 'Leave the text field, or clear the line selection', group: 'General', hidden: true },
 ] as const satisfies readonly KeyBinding[]
 
 export type ShortcutId = (typeof KEYMAP)[number]['id']
