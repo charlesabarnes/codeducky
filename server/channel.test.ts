@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import type { ChannelState } from '../shared/channel'
 import { createChannelRegistry, type ChannelOwner, type PluginEvent, type Registration } from './channel/registry'
-import { createUserSession, makeApp, request } from './testing'
+import { createUserSession, makeApp, request, sseReader } from './testing'
 
 const registration = (overrides: Partial<Registration> = {}): Registration => ({
   id: 'plugin-session-0001',
@@ -267,35 +267,6 @@ describe('channel registry across users', () => {
     expect(registry.state(BOB).tasks).toHaveLength(1)
   })
 })
-
-/** Reads SSE events off a streaming response as they arrive. */
-function sseReader(res: Response) {
-  const reader = res.body!.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  return {
-    async next(): Promise<{ event: string; data: unknown }> {
-      for (;;) {
-        const end = buffer.indexOf('\n\n')
-        if (end >= 0) {
-          const block = buffer.slice(0, end)
-          buffer = buffer.slice(end + 2)
-          const event = /^event: (.*)$/m.exec(block)?.[1] ?? 'message'
-          const data = block
-            .split('\n')
-            .filter((l) => l.startsWith('data: '))
-            .map((l) => l.slice(6))
-            .join('\n')
-          return { event, data: data ? JSON.parse(data) : null }
-        }
-        const { value, done } = await reader.read()
-        if (done) throw new Error('stream ended')
-        buffer += decoder.decode(value, { stream: true })
-      }
-    },
-    close: () => reader.cancel(),
-  }
-}
 
 describe('channel routes', () => {
   let ctx: ReturnType<typeof makeApp>

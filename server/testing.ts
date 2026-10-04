@@ -73,7 +73,6 @@ export async function adminLogin(app: App, name?: string): Promise<SignedIn> {
   return (await res.json()) as SignedIn
 }
 
-
 /** Signs a GitHub user in without the GitHub round-trip: creates the user if needed and issues a device session. */
 export function createUserSession(db: Database, login: string, name = 'Browser') {
   const user = upsertGitHubUser(db, { id: fakeGitHubId(login), login, name: null, avatarUrl: null })
@@ -100,4 +99,33 @@ export async function mcpClient(app: App, token: string) {
   })
   await client.connect(transport)
   return client
+}
+
+/** Reads SSE events off a streaming response as they arrive. */
+export function sseReader(res: Response) {
+  const reader = res.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  return {
+    async next(): Promise<{ event: string; data: unknown }> {
+      for (;;) {
+        const end = buffer.indexOf('\n\n')
+        if (end >= 0) {
+          const block = buffer.slice(0, end)
+          buffer = buffer.slice(end + 2)
+          const event = /^event: (.*)$/m.exec(block)?.[1] ?? 'message'
+          const data = block
+            .split('\n')
+            .filter((l) => l.startsWith('data: '))
+            .map((l) => l.slice(6))
+            .join('\n')
+          return { event, data: data ? JSON.parse(data) : null }
+        }
+        const { value, done } = await reader.read()
+        if (done) throw new Error('stream ended')
+        buffer += decoder.decode(value, { stream: true })
+      }
+    },
+    close: () => reader.cancel(),
+  }
 }
