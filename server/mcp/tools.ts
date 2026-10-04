@@ -4,7 +4,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import { MAX_RANGE_LINES } from '../../shared/anchor'
 import { uuidv7 } from '../../shared/ids'
-import { prUrl } from '../../shared/links'
+import { prUrl, sessionUrl } from '../../shared/links'
 import { pairId } from '../../shared/sync'
 import {
   currentPrSession,
@@ -234,7 +234,7 @@ export function createMcpServer({ db, userId, actor, origin = '', now = Date.now
               ...(s.pr ? { pr: prView(s, origin) } : {}),
               status: s.status,
               current: currentIds.has(s.id),
-              url: `${origin}/sessions/${encodeURIComponent(s.id)}`,
+              url: sessionUrl(origin, s.id),
               started: iso(s.startedAt),
               headSha: s.headSha,
               baseSha: s.baseSha,

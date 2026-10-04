@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { ChannelState, ChannelTaskView, PermissionBehavior, TaskRequest } from '../../shared/channel'
 import { syncController } from '../sync/client'
+import { clientHeaders, reportIfOutdated } from '../update/handshake'
 import { readSse } from './sse'
 
 export type ChannelStatus = 'signedOut' | 'connecting' | 'live' | 'retrying'
@@ -98,10 +99,11 @@ export class ChannelClient {
     const fetchImpl = this.deps.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args))
     try {
       const res = await fetchImpl(`${this.deps.baseUrl ?? ''}/api/channel/events`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
+        headers: { ...clientHeaders(), Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
         signal: abort.signal,
         cache: 'no-store',
       })
+      if (res.status === 426) reportIfOutdated(res.status, await res.json().catch(() => null))
       if (!res.ok || !res.body) return
       for await (const event of readSse(res.body)) {
         if (event.event !== 'state') continue

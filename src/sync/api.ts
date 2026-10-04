@@ -1,3 +1,5 @@
+import { clientHeaders, reportIfOutdated } from '../update/handshake'
+
 export class UnauthorizedError extends Error {
   constructor() {
     super('Not signed in to the sync server')
@@ -46,7 +48,7 @@ export async function apiRequest<T>(
   path: string,
   { body, token }: { body?: unknown; token?: string } = {},
 ): Promise<T> {
-  const headers: Record<string, string> = {}
+  const headers = clientHeaders()
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   if (token) headers.Authorization = `Bearer ${token}`
   let res: Response
@@ -63,6 +65,7 @@ export async function apiRequest<T>(
   if (res.status === 401) throw new UnauthorizedError()
   const json = (await res.json().catch(() => null)) as (T & { error?: string }) | null
   if (!res.ok) {
+    reportIfOutdated(res.status, json)
     const retryAfter = res.status === 429 || res.status === 503 ? parseRetryAfter(res.headers.get('Retry-After')) : null
     throw new HttpError(res.status, json?.error ?? null, retryAfter)
   }
