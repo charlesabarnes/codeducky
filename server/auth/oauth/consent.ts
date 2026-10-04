@@ -1,3 +1,5 @@
+import type { User } from '../../users/store'
+
 export const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!)
 
@@ -18,7 +20,8 @@ label{display:grid;gap:.25rem;margin:0 0 1rem;font-weight:500}
 input{font:inherit;padding:.4rem .6rem;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:inherit}
 .row{display:flex;gap:.5rem}button{font:inherit;padding:.35rem .85rem;border-radius:6px;border:1px solid transparent;cursor:pointer}
 button.primary{background:var(--accent);color:var(--accent-fg)}button.secondary{background:transparent;color:inherit;border-color:var(--border)}
-.error{color:var(--del-fg)}
+.error{color:var(--del-fg)}a{color:var(--accent)}
+.who{display:flex;align-items:center;gap:.5rem}.avatar{border-radius:50%;border:1px solid var(--border)}
 `
 
 export function page(title: string, body: string): string {
@@ -27,28 +30,32 @@ export function page(title: string, body: string): string {
 }
 
 export interface ConsentView {
+  user: Pick<User, 'login' | 'avatarUrl'>
   clientName: string
   redirectUri: string
-  /** The authorization request, echoed back as hidden fields. */
-  params: Record<string, string>
-  error?: string
+  /** The pending consent; the authorization request itself stays on the server. */
+  flow: string
+  ticket: string
 }
 
-export function consentPage({ clientName, redirectUri, params, error }: ConsentView): string {
-  const hidden = Object.entries(params)
-    .map(([name, value]) => `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}">`)
-    .join('')
+const AVATAR_ORIGIN = 'https://avatars.githubusercontent.com'
+const avatar = (url: string | null) =>
+  url?.startsWith(`${AVATAR_ORIGIN}/`) ? `<img class="avatar" src="${escapeHtml(url)}" alt="" width="32" height="32">` : ''
+
+export function consentPage({ user, clientName, redirectUri, flow, ticket }: ConsentView): string {
   return page(
     'Authorize',
-    `<h1>Allow ${escapeHtml(clientName)} to use Code Ducky?</h1>
+    `<p class="who">${avatar(user.avatarUrl)}<span>Signed in to GitHub as <strong>@${escapeHtml(user.login)}</strong></span></p>
+<p class="muted">Not you? <a href="https://github.com/logout" rel="noreferrer">Sign out of GitHub</a>, then start again from your MCP client.</p>
+<h1>Allow <strong>${escapeHtml(clientName)}</strong> to read and change <em>your</em> Code Ducky review data?</h1>
 <p class="muted">It will be able to read and change your review notes, sessions and checklists over MCP. You can revoke it in Settings.</p>
 <p>After you approve, you are sent to:</p>
 <p class="uri">${escapeHtml(redirectUri)}</p>
-<form method="post" action="/oauth/authorize">${hidden}
-<label>Admin passphrase<input type="password" name="passphrase" autocomplete="current-password" required autofocus></label>
-${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ''}
-<div class="row"><button class="primary" type="submit" name="decision" value="approve">Approve</button>
-<button class="secondary" type="submit" name="decision" value="deny" formnovalidate>Deny</button></div>
+<form method="post" action="/oauth/authorize">
+<input type="hidden" name="flow" value="${escapeHtml(flow)}">
+<input type="hidden" name="ticket" value="${escapeHtml(ticket)}">
+<div class="row"><button class="primary" type="submit" name="decision" value="approve" autofocus>Approve</button>
+<button class="secondary" type="submit" name="decision" value="deny">Deny</button></div>
 </form>`,
   )
 }
@@ -61,7 +68,7 @@ export function errorPage(message: string): string {
 export const PAGE_HEADERS = {
   'Content-Type': 'text/html; charset=utf-8',
   'Cache-Control': 'no-store',
-  'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
+  'Content-Security-Policy': `default-src 'none'; style-src 'unsafe-inline'; img-src ${AVATAR_ORIGIN}; frame-ancestors 'none'; base-uri 'none'`,
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
   'X-Content-Type-Options': 'nosniff',

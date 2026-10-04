@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { auth, type OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js'
 import type { OAuthClientInformationMixed, OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js'
-import { canonicalResource, isAllowedRedirectUri } from './auth/oauth/routes'
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
+import type { WireChange } from '../shared/sync'
+import { decideConsent, fakeConsent } from '../test/support/fakeSignIn'
+import { canonicalResource } from './auth/oauth/authorize'
+import { isAllowedRedirectUri } from './auth/oauth/routes'
 import { pkceChallenge } from './auth/pkce'
-import { createFailureLimiter } from './auth/passphrase'
-import { ADMIN_PASSPHRASE, adminLogin, appFetch, makeApp, mcpClient, request, TEST_ORIGIN } from './testing'
+import { DEFAULT_SIGNUPS } from './config'
+import { record, repo, REPO } from './fixtures'
+import { DEFAULT_RATE_LIMITS } from './limits'
+import { appFetch, appSend, makeApp, mcpClient, request, signInAs, TEST_ORIGIN, userIdFor } from './testing'
 
 const cleanups: (() => void)[] = []
 afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
@@ -64,14 +70,20 @@ class MemoryProvider implements OAuthClientProvider {
 
 const form = (values: Record<string, string>) => new URLSearchParams(values).toString()
 const FORM = { 'Content-Type': 'application/x-www-form-urlencoded' }
+const location = (res: Response) => new URL(res.headers.get('Location')!)
+const codeOf = (res: Response) => location(res).searchParams.get('code')!
 
-/** Submits the consent page as the owner would. */
-async function approve(app: App, authorizationUrl: URL, passphrase = ADMIN_PASSPHRASE, decision = 'approve') {
-  return app.request(`${TEST_ORIGIN}/oauth/authorize`, {
-    method: 'POST',
-    headers: FORM,
-    body: form({ ...Object.fromEntries(authorizationUrl.searchParams), passphrase, decision }),
-  })
+/** Opens the authorization URL in a browser that signs in to the fake GitHub as `login`. */
+const consentAs = (app: App, url: URL | string, login = 'alice') => fakeConsent(appSend(app), url.toString(), login)
+
+const decide = (app: App, page: { flow?: string; ticket?: string }, decision: 'approve' | 'deny' = 'approve') =>
+  decideConsent(appSend(app), TEST_ORIGIN, page, decision)
+
+/** Signs in to GitHub as `login` and approves on the consent page. */
+async function approve(app: App, url: URL | string, login = 'alice') {
+  const page = await consentAs(app, url, login)
+  expect(page.status).toBe(200)
+  return decide(app, page)
 }
 
 async function register(app: App, metadata: Record<string, unknown>) {
@@ -82,6 +94,61 @@ async function token(app: App, values: Record<string, string>) {
   const res = await app.request(`${TEST_ORIGIN}/oauth/token`, { method: 'POST', headers: FORM, body: form(values) })
   return { status: res.status, body: (await res.json()) as Record<string, string> }
 }
+
+const VERIFIER = 'v'.repeat(50)
+
+/** A public client and an authorization URL for it, as an MCP client would build. */
+async function publicClient(app: App, state = 's') {
+  const reg = (await (await register(app, { client_name: 'X', redirect_uris: [REDIRECT], token_endpoint_auth_method: 'none' })).json()) as {
+    client_id: string
+  }
+  const params = {
+    response_type: 'code',
+    client_id: reg.client_id,
+    redirect_uri: REDIRECT,
+    code_challenge: pkceChallenge(VERIFIER),
+    code_challenge_method: 'S256',
+    state,
+  }
+  return { clientId: reg.client_id, params, url: `${TEST_ORIGIN}/oauth/authorize?${form(params)}` }
+}
+
+const exchangeCode = (app: App, clientId: string, code: string) =>
+  token(app, { grant_type: 'authorization_code', code, code_verifier: VERIFIER, client_id: clientId, redirect_uri: REDIRECT })
+
+/** Follows GET /oauth/authorize through the fake GitHub to the callback by hand, so tests can act in between. */
+async function viaGitHub(app: App, url: string, query: Record<string, string>, between = () => {}) {
+  const start = await app.request(url)
+  const fake = location(start)
+  for (const [key, value] of Object.entries(query)) fake.searchParams.set(key, value)
+  const back = location(await app.request(fake.toString()))
+  between()
+  return app.request(back.toString(), { headers: { Cookie: start.headers.get('set-cookie')!.split(';')[0]! } })
+}
+
+async function seed(app: App, login: string, changes: WireChange[]) {
+  const { token: session, user } = await signInAs(app, login)
+  expect((await request(app, 'POST', '/api/sync', { cursor: 0, changes }, session)).status).toBe(200)
+  return { session, user }
+}
+
+async function oauthGrants(app: App, session: string) {
+  const body = (await (await request(app, 'GET', '/api/auth/tokens', undefined, session)).json()) as { tokens: { id: string; kind: string; name: string }[] }
+  return body.tokens.filter((t) => t.kind === 'oauth')
+}
+
+async function repoNames(app: App, accessToken: string) {
+  const client = await mcpClient(app, accessToken)
+  try {
+    const result = (await client.callTool({ name: 'list_repos', arguments: {} })) as CallToolResult
+    expect(result.isError).toBeFalsy()
+    return (JSON.parse((result.content[0] as { text: string }).text) as { repos: { repo: string }[] }).repos.map((r) => r.repo)
+  } finally {
+    await client.close()
+  }
+}
+
+const BOB_REPO = record('repos', 'gh:bob/private', { owner: 'bob', name: 'private', folderName: 'private', baseBranch: 'main', lastOpenedAt: 5, checklistIds: [] })
 
 describe('oauth metadata', () => {
   it('publishes protected-resource and authorization-server metadata', async () => {
@@ -113,8 +180,10 @@ describe('oauth metadata', () => {
 })
 
 describe('oauth flow', () => {
-  it('runs register, authorize with PKCE, token, MCP use, refresh rotation and revocation', async () => {
+  it('signs in with GitHub, asks for consent, and acts only for that user from code to token to MCP', async () => {
     const { app, db } = setup()
+    const alice = await seed(app, 'alice', [repo()])
+    const bob = await seed(app, 'bob', [BOB_REPO])
     const provider = new MemoryProvider()
     const fetchFn = appFetch(app)
     const serverUrl = `${TEST_ORIGIN}/mcp`
@@ -125,20 +194,28 @@ describe('oauth flow', () => {
     expect(url.searchParams.get('code_challenge_method')).toBe('S256')
     expect(url.searchParams.get('resource')).toBe(serverUrl)
 
-    const page = await app.request(url.toString())
+    const start = await app.request(url.toString())
+    expect(start.status).toBe(302)
+    expect(location(start).pathname).toBe('/api/auth/fake-github/authorize')
+    expect(start.headers.get('set-cookie')).toContain('Path=/api/auth')
+
+    const page = await consentAs(app, url, 'alice')
     expect(page.status).toBe(200)
     expect(page.headers.get('X-Frame-Options')).toBe('DENY')
-    const html = await page.text()
-    expect(html).toContain('Claude Code (test)')
-    expect(html).toContain(REDIRECT)
+    expect(page.headers.get('Cache-Control')).toBe('no-store')
+    const csp = page.headers.get('Content-Security-Policy')!
+    expect(csp).toContain("frame-ancestors 'none'")
+    expect(csp).toContain('img-src https://avatars.githubusercontent.com')
+    expect(page.html).toContain('Signed in to GitHub as <strong>@alice</strong>')
+    expect(page.html).toContain('https://github.com/logout')
+    expect(page.html).toContain('Claude Code (test)')
+    expect(page.html).toContain(REDIRECT)
+    expect([...page.html.matchAll(/type="hidden" name="([^"]+)"/g)].map((m) => m[1])).toEqual(['flow', 'ticket'])
+    expect(page.html).not.toContain('passphrase')
 
-    const wrong = await approve(app, url, 'not it')
-    expect(wrong.status).toBe(401)
-    expect(await wrong.text()).toContain('Wrong passphrase')
-
-    const approved = await approve(app, url)
+    const approved = await decide(app, page)
     expect(approved.status).toBe(302)
-    const callback = new URL(approved.headers.get('Location')!)
+    const callback = location(approved)
     expect(`${callback.origin}${callback.pathname}`).toBe(REDIRECT)
     expect(callback.searchParams.get('state')).toBe('state-123')
     expect(callback.searchParams.get('iss')).toBe(TEST_ORIGIN)
@@ -155,17 +232,13 @@ describe('oauth flow', () => {
     const replay = await token(app, { grant_type: 'authorization_code', code, code_verifier: provider.verifier, client_id: clientId, redirect_uri: REDIRECT })
     expect(replay).toMatchObject({ status: 400, body: { error: 'invalid_grant' } })
 
-    const client = await mcpClient(app, first.access_token)
-    const listed = await client.callTool({ name: 'list_repos', arguments: {} })
-    expect(listed.isError).toBeFalsy()
-    await client.close()
+    expect(await repoNames(app, first.access_token)).toEqual([REPO])
 
-    // Settings lists the grant once, under the client's name. Until consent signs in with GitHub, it approves for the admin.
-    const { token: owner } = await adminLogin(app)
-    const tokens = ((await (await request(app, 'GET', '/api/auth/tokens', undefined, owner)).json()) as { tokens: { id: string; kind: string; name: string }[] })
-      .tokens
-    const grants = tokens.filter((t) => t.kind === 'oauth')
+    // Alice's Settings lists the grant once, under the client's name; Bob's lists none and cannot revoke it.
+    const grants = await oauthGrants(app, alice.session)
     expect(grants).toEqual([expect.objectContaining({ name: 'Claude Code (test)' })])
+    expect(await oauthGrants(app, bob.session)).toEqual([])
+    expect((await request(app, 'DELETE', `/api/auth/tokens/${grants[0]!.id}`, undefined, bob.session)).status).toBe(404)
 
     // Refresh rotates both tokens; the old access token stops working.
     const refreshed = await token(app, { grant_type: 'refresh_token', refresh_token: first.refresh_token!, client_id: clientId, resource: serverUrl })
@@ -184,7 +257,7 @@ describe('oauth flow', () => {
     expect(await mcpStatus(refreshed.body.access_token!)).toBe(200)
 
     // Revoking the grant in Settings rejects its access and refresh tokens.
-    expect((await request(app, 'DELETE', `/api/auth/tokens/${grants[0]!.id}`, undefined, owner)).status).toBe(200)
+    expect((await request(app, 'DELETE', `/api/auth/tokens/${grants[0]!.id}`, undefined, alice.session)).status).toBe(200)
     expect(await mcpStatus(refreshed.body.access_token!)).toBe(401)
     expect(await token(app, { grant_type: 'refresh_token', refresh_token: refreshed.body.refresh_token!, client_id: clientId })).toMatchObject({
       status: 400,
@@ -199,7 +272,7 @@ describe('oauth flow', () => {
     const fetchFn = appFetch(app)
     const serverUrl = `${TEST_ORIGIN}/mcp`
     await auth(provider, { serverUrl, fetchFn })
-    const code = new URL((await approve(app, provider.authorizationUrl!)).headers.get('Location')!).searchParams.get('code')!
+    const code = codeOf(await approve(app, provider.authorizationUrl!))
     await auth(provider, { serverUrl, fetchFn, authorizationCode: code })
     const clientId = provider.client!.client_id
     const old = provider.saved!.refresh_token!
@@ -212,29 +285,14 @@ describe('oauth flow', () => {
     })
   })
 
-  it('rejects a wrong PKCE verifier, a plain challenge and a denied consent', async () => {
+  it('rejects a wrong PKCE verifier and a plain challenge', async () => {
     const { app } = setup()
-    const reg = (await (await register(app, { client_name: 'X', redirect_uris: [REDIRECT], token_endpoint_auth_method: 'none' })).json()) as {
-      client_id: string
-    }
-    const verifier = 'v'.repeat(50)
-    const params = {
-      response_type: 'code',
-      client_id: reg.client_id,
-      redirect_uri: REDIRECT,
-      code_challenge: pkceChallenge(verifier),
-      code_challenge_method: 'S256',
-      state: 's',
-    }
+    const { clientId, params, url } = await publicClient(app)
     const plain = await app.request(`${TEST_ORIGIN}/oauth/authorize?${form({ ...params, code_challenge_method: 'plain' })}`)
-    expect(new URL(plain.headers.get('Location')!).searchParams.get('error')).toBe('invalid_request')
+    expect(location(plain).searchParams.get('error')).toBe('invalid_request')
 
-    const denied = await approve(app, new URL(`${TEST_ORIGIN}/oauth/authorize?${form(params)}`), '', 'deny')
-    expect(new URL(denied.headers.get('Location')!).searchParams.get('error')).toBe('access_denied')
-
-    const ok = await approve(app, new URL(`${TEST_ORIGIN}/oauth/authorize?${form(params)}`))
-    const code = new URL(ok.headers.get('Location')!).searchParams.get('code')!
-    expect(await token(app, { grant_type: 'authorization_code', code, code_verifier: 'w'.repeat(50), client_id: reg.client_id })).toMatchObject({
+    const code = codeOf(await approve(app, url))
+    expect(await token(app, { grant_type: 'authorization_code', code, code_verifier: 'w'.repeat(50), client_id: clientId })).toMatchObject({
       status: 400,
       body: { error: 'invalid_grant' },
     })
@@ -252,17 +310,187 @@ describe('oauth flow', () => {
     const good = await token(app, { grant_type: 'refresh_token', refresh_token: 'x', client_id: reg.client_id, client_secret: reg.client_secret })
     expect(good).toMatchObject({ status: 400, body: { error: 'invalid_grant' } })
   })
+})
 
-  it('rate-limits the consent passphrase together with admin sign-in', async () => {
-    const limiter = createFailureLimiter({ perClient: 2, global: 50, windowMs: 60_000 })
-    const { app } = setup({ limiter })
-    const reg = (await (await register(app, { redirect_uris: [REDIRECT], token_endpoint_auth_method: 'none' })).json()) as { client_id: string }
-    const url = new URL(
-      `${TEST_ORIGIN}/oauth/authorize?${form({ response_type: 'code', client_id: reg.client_id, code_challenge: pkceChallenge('v'.repeat(43)), code_challenge_method: 'S256' })}`,
-    )
-    expect((await approve(app, url, 'wrong')).status).toBe(401)
-    expect((await request(app, 'POST', '/api/auth/admin/login', { passphrase: 'wrong' })).status).toBe(401)
-    expect((await approve(app, url)).status).toBe(429)
+describe('oauth consent', () => {
+  it('returns access_denied to the client on deny, and issues no code', async () => {
+    const { app, db } = setup()
+    const { url } = await publicClient(app, 'deny-state')
+    const denied = location(await decide(app, await consentAs(app, url), 'deny'))
+    expect(`${denied.origin}${denied.pathname}`).toBe(REDIRECT)
+    expect(denied.searchParams.get('error')).toBe('access_denied')
+    expect(denied.searchParams.get('state')).toBe('deny-state')
+    expect(denied.searchParams.get('code')).toBeNull()
+    expect(db.query<{ n: number }, []>('SELECT COUNT(*) AS n FROM oauth_codes').get()!.n).toBe(0)
+  })
+
+  it('returns access_denied when the user cancels at GitHub', async () => {
+    const { app } = setup()
+    const { url } = await publicClient(app)
+    const back = location(await viaGitHub(app, url, { auto: '1', deny: '1' }))
+    expect(`${back.origin}${back.pathname}`).toBe(REDIRECT)
+    expect(back.searchParams.get('error')).toBe('access_denied')
+  })
+
+  it('asks every time, even for a client the user already approved', async () => {
+    const { app } = setup()
+    const { url } = await publicClient(app)
+    expect(codeOf(await approve(app, url))).toBeTruthy()
+    const again = await consentAs(app, url)
+    expect(again.status).toBe(200)
+    expect(again.ticket).toBeTruthy()
+  })
+
+  it('uses each ticket once', async () => {
+    const { app } = setup()
+    const { url } = await publicClient(app)
+    const page = await consentAs(app, url)
+    expect((await decide(app, page)).status).toBe(302)
+    const replay = await decide(app, page)
+    expect(replay.status).toBe(400)
+    expect(replay.headers.get('Location')).toBeNull()
+    expect(await replay.text()).toContain('expired or was already used')
+    expect((await decide(app, page, 'deny')).status).toBe(400)
+  })
+
+  it('refuses a ticket from another flow, and burns the flow it was tried on', async () => {
+    const { app } = setup()
+    const { url } = await publicClient(app)
+    const first = await consentAs(app, url)
+    const second = await consentAs(app, url)
+    expect((await decide(app, { flow: first.flow, ticket: second.ticket })).status).toBe(400)
+    expect((await decide(app, first)).status).toBe(400)
+    expect((await decide(app, { flow: first.flow })).status).toBe(400)
+    expect((await decide(app, {})).status).toBe(400)
+    expect(codeOf(await decide(app, second))).toBeTruthy()
+  })
+
+  it('expires the consent page after 10 minutes', async () => {
+    let now = 1_000_000
+    const { app } = setup({ now: () => now })
+    const { url } = await publicClient(app)
+    const page = await consentAs(app, url)
+    now += 10 * 60_000
+    expect((await decide(app, page)).status).toBe(400)
+  })
+
+  it('checks the request again when the client is pruned meanwhile', async () => {
+    const { app, db } = setup()
+    const before = await publicClient(app)
+    const prune = (clientId: string) => () => void db.query('DELETE FROM oauth_clients WHERE id = ?').run(clientId)
+    const atCallback = await viaGitHub(app, before.url, { login: 'alice', auto: '1' }, prune(before.clientId))
+    expect(atCallback.status).toBe(400)
+    expect(await atCallback.text()).toContain('Unknown client')
+
+    const after = await publicClient(app)
+    const page = await consentAs(app, after.url)
+    prune(after.clientId)()
+    const decided = await decide(app, page)
+    expect(decided.status).toBe(400)
+    expect(decided.headers.get('Location')).toBeNull()
+    expect(await decided.text()).toContain('Unknown client')
+  })
+
+  it('gives each user their own grant for the same client, acting only on their data', async () => {
+    const { app } = setup()
+    const alice = await seed(app, 'alice', [repo()])
+    const bob = await seed(app, 'bob', [BOB_REPO])
+    const { clientId, url } = await publicClient(app)
+    const aliceTokens = await exchangeCode(app, clientId, codeOf(await approve(app, url, 'alice')))
+    const bobTokens = await exchangeCode(app, clientId, codeOf(await approve(app, url, 'bob')))
+    expect(await repoNames(app, aliceTokens.body.access_token!)).toEqual([REPO])
+    expect(await repoNames(app, bobTokens.body.access_token!)).toEqual(['bob/private'])
+
+    const [aliceGrant] = await oauthGrants(app, alice.session)
+    const [bobGrant] = await oauthGrants(app, bob.session)
+    expect(aliceGrant!.id).not.toBe(bobGrant!.id)
+    expect((await request(app, 'DELETE', `/api/auth/tokens/${aliceGrant!.id}`, undefined, bob.session)).status).toBe(404)
+    expect(await repoNames(app, aliceTokens.body.access_token!)).toEqual([REPO])
+  })
+
+  it('binds the code to the user who signed in at GitHub, whoever submits the form', async () => {
+    const { app, db } = setup()
+    const { clientId, url } = await publicClient(app)
+    const page = await consentAs(app, url, 'alice')
+    await signInAs(app, 'bob')
+    expect((await exchangeCode(app, clientId, codeOf(await decide(app, page)))).status).toBe(200)
+    const owner = db.query<{ user_id: string }, []>("SELECT user_id FROM tokens WHERE kind = 'oauth'").get()!.user_id
+    expect(owner).toBe(userIdFor(db, 'alice'))
+  })
+
+  it('refuses consent to admin principals', async () => {
+    const { app, db } = setup()
+    await signInAs(app, 'mallory')
+    db.query("UPDATE users SET role = 'admin' WHERE login = 'mallory'").run()
+    const { url } = await publicClient(app)
+    const page = await consentAs(app, url, 'mallory')
+    expect(page.status).toBe(403)
+    expect(page.flow).toBeUndefined()
+
+    const pending = await consentAs(app, url, 'alice')
+    db.query("UPDATE users SET role = 'admin' WHERE login = 'alice'").run()
+    expect((await decide(app, pending)).status).toBe(403)
+    expect(db.query<{ n: number }, []>('SELECT COUNT(*) AS n FROM oauth_codes').get()!.n).toBe(0)
+  })
+
+  it('refuses disabled users at the callback, at approval, at the code exchange and at refresh', async () => {
+    const { app, db } = setup()
+    const setStatus = (status: 'active' | 'disabled') => db.query("UPDATE users SET status = ? WHERE login = 'dora'").run(status)
+    const { clientId, url } = await publicClient(app)
+
+    await signInAs(app, 'dora')
+    setStatus('disabled')
+    const refused = await consentAs(app, url, 'dora')
+    expect(refused.status).toBe(403)
+    expect(refused.html).toContain('disabled')
+    setStatus('active')
+
+    const pending = await consentAs(app, url, 'dora')
+    setStatus('disabled')
+    expect((await decide(app, pending)).status).toBe(403)
+    setStatus('active')
+
+    const code = codeOf(await approve(app, url, 'dora'))
+    setStatus('disabled')
+    expect(await exchangeCode(app, clientId, code)).toMatchObject({ status: 400, body: { error: 'invalid_grant' } })
+    setStatus('active')
+
+    const issued = await exchangeCode(app, clientId, codeOf(await approve(app, url, 'dora')))
+    const refresh = () => token(app, { grant_type: 'refresh_token', refresh_token: issued.body.refresh_token!, client_id: clientId })
+    setStatus('disabled')
+    expect(await refresh()).toMatchObject({ status: 400, body: { error: 'invalid_grant' } })
+    setStatus('active')
+    expect((await refresh()).status).toBe(200)
+  })
+
+  it('shows sign-up refusals on a page instead of the consent form', async () => {
+    const { app } = setup({ signups: { ...DEFAULT_SIGNUPS, open: false } })
+    const { url } = await publicClient(app)
+    const page = await consentAs(app, url, 'newcomer')
+    expect(page.status).toBe(403)
+    expect(page.html).toContain('New accounts are closed')
+    expect(page.flow).toBeUndefined()
+  })
+
+  it('escapes the login and client name, and shows only GitHub avatars', async () => {
+    const { consentPage } = await import('./auth/oauth/consent')
+    const view = { clientName: '<b>x</b>', redirectUri: 'http://localhost/"cb', flow: 'f', ticket: 't' }
+    const html = consentPage({ ...view, user: { login: '<i>eve</i>', avatarUrl: 'https://avatars.githubusercontent.com/u/1?v=4' } })
+    expect(html).not.toContain('<b>x</b>')
+    expect(html).not.toContain('<i>eve</i>')
+    expect(html).toContain('&lt;b&gt;x&lt;/b&gt;')
+    expect(html).toContain('http://localhost/&quot;cb')
+    expect(html).toContain('<img class="avatar" src="https://avatars.githubusercontent.com/u/1?v=4"')
+    expect(consentPage({ ...view, user: { login: 'eve', avatarUrl: 'https://evil.example/a.png' } })).not.toContain('<img')
+  })
+
+  it('limits authorization starts per client address', async () => {
+    const { app } = setup({ limits: { ...DEFAULT_RATE_LIMITS, githubStart: { limit: 1, windowSec: 600, burst: 1 } } })
+    const { url } = await publicClient(app)
+    expect((await app.request(url)).status).toBe(302)
+    const limited = await app.request(url)
+    expect(limited.status).toBe(429)
+    expect(Number(limited.headers.get('Retry-After'))).toBeGreaterThan(0)
   })
 })
 
@@ -297,13 +525,12 @@ describe('redirect uri validation', () => {
     }
     // With two registered URIs, one must be named.
     expect((await app.request(`${TEST_ORIGIN}/oauth/authorize?${form(base)}`)).status).toBe(400)
-    expect((await app.request(`${TEST_ORIGIN}/oauth/authorize?${form({ ...base, redirect_uri: REDIRECT })}`)).status).toBe(200)
+    expect((await app.request(`${TEST_ORIGIN}/oauth/authorize?${form({ ...base, redirect_uri: REDIRECT })}`)).status).toBe(302)
     // An unknown client gets the error page, not a redirect.
     expect((await app.request(`${TEST_ORIGIN}/oauth/authorize?${form({ ...base, client_id: 'nope', redirect_uri: REDIRECT })}`)).status).toBe(400)
 
     // The token request must repeat the same redirect URI.
-    const ok = await approve(app, new URL(`${TEST_ORIGIN}/oauth/authorize?${form({ ...base, redirect_uri: REDIRECT })}`))
-    const code = new URL(ok.headers.get('Location')!).searchParams.get('code')!
+    const code = codeOf(await approve(app, `${TEST_ORIGIN}/oauth/authorize?${form({ ...base, redirect_uri: REDIRECT })}`))
     expect(
       await token(app, { grant_type: 'authorization_code', code, code_verifier: 'v'.repeat(43), client_id: reg.client_id, redirect_uri: 'http://localhost:9999/other' }),
     ).toMatchObject({ status: 400, body: { error: 'invalid_grant' } })

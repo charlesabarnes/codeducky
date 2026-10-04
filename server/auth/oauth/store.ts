@@ -1,6 +1,7 @@
 import type { Database } from 'bun:sqlite'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { hashToken, passphraseMatches } from '../passphrase'
+import { getUser } from '../../users/store'
 import type { TokenStore } from '../tokens'
 
 export const ACCESS_TOKEN_TTL_MS = 60 * 60_000
@@ -116,6 +117,8 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
     return row ? toClient(row) : null
   }
 
+  const userActive = (userId: string) => getUser(db, userId)?.status === 'active'
+
   const getGrant = (id: string): Grant | null => {
     const row = db.query<GrantRow, [string]>(`SELECT ${GRANT_COLUMNS} FROM oauth_grants WHERE id = ?`).get(id)
     return row ? toGrant(row) : null
@@ -226,7 +229,7 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
       return value
     },
 
-    /** Codes are single use: the row is deleted whether or not the exchange then succeeds. */
+    /** Codes are single use: the row is deleted whether or not the exchange then succeeds. A disabled user's code is refused. */
     consumeCode(value: string): AuthorizationCode | null {
       const row = db
         .query<
@@ -242,7 +245,7 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
           [string]
         >('DELETE FROM oauth_codes WHERE code_hash = ? RETURNING *')
         .get(hashToken(value))
-      if (!row || row.expires_at <= now()) return null
+      if (!row || row.expires_at <= now() || !userActive(row.user_id)) return null
       return {
         userId: row.user_id,
         clientId: row.client_id,
@@ -284,7 +287,7 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
 
     /**
      * Rotates the refresh token. Presenting the token that was just rotated out means it leaked
-     * (or a client raced itself), so the whole grant is revoked.
+     * (or a client raced itself), so the whole grant is revoked. A disabled user cannot refresh.
      */
     refresh(refreshToken: string, client: OAuthClient): RefreshResult {
       const hash = hashToken(refreshToken)
@@ -293,6 +296,7 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
         .get(hash, client.id)
       if (current) {
         const grant = toGrant(current)
+        if (!userActive(grant.userId)) return { error: 'invalid' }
         if (grant.expiresAt <= now()) {
           revokeGrant(grant.id)
           return { error: 'invalid' }
