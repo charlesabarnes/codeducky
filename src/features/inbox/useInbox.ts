@@ -24,6 +24,22 @@ async function syncSnapshot(inbox: Inbox): Promise<void> {
   await db.inbox.put({ id: INBOX_ID, fetchedAt: inbox.fetchedAt, items })
 }
 
+/** Whether the cached inbox is older than INBOX_STALE_MS, or missing. */
+export function inboxIsStale(now = Date.now()): boolean {
+  const cached = readJson<Inbox>(STORAGE_KEY)
+  return !cached || now - cached.fetchedAt >= INBOX_STALE_MS
+}
+
+/** Fetches the inbox and stores it as the page's cache and the synced snapshot. Null without a token. */
+export async function fetchAndStoreInbox(): Promise<Inbox | null> {
+  const gh = await githubClient()
+  if (!gh) return null
+  const inbox = await fetchInbox(gh)
+  writeJson(STORAGE_KEY, inbox)
+  await syncSnapshot(inbox).catch((error: unknown) => console.warn('Could not save the inbox snapshot', error))
+  return inbox
+}
+
 /** The inbox, shown from cache at once and refreshed when stale, on window focus, and on demand. */
 export function useInbox() {
   const [state, setState] = useState<InboxState>(() => {
@@ -39,12 +55,8 @@ export function useInbox() {
     inFlight.current = true
     setState((current) => (current.status === 'ready' ? { ...current, refreshing: true } : current))
     try {
-      const gh = await githubClient()
-      if (!gh) return setState({ status: 'no-token' })
-      const inbox = await fetchInbox(gh)
-      writeJson(STORAGE_KEY, inbox)
-      setState({ status: 'ready', inbox, refreshing: false })
-      await syncSnapshot(inbox).catch((error: unknown) => console.warn('Could not save the inbox snapshot', error))
+      const inbox = await fetchAndStoreInbox()
+      setState(inbox ? { status: 'ready', inbox, refreshing: false } : { status: 'no-token' })
     } catch (error) {
       setState({ status: 'error', message: errorMessage(error), forbidden: isGitHubError(error, 'forbidden') || isGitHubError(error, 'bad-token'), inbox: cached })
     } finally {
