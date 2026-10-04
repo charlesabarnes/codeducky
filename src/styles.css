@@ -488,33 +488,8 @@ details > summary {
 }
 
 .brand-mark {
-  position: relative;
-  width: 12px;
-  height: 8px;
-  margin-top: 4px;
-  border-radius: 2px 6px 6px 6px;
-  background: var(--accent);
-}
-
-.brand-mark::before {
-  content: '';
-  position: absolute;
-  top: -5px;
-  left: 0;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-.brand-mark::after {
-  content: '';
-  position: absolute;
-  top: -3px;
-  left: -3px;
-  border-style: solid;
-  border-width: 1.5px 3px 1.5px 0;
-  border-color: transparent var(--fg) transparent transparent;
+  flex: none;
+  image-rendering: pixelated;
 }
 
 .app-header nav {
