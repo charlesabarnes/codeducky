@@ -427,6 +427,13 @@ input[type='radio']:checked::before {
   content: '(•)';
 }
 
+/* input:focus drops the outline and these have no border, so bring the focus ring back. */
+input[type='checkbox']:focus-visible,
+input[type='radio']:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
 input[type='checkbox']:disabled,
 input[type='radio']:disabled {
   opacity: 0.45;
