@@ -19,6 +19,13 @@ const KIND_LABEL: Record<SyncKind, string> = {
   inbox: 'Inbox',
 }
 
+/** Server rejection codes worth explaining; anything else is shown as sent. */
+const ERROR_LABEL: Record<string, string> = {
+  quota_exceeded: 'Your account has reached its storage quota. Free up space, or ask the admin for a larger quota.',
+}
+
+export const rejectionMessage = (error: string) => ERROR_LABEL[error] ?? error
+
 function describe(kind: SyncKind, row: Record<string, unknown> | undefined): string {
   const label = KIND_LABEL[kind]
   const name = row?.title ?? row?.name ?? row?.path ?? row?.branch
@@ -32,7 +39,9 @@ const rowFor = (db: CodeDuckyDb, entry: RejectedEntry) => {
 
 export async function listRejected(db: CodeDuckyDb): Promise<RejectedItem[]> {
   const entries = await db.rejected.orderBy('at').toArray()
-  return Promise.all(entries.map(async (entry) => ({ ...entry, label: describe(entry.kind, await rowFor(db, entry)) })))
+  return Promise.all(
+    entries.map(async (entry) => ({ ...entry, error: rejectionMessage(entry.error), label: describe(entry.kind, await rowFor(db, entry)) })),
+  )
 }
 
 /** Puts a rejected change back in the outbox with the record as it is now. */

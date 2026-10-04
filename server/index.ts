@@ -13,8 +13,9 @@ const { app } = createApp({
   provider: config.github === 'fake' ? fakeGitHubProvider() : githubProvider(config.github),
   adminPassphrase: config.adminPassphrase,
   signups: config.signups,
-  quotas: config.quotas,
   publicUrl: config.publicUrl,
+  limits: config.limits,
+  quotas: config.quotas,
   webDist: existsSync(config.webDist) ? config.webDist : undefined,
 })
 

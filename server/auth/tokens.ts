@@ -59,6 +59,10 @@ const SELECT = `SELECT t.id, t.user_id, t.name, t.kind, t.created_at, t.last_use
   FROM tokens t JOIN users u ON u.id = t.user_id`
 /** last_used_at and last_seen_at are only rewritten when older than this, to avoid a write per request. */
 const TOUCH_AFTER_MS = 60_000
+/** Device sessions kept per user; signing in on another device evicts the oldest. */
+export const MAX_SESSIONS = 20
+/** Named API tokens a user may hold. */
+export const MAX_API_TOKENS = 20
 
 const toInfo = (row: Row): TokenInfo => ({
   id: row.id,
@@ -103,6 +107,12 @@ export function createTokenStore(db: Database, now: () => number = Date.now) {
         options.scope ?? null,
         options.grantId ?? null,
       )
+      if (options.kind === 'session') {
+        db.query(
+          `DELETE FROM tokens WHERE id IN (
+             SELECT id FROM tokens WHERE user_id = ? AND kind = 'session' ORDER BY created_at DESC, rowid DESC LIMIT -1 OFFSET ?)`,
+        ).run(options.userId, MAX_SESSIONS)
+      }
       return { token, info: toInfo(db.query<Row, [string]>(`${SELECT} WHERE t.id = ?`).get(id)!) }
     },
 
@@ -132,6 +142,19 @@ export function createTokenStore(db: Database, now: () => number = Date.now) {
     /** Only the user's own tokens; another user's id is treated as unknown. */
     revoke(userId: string, id: string): boolean {
       return db.query('DELETE FROM tokens WHERE id = ? AND user_id = ?').run(id, userId).changes > 0
+    },
+
+    /** Signs the user out everywhere: sessions, API tokens and OAuth access tokens. */
+    revokeAllForUser(userId: string): number {
+      return db.query('DELETE FROM tokens WHERE user_id = ?').run(userId).changes
+    },
+
+    countByKind(userId: string, kind: TokenKind): number {
+      return db
+        .query<{ n: number }, [string, TokenKind, number]>(
+          'SELECT COUNT(*) AS n FROM tokens WHERE user_id = ? AND kind = ? AND (expires_at IS NULL OR expires_at > ?)',
+        )
+        .get(userId, kind, now())!.n
     },
 
     /** Internal: callers check that the grant belongs to the user first. */

@@ -1,23 +1,17 @@
 import { resolve } from 'node:path'
+import { loadRateLimits, positiveInt, type RateLimits } from './limits'
+import { loadQuotas, type Quotas } from './records/quota'
 
 export const DEV_ADMIN_PASSPHRASE = 'codeducky'
 
-export interface Quotas {
-  records: number
-  bytes: number
-}
-
-export const DEFAULT_QUOTAS: Quotas = { records: 20_000, bytes: 50 * 1024 * 1024 }
-
+/** New accounts per hour are limited separately (CODEDUCKY_RATE_NEW_ACCOUNTS). */
 export interface SignupPolicy {
   open: boolean
   /** Cap on GitHub accounts; null for no cap. */
   maxUsers: number | null
-  /** New accounts allowed across everyone per rolling hour. */
-  perHour: number
 }
 
-export const DEFAULT_SIGNUPS: SignupPolicy = { open: true, maxUsers: null, perHour: 30 }
+export const DEFAULT_SIGNUPS: SignupPolicy = { open: true, maxUsers: null }
 
 export type GitHubConfig = { clientId: string; clientSecret: string } | 'fake'
 
@@ -31,18 +25,11 @@ export interface Config {
   adminPassphrase?: string
   publicUrl?: string
   signups: SignupPolicy
+  limits: RateLimits
   quotas: Quotas
 }
 
 type Env = Record<string, string | undefined>
-
-function positiveInt(env: Env, name: string): number | undefined {
-  const raw = env[name]
-  if (raw === undefined || raw === '') return undefined
-  const value = Number(raw)
-  if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${name} must be a positive whole number`)
-  return value
-}
 
 function githubConfig(env: Env, production: boolean): GitHubConfig {
   const clientId = env.CODEDUCKY_GITHUB_CLIENT_ID || undefined
@@ -89,7 +76,7 @@ function adminPassphrase(env: Env, production: boolean): string | undefined {
 function signups(env: Env): SignupPolicy {
   const mode = env.CODEDUCKY_SIGNUPS || 'open'
   if (mode !== 'open' && mode !== 'closed') throw new Error('CODEDUCKY_SIGNUPS must be "open" or "closed"')
-  return { ...DEFAULT_SIGNUPS, open: mode === 'open', maxUsers: positiveInt(env, 'CODEDUCKY_MAX_USERS') ?? null }
+  return { open: mode === 'open', maxUsers: positiveInt(env, 'CODEDUCKY_MAX_USERS') ?? null }
 }
 
 export function loadConfig(env: Env = process.env): Config {
@@ -105,9 +92,7 @@ export function loadConfig(env: Env = process.env): Config {
     adminPassphrase: adminPassphrase(env, production),
     publicUrl: publicUrl(env, production),
     signups: signups(env),
-    quotas: {
-      records: positiveInt(env, 'CODEDUCKY_QUOTA_RECORDS') ?? DEFAULT_QUOTAS.records,
-      bytes: positiveInt(env, 'CODEDUCKY_QUOTA_BYTES') ?? DEFAULT_QUOTAS.bytes,
-    },
+    limits: loadRateLimits(env),
+    quotas: loadQuotas(env),
   }
 }

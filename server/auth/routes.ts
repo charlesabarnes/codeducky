@@ -1,15 +1,17 @@
 import type { Database } from 'bun:sqlite'
 import { Hono } from 'hono'
-import { DEFAULT_QUOTAS, DEFAULT_SIGNUPS, type Quotas, type SignupPolicy } from '../config'
+import { DEFAULT_SIGNUPS, type SignupPolicy } from '../config'
+import { createRateLimiters, type RateLimiters } from '../limits'
 import { silentSink, type LogSink } from '../log'
-import { getUsage, getUser } from '../users/store'
+import { getUsage } from '../records/quota'
+import { getUser } from '../users/store'
 import { createFlowStore } from './flows'
 import type { IdentityProvider } from './github'
 import { requireToken, type AuthEnv } from './middleware'
 import type { OAuthStore } from './oauth/store'
 import { createFailureLimiter, type FailureLimiter } from './passphrase'
 import { profile, signInRoutes } from './signin'
-import { tokenName, type TokenStore } from './tokens'
+import { MAX_API_TOKENS, tokenName, type TokenStore } from './tokens'
 
 export interface AuthRoutesOptions {
   db: Database
@@ -18,8 +20,8 @@ export interface AuthRoutesOptions {
   provider: IdentityProvider
   adminPassphrase?: string
   limiter?: FailureLimiter
+  limiters?: RateLimiters
   signups?: SignupPolicy
-  quotas?: Quotas
   publicUrl?: string
   log?: LogSink
   now?: () => number
@@ -32,8 +34,8 @@ export function authRoutes({
   provider,
   adminPassphrase,
   limiter = createFailureLimiter({ perClient: 10, global: 100, windowMs: 15 * 60_000 }),
+  limiters = createRateLimiters(),
   signups = DEFAULT_SIGNUPS,
-  quotas = DEFAULT_QUOTAS,
   publicUrl,
   log = silentSink,
   now = Date.now,
@@ -41,23 +43,14 @@ export function authRoutes({
   const routes = new Hono<AuthEnv>()
   const flows = createFlowStore(db, now)
 
-  routes.route('/', signInRoutes({ db, tokens, flows, provider, adminPassphrase, limiter, signups, publicUrl, log, now }))
+  routes.route('/', signInRoutes({ db, tokens, flows, provider, adminPassphrase, limiter, limiters, signups, publicUrl, log, now }))
 
   routes.use('*', requireToken(tokens))
 
   /** The PWA calls this on load and focus: it refreshes the profile, and a 401 means signed out or disabled. */
   routes.get('/session', (c) => {
     const { id, name, kind, userId } = c.get('principal')
-    const user = getUser(db, userId)!
-    const usage = getUsage(db, userId)!
-    return c.json({
-      tokenId: id,
-      name,
-      kind,
-      user: profile(user),
-      usage: { records: usage.records, bytes: usage.bytes },
-      quota: { records: usage.quotaRecords ?? quotas.records, bytes: usage.quotaBytes ?? quotas.bytes },
-    })
+    return c.json({ tokenId: id, name, kind, user: profile(getUser(db, userId)!), ...getUsage(db, userId) })
   })
 
   routes.post('/logout', (c) => {
@@ -102,6 +95,7 @@ export function authRoutes({
     const body = (await c.req.json().catch(() => null)) as { name?: unknown } | null
     const name = tokenName(body?.name, '')
     if (!name) return c.json({ error: 'invalid_name' }, 400)
+    if (tokens.countByKind(principal.userId, 'api') >= MAX_API_TOKENS) return c.json({ error: 'token_limit' }, 409)
     const { token, info } = tokens.issue({ userId: principal.userId, name, kind: 'api' })
     return c.json({ token, info })
   })

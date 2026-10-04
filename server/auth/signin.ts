@@ -2,6 +2,7 @@ import type { Database } from 'bun:sqlite'
 import { Hono, type Context } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import type { SignupPolicy } from '../config'
+import { tooManyRequests, type RateLimiter, type RateLimiters } from '../limits'
 import type { LogSink } from '../log'
 import { publicOrigin } from '../origin'
 import { ADMIN_USER_ID, countUsers, getUser, getUserByGitHubId, upsertGitHubUser, type GitHubIdentity, type User } from '../users/store'
@@ -31,14 +32,20 @@ export const profile = ({ id, login, name, avatarUrl, role }: User): Profile => 
 
 /**
  * Lets an existing active user back in, or creates a new one if signups allow it. New accounts are
- * capped in total and per rolling hour across everyone, so open signup cannot be flooded.
+ * capped in total and by a rate shared across everyone, so open signup cannot be flooded.
  */
-export function admitUser(db: Database, identity: GitHubIdentity, policy: SignupPolicy, now: number): User | SignInError {
+export function admitUser(
+  db: Database,
+  identity: GitHubIdentity,
+  policy: SignupPolicy,
+  newAccounts: RateLimiter,
+  now: number,
+): User | SignInError {
   const existing = getUserByGitHubId(db, identity.id)
   if (existing) return existing.status === 'active' ? upsertGitHubUser(db, identity, now) : 'account_disabled'
   if (!policy.open) return 'signups_closed'
   if (policy.maxUsers !== null && countUsers(db) >= policy.maxUsers) return 'signups_closed'
-  if (countUsers(db, now - 60 * 60_000) >= policy.perHour) return 'rate_limited'
+  if (newAccounts.take('global') !== null) return 'rate_limited'
   return upsertGitHubUser(db, identity, now)
 }
 
@@ -49,6 +56,7 @@ export interface SignInRoutesOptions {
   provider: IdentityProvider
   adminPassphrase?: string
   limiter: FailureLimiter
+  limiters: RateLimiters
   signups: SignupPolicy
   publicUrl?: string
   log: LogSink
@@ -56,7 +64,7 @@ export interface SignInRoutesOptions {
 }
 
 /** GitHub sign-in for the PWA (start, callback, exchange) and the admin passphrase sign-in. */
-export function signInRoutes({ db, tokens, flows, provider, adminPassphrase, limiter, signups, publicUrl, log, now }: SignInRoutesOptions) {
+export function signInRoutes({ db, tokens, flows, provider, adminPassphrase, limiter, limiters, signups, publicUrl, log, now }: SignInRoutesOptions) {
   const routes = new Hono()
   const origin = (c: Context) => publicOrigin(c, publicUrl)
   const secure = (c: Context) => origin(c).startsWith('https:')
@@ -77,6 +85,8 @@ export function signInRoutes({ db, tokens, flows, provider, adminPassphrase, lim
   routes.get('/github/start', (c) => {
     const challenge = c.req.query('challenge') ?? ''
     if (!CHALLENGE.test(challenge)) return c.json({ error: 'invalid_request' }, 400)
+    const retryAfter = limiters.githubStart.take(clientIp(c))
+    if (retryAfter !== null) return tooManyRequests(c, retryAfter)
     const flow = flows.start({ purpose: 'pwa', pwaChallenge: challenge })
     setCookie(c, cookieName(c), flow.flowId, {
       path: COOKIE_PATH,
@@ -114,7 +124,7 @@ export function signInRoutes({ db, tokens, flows, provider, adminPassphrase, lim
       log({ level: 'warn', event: 'github_error', error: err instanceof Error ? err.message : String(err) })
       return fail('github_error')
     }
-    const user = admitUser(db, identity, signups, now())
+    const user = admitUser(db, identity, signups, limiters.newAccounts, now())
     if (typeof user === 'string') return fail(user)
     return finish(`handoff=${flows.createHandoff(user.id, flow.pwaChallenge)}`)
   })

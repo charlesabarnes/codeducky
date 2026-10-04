@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test'
-import { DEFAULT_QUOTAS, DEV_ADMIN_PASSPHRASE, loadConfig } from './config'
+import { DEV_ADMIN_PASSPHRASE, loadConfig } from './config'
+import { DEFAULT_RATE_LIMITS } from './limits'
+import { DEFAULT_QUOTAS } from './records/quota'
 
 const PROD = {
   NODE_ENV: 'production',
@@ -22,7 +24,8 @@ describe('config', () => {
       github: { clientId: 'Iv1.abc', clientSecret: 'secret' },
       adminPassphrase: 'long random',
       publicUrl: 'https://ducky.example',
-      signups: { open: true, maxUsers: null, perHour: 30 },
+      signups: { open: true, maxUsers: null },
+      limits: DEFAULT_RATE_LIMITS,
       quotas: DEFAULT_QUOTAS,
     })
     expect(warn).not.toHaveBeenCalled()

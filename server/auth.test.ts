@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { ADMIN_SESSION_TTL_MS } from './auth/signin'
 import { createFailureLimiter } from './auth/passphrase'
-import { DEFAULT_QUOTAS } from './config'
+import { DEFAULT_QUOTAS } from './records/quota'
 import { ADMIN_PASSPHRASE, adminLogin, createUserSession, login, makeApp, request, signInAs } from './testing'
 import { ADMIN_USER_ID } from './users/store'
 

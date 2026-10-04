@@ -11,10 +11,12 @@ import { authRoutes } from './auth/routes'
 import { createTokenStore } from './auth/tokens'
 import { createChannelRegistry, type ChannelRegistry } from './channel/registry'
 import { channelRoutes } from './channel/routes'
-import type { Quotas, SignupPolicy } from './config'
+import type { SignupPolicy } from './config'
 import { gateApi, gateScripts } from './gate/routes'
+import { createRateLimiters, perUser, rateLimit, type RateLimits } from './limits'
 import { logErrors, requestLog, stdoutSink, type LogSink } from './log'
 import { mcpRoutes } from './mcp/route'
+import { setDefaultQuotas, type Quotas } from './records/quota'
 import { sync } from './records/store'
 import { serveWeb } from './static'
 import { ensureAdmin } from './users/store'
@@ -26,7 +28,6 @@ export interface AppDeps {
   /** Unset disables admin sign-in. */
   adminPassphrase?: string
   signups?: SignupPolicy
-  quotas?: Quotas
   webDist?: string
   now?: () => number
   log?: LogSink
@@ -37,16 +38,22 @@ export interface AppDeps {
   publicUrl?: string
   /** Connected Claude Code channel sessions; tests pass one with a fake clock. */
   channel?: ChannelRegistry
+  /** Request rates per user or per IP (config defaults, CODEDUCKY_RATE_*). */
+  limits?: RateLimits
+  /** Default per-user storage quotas; a user's own override wins. */
+  quotas?: Quotas
 }
 
-const MAX_SYNC_BODY = 16 * 1024 * 1024
+const MAX_SYNC_BODY = 8 * 1024 * 1024
+const MAX_API_BODY = 64 * 1024
+const MAX_OAUTH_BODY = 16 * 1024
+const tooLarge = (maxSize: number) => bodyLimit({ maxSize, onError: (c) => c.json({ error: 'too_large' }, 413) })
 
 export function createApp({
   db,
   provider,
   adminPassphrase,
   signups,
-  quotas,
   webDist,
   now,
   log = stdoutSink,
@@ -54,8 +61,12 @@ export function createApp({
   registrationLimiter,
   publicUrl,
   channel,
+  limits,
+  quotas,
 }: AppDeps) {
   ensureAdmin(db)
+  if (quotas) setDefaultQuotas(db, quotas)
+  const limiters = createRateLimiters(limits, now)
   const app = new Hono()
   const api = new Hono<AuthEnv>()
   const tokens = createTokenStore(db, now)
@@ -65,13 +76,16 @@ export function createApp({
 
   api.use('*', requestLog(log))
   api.onError(logErrors(log))
+  const apiBody = tooLarge(MAX_API_BODY)
+  api.use('*', (c, next) => (c.req.path === '/api/sync' ? next() : apiBody(c, next)))
   api.get('/health', (c) => c.json({ ok: true }))
-  api.route('/auth', authRoutes({ db, tokens, oauth, provider, adminPassphrase, limiter, signups, quotas, publicUrl, log, now }))
+  api.route('/auth', authRoutes({ db, tokens, oauth, provider, adminPassphrase, limiter, limiters, signups, publicUrl, log, now }))
 
   api.post(
     '/sync',
-    bodyLimit({ maxSize: MAX_SYNC_BODY, onError: (c) => c.json({ error: 'too_large' }, 413) }),
+    tooLarge(MAX_SYNC_BODY),
     requireToken(tokens, ['session', 'api']),
+    rateLimit(limiters.sync, perUser),
     async (c) => {
       const parsed = parseSyncRequest(await c.req.json().catch(() => null))
       if ('error' in parsed) return c.json({ error: parsed.error }, 400)
@@ -79,20 +93,21 @@ export function createApp({
     },
   )
 
-  api.route('/gate', gateApi({ db, tokens, publicUrl }))
-  api.route('/channel', channelRoutes({ db, tokens, registry, publicUrl }))
+  api.route('/gate', gateApi({ db, tokens, publicUrl, limiter: limiters.gate }))
+  api.route('/channel', channelRoutes({ db, tokens, registry, publicUrl, taskLimiter: limiters.channelTasks }))
 
   api.all('*', (c) => c.json({ error: 'not_found' }, 404))
 
   const server = new Hono()
   for (const path of ['/mcp', '/oauth/*', '/.well-known/*', '/gate/*']) server.use(path, requestLog(log))
   server.onError(logErrors(log))
+  server.use('/oauth/*', tooLarge(MAX_OAUTH_BODY))
   server.route('/', oauthRoutes({ store: oauth, adminPassphrase, limiter, registrationLimiter, publicUrl }))
-  server.route('/', mcpRoutes({ db, tokens, publicUrl }))
+  server.route('/', mcpRoutes({ db, tokens, publicUrl, limiter: limiters.mcp }))
   server.route('/', gateScripts(publicUrl))
 
   app.route('/api', api)
   app.route('/', server)
   if (webDist) app.use('*', serveWeb(webDist))
-  return { app, tokens, oauth, channel: registry }
+  return { app, tokens, oauth, channel: registry, limiters }
 }

@@ -3,6 +3,7 @@ import { challengeFor, newVerifier } from '../test/support/fakeSignIn'
 import type { IdentityProvider } from './auth/github'
 import { GitHubError } from './auth/github'
 import { DEFAULT_SIGNUPS } from './config'
+import { DEFAULT_RATE_LIMITS } from './limits'
 import type { LogEntry } from './log'
 import { createUserSession, makeApp, request, signInAs, TEST_ORIGIN } from './testing'
 
@@ -87,6 +88,18 @@ describe('GitHub sign-in', () => {
     })
     expect(url.searchParams.get('code_challenge')).toMatch(/^[A-Za-z0-9_-]{43}$/)
     expect((await app.request(`${TEST_ORIGIN}/api/auth/fake-github/authorize`)).status).toBe(401)
+  })
+
+  it('limits sign-in starts per client address', async () => {
+    const { app } = setup({ limits: { ...DEFAULT_RATE_LIMITS, githubStart: { limit: 2, windowSec: 600, burst: 2 } } })
+    const start = (ip: string) =>
+      app.request(`/api/auth/github/start?challenge=${challengeFor(newVerifier())}`, { headers: { 'X-Forwarded-For': ip } })
+    expect((await start('10.0.0.1')).status).toBe(302)
+    expect((await start('10.0.0.1')).status).toBe(302)
+    const limited = await start('10.0.0.1')
+    expect(limited.status).toBe(429)
+    expect(Number(limited.headers.get('Retry-After'))).toBeGreaterThan(0)
+    expect((await start('10.0.0.2')).status).toBe(302)
   })
 
   it('refuses to start without a valid PKCE challenge', async () => {
@@ -211,7 +224,7 @@ describe('GitHub sign-in', () => {
 
   it('limits new accounts per hour across everyone', async () => {
     let now = 10_000_000
-    const { app } = setup({ now: () => now, signups: { ...DEFAULT_SIGNUPS, perHour: 2 } })
+    const { app } = setup({ now: () => now, limits: { ...DEFAULT_RATE_LIMITS, newAccounts: { limit: 2, windowSec: 3600, burst: 2 } } })
     await signInAs(app, 'a1')
     await signInAs(app, 'a2')
     expect((await roundTrip(app, 'a3')).fragment.get('error')).toBe('rate_limited')
