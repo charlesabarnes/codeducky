@@ -9,6 +9,7 @@ import { StatusBar } from '../../app/chrome'
 import { repoPath } from '../../app/paths'
 import { repoLabel } from '../../db/repos'
 import { GithubIcon } from '../../ui/GithubIcon'
+import { FolderAccessNotice } from '../pwa/FolderAccess'
 import { PageHeader } from '../../ui/PageHeader'
 
 export function ReposPage() {
@@ -51,6 +52,7 @@ export function ReposPage() {
         <p className="error">This browser does not support the File System Access API. Use a Chromium-based desktop browser.</p>
       )}
       {error && <p className="error">{error}</p>}
+      {supportsFileSystemAccess() && <FolderAccessNotice />}
       {repos && repos.length > 0 && (
         <table className="data-table">
           <thead>

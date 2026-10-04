@@ -8,6 +8,7 @@ import { GithubIcon } from '../../ui/GithubIcon'
 import { PageHeader } from '../../ui/PageHeader'
 import { Panel } from '../../ui/Panel'
 import { TokenTest } from '../github/TokenTest'
+import { AppPanels } from '../pwa/AppPanels'
 import { ServerSection } from '../sync/ServerSection'
 import { AppearancePanel } from './AppearancePanel'
 
@@ -66,6 +67,7 @@ export function SettingsPage() {
         </form>
       </Panel>
       <AppearancePanel appearance={form} onChange={(next) => setForm({ ...form, ...next })} />
+      <AppPanels />
       <ServerSection />
     </section>
   )
