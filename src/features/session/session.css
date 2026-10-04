@@ -38,3 +38,29 @@
 .segmented.inverted button[aria-pressed='true'] .dirty-mark {
   background: var(--bg);
 }
+
+.file-list li {
+  position: relative;
+}
+
+.file-list button.file-window-button {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: inline-flex;
+  width: auto;
+  opacity: 0;
+  padding: 2px 4px;
+  transform: translateY(-50%);
+  background: var(--bg-2);
+  color: var(--fg-2);
+}
+
+.file-list li:hover button.file-window-button,
+.file-list button.file-window-button:focus-visible {
+  opacity: 1;
+}
+
+.file-list button.file-window-button:hover {
+  color: var(--accent);
+}

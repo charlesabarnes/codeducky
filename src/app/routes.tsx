@@ -9,7 +9,10 @@ import { RepoPage } from '../features/repos/RepoPage'
 import { ReposPage } from '../features/repos/ReposPage'
 import { SessionPage } from '../features/session/SessionPage'
 import { SettingsPage } from '../features/settings/SettingsPage'
+import { SharePage } from '../features/share/SharePage'
 import { SignInCallback } from '../features/sync/SignInCallback'
+import { FileWindowLayout } from '../features/window/FileWindowLayout'
+import { FileWindowPage } from '../features/window/FileWindowPage'
 
 export const routes: RouteObject[] = [
   {
@@ -24,9 +27,14 @@ export const routes: RouteObject[] = [
       { id: 'inbox', path: 'inbox', element: <InboxPage /> },
       { id: 'last', path: 'last', element: <LastSessionPage /> },
       { id: 'signin-callback', path: 'signin/callback', element: <SignInCallback /> },
+      { id: 'share', path: 'share', element: <SharePage /> },
       { id: 'pr', path: 'pr/:owner/:repo/:number', element: <PrOpenPage /> },
       // github.com's PR paths, so replacing the host in a PR URL opens it here. Static routes rank above it.
       { id: 'pr-mirror', path: ':owner/:repo/pull/:number/*', element: <PrOpenPage /> },
     ],
+  },
+  {
+    element: <FileWindowLayout />,
+    children: [{ id: 'file-window', path: 'sessions/:sessionId/window', element: <FileWindowPage /> }],
   },
 ]

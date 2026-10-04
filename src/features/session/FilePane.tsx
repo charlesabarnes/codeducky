@@ -1,4 +1,4 @@
-import { Columns2, Pilcrow, Rows2 } from 'lucide-react'
+import { AppWindow, Columns2, Pilcrow, Rows2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Note } from '../../db/schema'
 import type { ViewMode } from '../../diff/DiffTable'
@@ -64,6 +64,8 @@ interface FilePaneProps {
   onNoteRefused?: (message: string) => void
   /** Opens the file in the editor; `blocked` says why it cannot be. */
   edit?: { onEdit: () => void; blocked: string | null; dirty: boolean }
+  /** Opens the file in a window of its own. */
+  onOpenWindow?: () => void
 }
 
 const ALL: NoteView = { kind: 'all' }
@@ -71,7 +73,7 @@ const ALL: NoteView = { kind: 'all' }
 export function FilePane(props: FilePaneProps) {
   const { sessionId, change, notes, mode, onModeChange, generation, viewed, onToggleViewed, focus } = props
   const { navRequest, onBoundary, ignoreWhitespace, onIgnoreWhitespaceChange, moved, onOpenMoved, ci } = props
-  const { source, threads, threadActions, finalLines, collapseViewed = true, viewedDisabled, onNoteRefused, edit } = props
+  const { source, threads, threadActions, finalLines, collapseViewed = true, viewedDisabled, onNoteRefused, edit, onOpenWindow } = props
   const { contents, error, loading, loadLarge } = useFileContents(source, change, generation)
   const lines = useMemo(
     () => ({ old: sideLines(contents?.old ?? null), new: sideLines(contents?.new ?? null) }),
@@ -196,6 +198,19 @@ export function FilePane(props: FilePaneProps) {
           </div>
           <span className="key">&nbsp;s</span>
         </div>
+        {onOpenWindow && (
+          <button
+            type="button"
+            className="toolbar-toggle"
+            aria-keyshortcuts="Shift+O"
+            aria-label="Open in new window"
+            title={withShortcut('Open this file in a new window', 'file.window')}
+            onClick={onOpenWindow}
+          >
+            <AppWindow size={13} aria-hidden />
+            window <span className="key">O</span>
+          </button>
+        )}
         {edit && <ViewToggle editing={false} dirty={edit.dirty} disabledReason={edit.blocked} onChange={(editing) => editing && edit.onEdit()} />}
       </div>
       <LostNotes notes={lost} heading="Possibly resolved: the anchored line is gone" focusedId={focusedId} />

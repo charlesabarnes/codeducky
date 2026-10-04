@@ -1,4 +1,4 @@
-import { MessageSquare, Search } from 'lucide-react'
+import { AppWindow, MessageSquare, Search } from 'lucide-react'
 import type { Ref } from 'react'
 import { changeKind, type ChangeKind, type FileChange, type FileStats } from '../../git/types'
 import type { FileOrder, Risk } from '../../review/order'
@@ -40,6 +40,8 @@ interface FileListProps {
   canView?: (path: string) => boolean
   /** The file with unsaved edits in the editor. */
   dirtyPath?: string | null
+  /** Opens a file in a window of its own. */
+  onOpenWindow?: (path: string) => void
 }
 
 export function FileList(props: FileListProps) {
@@ -101,7 +103,8 @@ function rowTitle(file: FileChange, risk: Risk | undefined): string {
   return lines.join('\n')
 }
 
-function FileRows({ files, stats, selected, noteCounts, viewed, onSelect, onToggleViewed, risks, badges, canView, dirtyPath }: FileListProps) {
+function FileRows(props: FileListProps) {
+  const { files, stats, selected, noteCounts, viewed, onSelect, onToggleViewed, risks, badges, canView, dirtyPath, onOpenWindow } = props
   return (
     <ul className="file-list">
       {files.map((file) => {
@@ -142,6 +145,17 @@ function FileRows({ files, stats, selected, noteCounts, viewed, onSelect, onTogg
               </span>
               <Counts stats={stats[file.path]} />
             </button>
+            {onOpenWindow && (
+              <button
+                type="button"
+                className="file-window-button"
+                onClick={() => onOpenWindow(file.path)}
+                aria-label={`Open ${file.path} in a new window`}
+                title="Open in a new window"
+              >
+                <AppWindow size={12} aria-hidden />
+              </button>
+            )}
           </li>
         )
       })}
