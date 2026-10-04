@@ -26,7 +26,7 @@ function locate({ repo, branch }: Target): string {
 function instructionsBlock(data: DataSnapshot, repo: string | undefined): string {
   if (!repo) return ''
   const text = data.repos.filter((r) => repoMatches(r, repo)).map(repoInstructions).find(Boolean)
-  return text ? `\n\nRepo instructions from the owner (they take precedence over the defaults above):\n<repo-instructions>\n${text}\n</repo-instructions>` : ''
+  return text ? `\n\nMy instructions for this repo (they take precedence over the defaults above):\n<repo-instructions>\n${text}\n</repo-instructions>` : ''
 }
 
 /** Clients send blank strings for arguments the user skipped. */

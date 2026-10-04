@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import type { ChannelState } from '../shared/channel'
 import { createChannelRegistry, type ChannelOwner, type PluginEvent, type Registration } from './channel/registry'
-import { login, makeApp, request } from './testing'
+import { createUserSession, makeApp, request } from './testing'
 
 const registration = (overrides: Partial<Registration> = {}): Registration => ({
   id: 'plugin-session-0001',
@@ -14,7 +14,8 @@ const registration = (overrides: Partial<Registration> = {}): Registration => ({
   ...overrides,
 })
 
-const owner: ChannelOwner = { tokenId: 't1', grantId: null, tokenName: 'Claude channel' }
+const ALICE = 'user-alice'
+const owner: ChannelOwner = { userId: ALICE, tokenId: 't1', grantId: null, tokenName: 'Claude channel' }
 
 function recorder() {
   const events: PluginEvent[] = []
@@ -38,7 +39,7 @@ describe('channel registry', () => {
     expect(registry.connect(registration(), owner, plugin.sink)).toBe('ok')
     expect(plugin.events[0]).toEqual({ event: 'ready', data: { id: 'plugin-session-0001', heartbeatMs: 15_000 } })
 
-    const task = registry.sendTask('plugin-session-0001', {
+    const task = registry.sendTask(ALICE, 'plugin-session-0001', {
       kind: 'review',
       repo: 'acme/invoice-service',
       branch: 'feature/tax',
@@ -55,21 +56,21 @@ describe('channel registry', () => {
     expect(registry.report('plugin-session-0001', owner, task.id, 'working', 'Reading the diff')).toBe(true)
     // Out-of-order reports never move a task backwards.
     registry.delivered('plugin-session-0001', owner, task.id)
-    expect(registry.state().tasks[0]).toMatchObject({ state: 'working', message: 'Reading the diff' })
+    expect(registry.state(ALICE).tasks[0]).toMatchObject({ state: 'working', message: 'Reading the diff' })
     registry.report('plugin-session-0001', owner, task.id, 'done', 'Added 2 notes')
     registry.report('plugin-session-0001', owner, task.id, 'working', 'late')
-    expect(registry.state().tasks[0]).toMatchObject({ state: 'done', message: 'Added 2 notes' })
+    expect(registry.state(ALICE).tasks[0]).toMatchObject({ state: 'done', message: 'Added 2 notes' })
   })
 
   it('refuses a session id held by another token, but lets an OAuth grant reconnect with a new token', () => {
     const registry = createChannelRegistry({ now })
     registry.connect(registration(), owner, recorder().sink)
-    const other = { tokenId: 't2', grantId: null, tokenName: 'Other' }
+    const other = { userId: ALICE, tokenId: 't2', grantId: null, tokenName: 'Other' }
     expect(registry.connect(registration(), other, recorder().sink)).toBe('conflict')
     expect(registry.report('plugin-session-0001', other, 'x', 'done', null)).toBe(false)
     expect(registry.remove('plugin-session-0001', other)).toBe(false)
 
-    const oauth = { tokenId: 'a1', grantId: 'g1', tokenName: 'Claude Code' }
+    const oauth = { userId: ALICE, tokenId: 'a1', grantId: 'g1', tokenName: 'Claude Code' }
     registry.connect(registration({ id: 'plugin-session-0002' }), oauth, recorder().sink)
     expect(registry.connect(registration({ id: 'plugin-session-0002' }), { ...oauth, tokenId: 'a2' }, recorder().sink)).toBe('ok')
   })
@@ -78,10 +79,10 @@ describe('channel registry', () => {
     const registry = createChannelRegistry({ now, expiryMs: 60_000 })
     const first = recorder()
     registry.connect(registration(), owner, first.sink)
-    registry.disconnect('plugin-session-0001', first.sink)
-    expect(registry.state().sessions[0]!.connected).toBe(false)
+    registry.disconnect('plugin-session-0001', owner, first.sink)
+    expect(registry.state(ALICE).sessions[0]!.connected).toBe(false)
 
-    const queued = registry.sendTask('plugin-session-0001', { kind: 'fix', repo: 'acme/invoice-service', branch: 'b', pr: null, sessionId: null, content: 'Fix', meta: {} })
+    const queued = registry.sendTask(ALICE, 'plugin-session-0001', { kind: 'fix', repo: 'acme/invoice-service', branch: 'b', pr: null, sessionId: null, content: 'Fix', meta: {} })
     if (typeof queued === 'string') throw new Error(queued)
     expect(queued.state).toBe('queued')
 
@@ -89,28 +90,28 @@ describe('channel registry', () => {
     const second = recorder()
     registry.connect(registration(), owner, second.sink)
     expect(second.events.map((e) => e.event)).toEqual(['ready', 'task'])
-    expect(registry.state().tasks[0]!.state).toBe('sent')
+    expect(registry.state(ALICE).tasks[0]!.state).toBe('sent')
 
-    registry.disconnect('plugin-session-0001', second.sink)
-    const lost = registry.sendTask('plugin-session-0001', { kind: 'fix', repo: 'acme/invoice-service', branch: 'b', pr: null, sessionId: null, content: 'Again', meta: {} })
+    registry.disconnect('plugin-session-0001', owner, second.sink)
+    const lost = registry.sendTask(ALICE, 'plugin-session-0001', { kind: 'fix', repo: 'acme/invoice-service', branch: 'b', pr: null, sessionId: null, content: 'Again', meta: {} })
     if (typeof lost === 'string') throw new Error(lost)
     clock += 61_000
     registry.sweep()
-    expect(registry.state().sessions).toEqual([])
-    expect(registry.state().tasks.find((t) => t.id === lost.id)).toMatchObject({ state: 'failed', message: 'The Claude Code session ended before the task was delivered.' })
-    expect(registry.sendTask('plugin-session-0001', { kind: 'fix', repo: 'r/r', branch: 'b', pr: null, sessionId: null, content: '', meta: {} })).toBe('not_found')
+    expect(registry.state(ALICE).sessions).toEqual([])
+    expect(registry.state(ALICE).tasks.find((t) => t.id === lost.id)).toMatchObject({ state: 'failed', message: 'The Claude Code session ended before the task was delivered.' })
+    expect(registry.sendTask(ALICE, 'plugin-session-0001', { kind: 'fix', repo: 'r/r', branch: 'b', pr: null, sessionId: null, content: '', meta: {} })).toBe('not_found')
   })
 
   it('fails unfinished tasks and expires prompts when the plugin unregisters', () => {
     const registry = createChannelRegistry({ now })
     registry.connect(registration(), owner, recorder().sink)
-    const task = registry.sendTask('plugin-session-0001', { kind: 'fix', repo: 'acme/invoice-service', branch: 'b', pr: null, sessionId: null, content: 'Fix', meta: {} })
+    const task = registry.sendTask(ALICE, 'plugin-session-0001', { kind: 'fix', repo: 'acme/invoice-service', branch: 'b', pr: null, sessionId: null, content: 'Fix', meta: {} })
     if (typeof task === 'string') throw new Error(task)
     registry.report('plugin-session-0001', owner, task.id, 'acknowledged', null)
     registry.permissionRequest('plugin-session-0001', owner, { requestId: 'abcde', toolName: 'Edit', description: '', inputPreview: '' })
     expect(registry.remove('plugin-session-0001', owner)).toBe(true)
-    expect(registry.state().tasks[0]).toMatchObject({ state: 'failed', message: 'The Claude Code session ended before reporting done.' })
-    expect(registry.state().permissions[0]!.state).toBe('expired')
+    expect(registry.state(ALICE).tasks[0]).toMatchObject({ state: 'failed', message: 'The Claude Code session ended before reporting done.' })
+    expect(registry.state(ALICE).permissions[0]!.state).toBe('expired')
   })
 
   it('a stale stream closing does not disconnect the newer one', () => {
@@ -119,10 +120,10 @@ describe('channel registry', () => {
     const second = recorder()
     registry.connect(registration(), owner, first.sink)
     registry.connect(registration(), owner, second.sink)
-    registry.disconnect('plugin-session-0001', first.sink)
-    expect(registry.state().sessions[0]!.connected).toBe(true)
-    expect(registry.ping('plugin-session-0001', first.sink)).toBe(false)
-    expect(registry.ping('plugin-session-0001', second.sink)).toBe(true)
+    registry.disconnect('plugin-session-0001', owner, first.sink)
+    expect(registry.state(ALICE).sessions[0]!.connected).toBe(true)
+    expect(registry.ping('plugin-session-0001', owner, first.sink)).toBe(false)
+    expect(registry.ping('plugin-session-0001', owner, second.sink)).toBe(true)
   })
 
   it('marks a session disconnected when a write fails', () => {
@@ -130,34 +131,34 @@ describe('channel registry', () => {
     const plugin = recorder()
     registry.connect(registration(), owner, plugin.sink)
     plugin.close()
-    expect(registry.ping('plugin-session-0001', plugin.sink)).toBe(false)
-    expect(registry.state().sessions[0]!.connected).toBe(false)
+    expect(registry.ping('plugin-session-0001', owner, plugin.sink)).toBe(false)
+    expect(registry.state(ALICE).sessions[0]!.connected).toBe(false)
   })
 
   it('relays a permission verdict once, and expires unanswered prompts', () => {
     const registry = createChannelRegistry({ now, permissionTtlMs: 600_000 })
     const plugin = recorder()
     registry.connect(registration(), owner, plugin.sink)
-    const task = registry.sendTask('plugin-session-0001', { kind: 'review', repo: 'acme/invoice-service', branch: 'b', pr: null, sessionId: null, content: 'x', meta: {} })
+    const task = registry.sendTask(ALICE, 'plugin-session-0001', { kind: 'review', repo: 'acme/invoice-service', branch: 'b', pr: null, sessionId: null, content: 'x', meta: {} })
     if (typeof task === 'string') throw new Error(task)
     registry.permissionRequest('plugin-session-0001', owner, { requestId: 'abcde', toolName: 'Bash', description: 'List files', inputPreview: '{"command":"ls"}' })
-    expect(registry.state().permissions[0]).toMatchObject({ requestId: 'abcde', taskId: task.id, state: 'pending' })
+    expect(registry.state(ALICE).permissions[0]).toMatchObject({ requestId: 'abcde', taskId: task.id, state: 'pending' })
 
-    expect(registry.decide('plugin-session-0001', 'zzzzz', 'allow')).toBe('not_found')
-    expect(registry.decide('plugin-session-0001', 'abcde', 'deny')).toBe('ok')
+    expect(registry.decide(ALICE, 'plugin-session-0001', 'zzzzz', 'allow')).toBe('not_found')
+    expect(registry.decide(ALICE, 'plugin-session-0001', 'abcde', 'deny')).toBe('ok')
     expect(plugin.events.at(-1)).toEqual({ event: 'verdict', data: { request_id: 'abcde', behavior: 'deny' } })
-    expect(registry.decide('plugin-session-0001', 'abcde', 'allow')).toBe('decided')
+    expect(registry.decide(ALICE, 'plugin-session-0001', 'abcde', 'allow')).toBe('decided')
 
     registry.permissionRequest('plugin-session-0001', owner, { requestId: 'fghij', toolName: 'Write', description: '', inputPreview: '' })
     clock += 600_001
     registry.sweep()
-    expect(registry.state().permissions.find((p) => p.requestId === 'fghij')!.state).toBe('expired')
+    expect(registry.state(ALICE).permissions.find((p) => p.requestId === 'fghij')!.state).toBe('expired')
   })
 
   it('notifies subscribers on every change and drops a revoked token\'s sessions', () => {
     const registry = createChannelRegistry({ now })
     const seen: ChannelState[] = []
-    const unsubscribe = registry.subscribe((state) => seen.push(state))
+    const unsubscribe = registry.subscribe(ALICE, (state) => seen.push(state))
     registry.connect(registration(), owner, recorder().sink)
     registry.update('plugin-session-0001', owner, { branch: 'main' })
     expect(seen.at(-1)!.sessions[0]!.branch).toBe('main')
@@ -166,6 +167,104 @@ describe('channel registry', () => {
     unsubscribe()
     registry.connect(registration(), owner, recorder().sink)
     expect(seen).toHaveLength(3)
+  })
+})
+
+describe('channel registry across users', () => {
+  const BOB = 'user-bob'
+  const bob: ChannelOwner = { userId: BOB, tokenId: 't9', grantId: null, tokenName: 'Bob channel' }
+  const task = (content: string) => ({ kind: 'fix' as const, repo: 'acme/invoice-service', branch: 'b', pr: null, sessionId: null, content, meta: {} })
+
+  it('keeps the same session id apart per user', () => {
+    const registry = createChannelRegistry()
+    const alicePlugin = recorder()
+    const bobPlugin = recorder()
+    expect(registry.connect(registration(), owner, alicePlugin.sink)).toBe('ok')
+    expect(registry.canConnect('plugin-session-0001', bob)).toBe('ok')
+    expect(registry.connect(registration({ label: 'bob laptop' }), bob, bobPlugin.sink)).toBe('ok')
+
+    expect(registry.state(ALICE).sessions.map((s) => s.label)).toEqual(['invoice-service on laptop'])
+    expect(registry.state(BOB).sessions.map((s) => s.label)).toEqual(['bob laptop'])
+
+    const sent = registry.sendTask(BOB, 'plugin-session-0001', task('for bob'))
+    if (typeof sent === 'string') throw new Error(sent)
+    expect(bobPlugin.events.at(-1)).toMatchObject({ event: 'task', data: { content: 'for bob' } })
+    expect(alicePlugin.events.map((e) => e.event)).toEqual(['ready'])
+    expect(registry.state(ALICE).tasks).toEqual([])
+
+    expect(registry.delivered('plugin-session-0001', owner, sent.id)).toBe(false)
+    expect(registry.report('plugin-session-0001', owner, sent.id, 'done', null)).toBe(false)
+    expect(registry.state(BOB).tasks[0]!.state).toBe('sent')
+
+    registry.remove('plugin-session-0001', bob)
+    expect(registry.state(ALICE).sessions[0]!.connected).toBe(true)
+  })
+
+  it('refuses tasks and verdicts for another user\'s session', () => {
+    const registry = createChannelRegistry()
+    const plugin = recorder()
+    registry.connect(registration(), owner, plugin.sink)
+    registry.permissionRequest('plugin-session-0001', owner, { requestId: 'abcde', toolName: 'Bash', description: '', inputPreview: '' })
+
+    expect(registry.sendTask(BOB, 'plugin-session-0001', task('hijack'))).toBe('not_found')
+    expect(registry.decide(BOB, 'plugin-session-0001', 'abcde', 'allow')).toBe('not_found')
+    expect(registry.permissionRequest('plugin-session-0001', bob, { requestId: 'fghij', toolName: 'Bash', description: '', inputPreview: '' })).toBe(false)
+    expect(registry.update('plugin-session-0001', bob, { label: 'taken' })).toBe(false)
+    expect(registry.remove('plugin-session-0001', bob)).toBe(false)
+    registry.removeOwner({ ...bob, tokenId: 't1' })
+    expect(plugin.events.map((e) => e.event)).toEqual(['ready'])
+    expect(registry.state(ALICE)).toMatchObject({ sessions: [{ label: 'invoice-service on laptop', connected: true }], tasks: [], permissions: [{ state: 'pending' }] })
+    expect(registry.state(BOB)).toEqual({ sessions: [], tasks: [], permissions: [] })
+  })
+
+  it('only notifies the user whose state changed', () => {
+    const registry = createChannelRegistry()
+    const aliceSeen: ChannelState[] = []
+    const bobSeen: ChannelState[] = []
+    registry.subscribe(ALICE, (state) => aliceSeen.push(state))
+    registry.subscribe(BOB, (state) => bobSeen.push(state))
+    registry.connect(registration(), owner, recorder().sink)
+    registry.sendTask(ALICE, 'plugin-session-0001', task('x'))
+    expect(aliceSeen).toHaveLength(2)
+    expect(bobSeen).toEqual([])
+  })
+
+  it('caps sessions and tasks per user', () => {
+    const registry = createChannelRegistry({ maxSessions: 2, maxTasks: 2 })
+    registry.connect(registration({ id: 'alice-session-1' }), owner, recorder().sink)
+    registry.connect(registration({ id: 'alice-session-2' }), owner, recorder().sink)
+    expect(registry.canConnect('alice-session-3', owner)).toBe('limit')
+    expect(registry.connect(registration({ id: 'alice-session-3' }), owner, recorder().sink)).toBe('limit')
+    expect(registry.connect(registration({ id: 'alice-session-1' }), owner, recorder().sink)).toBe('ok')
+    expect(registry.connect(registration({ id: 'bob-session-01' }), bob, recorder().sink)).toBe('ok')
+
+    let clock = 0
+    const timed = createChannelRegistry({ maxTasks: 2, now: () => ++clock })
+    timed.connect(registration(), owner, recorder().sink)
+    timed.connect(registration(), bob, recorder().sink)
+    timed.sendTask(BOB, 'plugin-session-0001', task('bob'))
+    for (const content of ['a1', 'a2', 'a3']) timed.sendTask(ALICE, 'plugin-session-0001', task(content))
+    expect(timed.state(ALICE).tasks).toHaveLength(2)
+    expect(timed.state(BOB).tasks).toHaveLength(1)
+  })
+
+  it('removeUser drops only that user\'s sessions, tasks and prompts', () => {
+    const registry = createChannelRegistry()
+    const seen: ChannelState[] = []
+    registry.subscribe(ALICE, (state) => seen.push(state))
+    const plugin = recorder()
+    registry.connect(registration(), owner, plugin.sink)
+    registry.sendTask(ALICE, 'plugin-session-0001', task('x'))
+    registry.permissionRequest('plugin-session-0001', owner, { requestId: 'abcde', toolName: 'Bash', description: '', inputPreview: '' })
+    registry.connect(registration(), bob, recorder().sink)
+    registry.sendTask(BOB, 'plugin-session-0001', task('y'))
+
+    registry.removeUser(ALICE)
+    expect(registry.state(ALICE)).toEqual({ sessions: [], tasks: [], permissions: [] })
+    expect(seen.at(-1)).toEqual({ sessions: [], tasks: [], permissions: [] })
+    expect(registry.ping('plugin-session-0001', owner, plugin.sink)).toBe(false)
+    expect(registry.state(BOB).sessions).toHaveLength(1)
+    expect(registry.state(BOB).tasks).toHaveLength(1)
   })
 })
 
@@ -201,12 +300,15 @@ function sseReader(res: Response) {
 describe('channel routes', () => {
   let ctx: ReturnType<typeof makeApp>
   let browser: string
+  let userId: string
   let pluginToken: string
   let pluginTokenId: string
 
   beforeEach(async () => {
     ctx = makeApp({ channel: createChannelRegistry({ heartbeatMs: 50 }) })
-    browser = await login(ctx.app)
+    const alice = createUserSession(ctx.db, 'alice')
+    browser = alice.token
+    userId = alice.user.id
     const res = await request(ctx.app, 'POST', '/api/auth/tokens', { name: 'Claude channel' }, browser)
     const body = (await res.json()) as { token: string; info: { id: string } }
     pluginToken = body.token
@@ -332,14 +434,92 @@ describe('channel routes', () => {
         for (;;) await plugin.next()
       })(),
     ).rejects.toThrow('stream ended')
-    expect(ctx.channel.state().sessions).toEqual([])
+    expect(ctx.channel.state(userId).sessions).toEqual([])
   })
 
   it('marks the session disconnected when the plugin goes away', async () => {
     const plugin = sseReader(await connect())
     await plugin.next()
     await plugin.close()
-    for (let i = 0; i < 20 && ctx.channel.state().sessions[0]?.connected; i++) await Bun.sleep(20)
-    expect(ctx.channel.state().sessions[0]!.connected).toBe(false)
+    for (let i = 0; i < 20 && ctx.channel.state(userId).sessions[0]?.connected; i++) await Bun.sleep(20)
+    expect(ctx.channel.state(userId).sessions[0]!.connected).toBe(false)
+  })
+})
+
+describe('channel routes across users', () => {
+  let ctx: ReturnType<typeof makeApp>
+  afterEach(() => ctx.cleanup())
+
+  async function signIn(login: string) {
+    const { token: browser, user } = createUserSession(ctx.db, login)
+    const res = await request(ctx.app, 'POST', '/api/auth/tokens', { name: `${login} channel` }, browser)
+    const { token: plugin } = (await res.json()) as { token: string }
+    const connect = (overrides: Partial<Registration> = {}) => request(ctx.app, 'POST', '/api/channel/stream', registration(overrides), plugin)
+    return { browser, plugin, userId: user.id, connect }
+  }
+
+  it('keeps sessions, tasks and prompts to the user who owns them', async () => {
+    ctx = makeApp({ channel: createChannelRegistry({ heartbeatMs: 50 }) })
+    const alice = await signIn('alice')
+    const bob = await signIn('bob')
+    const aliceShared = sseReader(await alice.connect())
+    const alicePrivate = sseReader(await alice.connect({ id: 'alice-only-session' }))
+    await aliceShared.next()
+    await alicePrivate.next()
+
+    const bobShared = await bob.connect({ label: 'bob laptop' })
+    expect(bobShared.status).toBe(200)
+    const bobStream = sseReader(bobShared)
+    expect(await bobStream.next()).toEqual({ event: 'ready', data: { id: 'plugin-session-0001', heartbeatMs: 50 } })
+
+    const events = '/api/channel/sessions/alice-only-session/events'
+    const prompt = { type: 'permission_request', requestId: 'abcde', toolName: 'Bash', description: '', inputPreview: '' }
+    expect((await request(ctx.app, 'POST', events, prompt, alice.plugin)).status).toBe(200)
+    const target = { kind: 'review', target: { repo: 'acme/invoice-service', branch: 'b' } }
+    const sent = await request(ctx.app, 'POST', '/api/channel/sessions/alice-only-session/tasks', target, alice.browser)
+    const { task } = (await sent.json()) as { task: { id: string } }
+
+    const listed = (await (await request(ctx.app, 'GET', '/api/channel/sessions', undefined, bob.browser)).json()) as ChannelState
+    expect(listed).toMatchObject({ sessions: [{ id: 'plugin-session-0001', label: 'bob laptop', tokenName: 'bob channel' }], tasks: [], permissions: [] })
+    expect(listed.sessions).toHaveLength(1)
+    const bobEvents = sseReader(await request(ctx.app, 'GET', '/api/channel/events', undefined, bob.browser))
+    expect(await bobEvents.next()).toMatchObject({ event: 'state', data: { sessions: [{ label: 'bob laptop' }], tasks: [], permissions: [] } })
+
+    expect((await request(ctx.app, 'POST', '/api/channel/sessions/alice-only-session/tasks', target, bob.browser)).status).toBe(404)
+    expect((await request(ctx.app, 'POST', '/api/channel/sessions/alice-only-session/permissions/abcde', { behavior: 'allow' }, bob.browser)).status).toBe(404)
+    expect((await request(ctx.app, 'POST', '/api/channel/sessions/plugin-session-0001/permissions/abcde', { behavior: 'allow' }, bob.browser)).status).toBe(404)
+    expect((await request(ctx.app, 'POST', events, { type: 'status', taskId: task.id, state: 'done' }, bob.plugin)).status).toBe(404)
+    expect((await request(ctx.app, 'POST', events, { type: 'update', label: 'taken' }, bob.plugin)).status).toBe(404)
+    expect((await request(ctx.app, 'DELETE', '/api/channel/sessions/alice-only-session', undefined, bob.plugin)).status).toBe(404)
+
+    expect((await request(ctx.app, 'POST', '/api/channel/sessions/plugin-session-0001/tasks', target, bob.browser)).status).toBe(200)
+    let event = await bobStream.next()
+    while (event.event === 'ping') event = await bobStream.next()
+    expect(event.event).toBe('task')
+
+    const aliceState = ctx.channel.state(alice.userId)
+    expect(aliceState.sessions.map((s) => [s.id, s.label, s.connected]).sort()).toEqual([
+      ['alice-only-session', 'invoice-service on laptop', true],
+      ['plugin-session-0001', 'invoice-service on laptop', true],
+    ])
+    expect(aliceState.tasks).toMatchObject([{ id: task.id, state: 'sent' }])
+    expect(aliceState.permissions).toMatchObject([{ requestId: 'abcde', state: 'pending' }])
+    expect(ctx.channel.state(bob.userId).tasks).toHaveLength(1)
+
+    await Promise.all([aliceShared.close(), alicePrivate.close(), bobStream.close(), bobEvents.close()])
+  })
+
+  it('refuses a plugin past the per-user session limit', async () => {
+    ctx = makeApp({ channel: createChannelRegistry({ heartbeatMs: 50, maxSessions: 1 }) })
+    const alice = await signIn('alice')
+    const bob = await signIn('bob')
+    const first = sseReader(await alice.connect())
+    await first.next()
+    const second = await alice.connect({ id: 'plugin-session-0002' })
+    expect(second.status).toBe(409)
+    expect(await second.json()).toEqual({ error: 'session_limit' })
+    const other = sseReader(await bob.connect({ id: 'plugin-session-0002' }))
+    expect((await other.next()).event).toBe('ready')
+    await Promise.all([first.close(), other.close()])
   })
 })
