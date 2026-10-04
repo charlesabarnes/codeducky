@@ -7,6 +7,9 @@ export interface LineSpan {
   endLine?: number | null
 }
 
+/** The most lines one note may cover; every covered line is kept visible and keyed in the diff. */
+export const MAX_RANGE_LINES = 1000
+
 export const lastLine = (span: LineSpan) => span.endLine ?? span.line
 
 export const isRange = (span: LineSpan) => lastLine(span) > span.line

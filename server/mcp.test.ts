@@ -247,6 +247,7 @@ describe('mcp tools', () => {
 
     expect((await call('add_note', { ...target, line: 7, endLine: 9, lineText: 'only one line' })).error).toContain('lineText has 1 line, but lines 7–9 are 3')
     expect((await call('add_note', { ...target, line: 7, endLine: 5 })).error).toContain('endLine 5 is before line 7')
+    expect((await call('add_note', { ...target, line: 1, endLine: 5000 })).error).toContain('at most 1000 lines')
   })
 
   it('get_checklist and check_item use the applicable checklists', async () => {

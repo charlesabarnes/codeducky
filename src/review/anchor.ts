@@ -1,7 +1,7 @@
 import type { NoteAnchor, NoteSide } from '../db/schema'
 import { contiguousAfter, contiguousBefore, indexOfLine, type NumberedLine } from './lines'
 
-export { isRange, lastLine, lineSpan, linesLabel } from '../../shared/anchor'
+export { isRange, lastLine, lineSpan, linesLabel, MAX_RANGE_LINES } from '../../shared/anchor'
 
 export const CONTEXT_LINES = 3
 

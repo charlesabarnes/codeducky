@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { MAX_RANGE_LINES } from '../../shared/anchor'
 import { pairId, parsePairId, parseSyncRequest, validateChange, wins } from '../../shared/sync'
 import { fromWire, toWire } from '../../src/sync/records'
 
@@ -94,6 +95,8 @@ describe('wire records', () => {
     expect(validateChange(withAnchor({ ...single, endLine: 6, rangeText: ['x', 'y'] }))).toBe('notes.anchor is invalid')
     expect(validateChange(withAnchor({ ...single, rangeText: ['x'] }))).toBe('notes.anchor is invalid')
     expect(validateChange(withAnchor({ ...single, endLine: '6' }))).toBe('notes.anchor is invalid')
+    expect(validateChange(withAnchor({ ...single, endLine: 4 + MAX_RANGE_LINES - 1 }))).toBeNull()
+    expect(validateChange(withAnchor({ ...single, endLine: 4 + MAX_RANGE_LINES }))).toBe('notes.anchor is invalid')
   })
 
   it('splits invalid changes out of a request', () => {

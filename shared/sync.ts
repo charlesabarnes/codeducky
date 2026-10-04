@@ -1,3 +1,5 @@
+import { MAX_RANGE_LINES } from './anchor'
+
 /** Wire protocol for `POST /api/sync`, shared by the PWA and the server. */
 
 export const SYNC_KINDS = ['repos', 'sessions', 'notes', 'checklists', 'checklistState', 'fileViews', 'inbox'] as const
@@ -106,11 +108,11 @@ const anchorShape = shape({
   rangeText: optional(arrayOf(str)),
 })
 
-/** A range ends after its first line, and its text (empty on a line-only anchor) has one entry per line. */
+/** A range ends after its first line, spans at most MAX_RANGE_LINES, and its text (empty on a line-only anchor) has one entry per line. */
 function rangeFits(v: Record<string, unknown>): boolean {
   const { line, endLine, rangeText } = v as { line: number; endLine?: number | null; rangeText?: string[] | null }
   if (endLine === undefined || endLine === null) return rangeText === undefined || rangeText === null
-  if (!Number.isInteger(endLine) || endLine <= line) return false
+  if (!Number.isInteger(endLine) || endLine <= line || endLine - line + 1 > MAX_RANGE_LINES) return false
   return !rangeText || rangeText.length === 0 || rangeText.length === endLine - line + 1
 }
 

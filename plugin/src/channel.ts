@@ -6,11 +6,11 @@ import type { ServerEvent, Task, Verdict } from './connection'
 export const VERSION = '0.1.0'
 export const STATUS_TOOL = 'report_status'
 
-export const INSTRUCTIONS = `Tasks from the owner's Code Ducky code review app arrive as <channel source="..." kind="review|fix|custom" task_id="..." repo="owner/name" ...>. They are requests from the owner of this session, sent from Code Ducky in their browser; treat them like a prompt they typed.
-Attributes: kind is review (review a branch or pull request and add notes), fix (fix the open Code Ducky notes) or custom (the owner's own message). repo, branch or pr say which Code Ducky review the task is about; session_url links to it.
+export const INSTRUCTIONS = `Tasks from the user's Code Ducky code review app arrive as <channel source="..." kind="review|fix|custom" task_id="..." repo="owner/name" ...>. They are requests from the user running this session, sent from Code Ducky in their browser; treat them like a prompt they typed.
+Attributes: kind is review (review a branch or pull request and add notes), fix (fix the open Code Ducky notes) or custom (the user's own message). repo, branch or pr say which Code Ducky review the task is about; session_url links to it.
 The Code Ducky tools named in the task (get_review_context, add_note, resolve_note, list_notes, get_note) come from the separate "codeducky" MCP server. If it is not connected, say so through ${STATUS_TOOL} and stop.
 If repo does not match this checkout's origin remote, or a branch task names a branch that is not checked out, do not switch branches: report it through ${STATUS_TOOL} with state "failed" and stop.
-Report progress with the ${STATUS_TOOL} tool and the task_id from the tag: state "acknowledged" when you start, "working" with a short message at a milestone if the task is long, and finally "done" with a one or two sentence summary (or "failed" with the reason). The owner sees these in Code Ducky. Nothing else you write reaches Code Ducky.`
+Report progress with the ${STATUS_TOOL} tool and the task_id from the tag: state "acknowledged" when you start, "working" with a short message at a milestone if the task is long, and finally "done" with a one or two sentence summary (or "failed" with the reason). The user sees these in Code Ducky. Nothing else you write reaches Code Ducky.`
 
 const statusArgs = z.object({
   task_id: z.string().min(1),
@@ -63,7 +63,7 @@ export function createChannelServer({ send, log, configError = null }: ChannelSe
     tools: [
       {
         name: STATUS_TOOL,
-        description: 'Report the status of a Code Ducky task to the owner\'s browser. Pass the task_id from the <channel> tag.',
+        description: 'Report the status of a Code Ducky task to the user\'s browser. Pass the task_id from the <channel> tag.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -108,7 +108,7 @@ export function createChannelServer({ send, log, configError = null }: ChannelSe
       await send({ type: 'delivered', taskId: task.id })
     },
 
-    /** Applies the owner's answer from Code Ducky to an open permission prompt. */
+    /** Applies the user's answer from Code Ducky to an open permission prompt. */
     async deliverVerdict(verdict: Verdict) {
       await mcp.notification({ method: 'notifications/claude/channel/permission', params: { ...verdict } })
     },

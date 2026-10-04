@@ -7,7 +7,7 @@ import type { LineAnnotations } from '../../diff/DiffTable'
 import { lineKey } from '../../diff/hunks'
 import type { LineActions, NoteAction } from '../../keys/lineActions'
 import { isMultiLine, type LineRange } from '../../keys/selection'
-import { createAnchor, isRange, lastLine, linesLabel } from '../../review/anchor'
+import { createAnchor, isRange, lastLine, linesLabel, MAX_RANGE_LINES } from '../../review/anchor'
 import type { NumberedLine } from '../../review/lines'
 import type { AnchorResult } from '../../review/viewNotes'
 import { NoteCard } from './NoteCard'
@@ -85,7 +85,7 @@ export function useNoteAnnotations({ sessionId, path, notes, lines, focusedId, a
   const actions: LineActions = {
     noted: new Set(byCard.keys()),
     comment: (range) => {
-      const refusal = refuseSide?.(range.side)
+      const refusal = range.end - range.start + 1 > MAX_RANGE_LINES ? `A note can cover at most ${MAX_RANGE_LINES} lines.` : refuseSide?.(range.side)
       if (refusal) return onRefuse?.(refusal)
       setDraft({ path, range })
     },
