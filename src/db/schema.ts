@@ -1,6 +1,9 @@
 export type BaseSource = 'local' | 'github'
-/** Where a session's diff comes from: a local checkout, or a pull request read through the GitHub API. */
-export type SessionSource = 'local' | 'github-pr'
+/**
+ * Where a session's diff comes from: a local checkout, a pull request read through the GitHub API, or a patch file
+ * (kept on this device, never synced).
+ */
+export type SessionSource = 'local' | 'github-pr' | 'patch'
 export type SubmittedReviewState = 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED'
 export type SessionStatus = 'active' | 'archived'
 export type NoteSide = 'old' | 'new'
@@ -92,6 +95,15 @@ export interface SessionPullRequest {
 }
 
 export const isPrSession = (session: Pick<Session, 'source'>) => session.source === 'github-pr'
+
+export const isPatchSession = (session: Pick<Session, 'source'>) => session.source === 'patch'
+
+/** The text of a patch session's file. Local only, like the session. */
+export interface StoredPatch {
+  sessionId: string
+  name: string
+  text: string
+}
 
 export interface FileView extends Synced {
   sessionId: string

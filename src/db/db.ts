@@ -15,6 +15,7 @@ import type {
   ReviewSnapshot,
   Session,
   Settings,
+  StoredPatch,
 } from './schema'
 
 export class CodeDuckyDb extends Dexie {
@@ -29,6 +30,7 @@ export class CodeDuckyDb extends Dexie {
   inbox!: EntityTable<InboxSnapshot, 'id'>
   githubBlobs!: Table<CachedBlob, string>
   reviewSnapshots!: Table<ReviewSnapshot, string>
+  patches!: Table<StoredPatch, string>
   outbox!: Table<OutboxEntry, string>
   rejected!: Table<RejectedEntry, string>
   syncMeta!: Table<MetaEntry, string>
@@ -91,6 +93,8 @@ export class CodeDuckyDb extends Dexie {
     this.version(6).stores({ inbox: 'id', githubBlobs: 'oid, at' })
     // Local only: not a sync kind, so the sync middleware leaves it alone.
     this.version(7).stores({ reviewSnapshots: 'oid, at, [at+size]' })
+    // Local only, like the patch sessions it belongs to.
+    this.version(8).stores({ patches: 'sessionId' })
     this.use(syncMiddleware)
   }
 }

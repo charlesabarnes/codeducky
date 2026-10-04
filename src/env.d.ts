@@ -5,6 +5,8 @@ declare const __CODEDUCKY_BUILD__: string
 
 interface LaunchParams {
   readonly targetURL?: string
+  /** Files the app was opened with, through the manifest's file_handlers. */
+  readonly files?: readonly FileSystemHandle[]
 }
 
 interface LaunchQueue {

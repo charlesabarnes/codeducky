@@ -1,4 +1,5 @@
 import { pairId, parsePairId, type RecordData, type SyncKind, type WireChange } from '../../shared/sync'
+import { isPatchSessionId } from './ids'
 
 type Key = string | [string, string]
 type Row = Record<string, unknown>
@@ -44,6 +45,10 @@ export const RECORD_SPECS: Record<SyncKind, RecordSpec> = {
 
 /** Synced tables share their name with their sync kind. */
 export const isSyncedTable = (name: string): name is SyncKind => Object.hasOwn(RECORD_SPECS, name)
+
+/** Records that never sync: patch sessions and the notes, views and checklist ticks made on them. */
+export const isLocalOnly = (kind: SyncKind, row: Row | undefined): boolean =>
+  row !== undefined && isPatchSessionId(kind === 'sessions' ? row.id : row.sessionId)
 
 export const HAS_GENERATED_ID: ReadonlySet<SyncKind> = new Set(['repos', 'sessions', 'notes', 'checklists', 'inbox'])
 

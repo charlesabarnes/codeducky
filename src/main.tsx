@@ -10,6 +10,7 @@ import { RouterProvider } from 'react-router'
 import { router } from './app/router'
 import { startAppearance } from './app/appearance'
 import { db } from './db/db'
+import { openLaunchedFiles } from './features/patch/openPatch'
 import { startBrowserPresence } from './pwa/browserPresence'
 import { startInstallPrompt } from './pwa/installPrompt'
 import { handleLaunches } from './pwa/launchQueue'
@@ -32,6 +33,8 @@ handleLaunches({
   location: window.location,
   navigate,
   openServerPage: (url) => window.location.assign(url),
+  openFiles: (files) =>
+    void openLaunchedFiles(db, files).then(({ to, patchError }) => router.navigate(to, patchError ? { state: { patchError } } : undefined)),
 })
 startBrowserPresence(navigate)
 void syncController.start()

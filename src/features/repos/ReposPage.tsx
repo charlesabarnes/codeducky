@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Folder, FolderGit2, FolderOpen } from 'lucide-react'
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { db } from '../../db/db'
 import { supportsFileSystemAccess } from '../../fs/permission'
 import { openRepoFolder } from './openRepoFolder'
@@ -9,13 +9,15 @@ import { StatusBar } from '../../app/chrome'
 import { repoPath } from '../../app/paths'
 import { repoLabel } from '../../db/repos'
 import { GithubIcon } from '../../ui/GithubIcon'
+import { OpenPatchButton, PatchSessionList } from '../patch/PatchSessions'
 import { FolderAccessNotice } from '../pwa/FolderAccess'
 import { PageHeader } from '../../ui/PageHeader'
 
 export function ReposPage() {
   const navigate = useNavigate()
   const repos = useLiveQuery(() => db.repos.orderBy('lastOpenedAt').reverse().toArray(), [])
-  const [error, setError] = useState<string | null>(null)
+  const launched = (useLocation().state as { patchError?: string } | null)?.patchError ?? null
+  const [error, setError] = useState<string | null>(launched)
   const [opening, setOpening] = useState(false)
 
   const onOpen = async () => {
@@ -39,17 +41,19 @@ export function ReposPage() {
         </span>
       </StatusBar>
       <PageHeader icon={FolderGit2} title="repos">
-        <p>Open a local checkout to review its working tree against a base branch. Access is read-only.</p>
+        <p>Open a local checkout to review its working tree against a base branch, or a .patch file to review on its own. Access is read-only.</p>
       </PageHeader>
-      {supportsFileSystemAccess() ? (
-        <div>
+      <div className="row">
+        {supportsFileSystemAccess() && (
           <button type="button" onClick={onOpen} disabled={opening}>
             <FolderOpen size={13} aria-hidden />
             {opening ? 'opening…' : 'open repo folder'}
           </button>
-        </div>
-      ) : (
-        <p className="error">This browser does not support the File System Access API. Use a Chromium-based desktop browser.</p>
+        )}
+        <OpenPatchButton onError={setError} />
+      </div>
+      {!supportsFileSystemAccess() && (
+        <p className="error">This browser does not support the File System Access API, so it cannot open repo folders. Use a Chromium-based desktop browser.</p>
       )}
       {error && <p className="error">{error}</p>}
       {supportsFileSystemAccess() && <FolderAccessNotice />}
@@ -85,6 +89,7 @@ export function ReposPage() {
           </tbody>
         </table>
       )}
+      <PatchSessionList />
     </section>
   )
 }
