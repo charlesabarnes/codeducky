@@ -10,9 +10,9 @@ import { z } from 'zod'
 import { ChannelClient } from '../../src/channel/client'
 import { CodeDuckyDb } from '../../src/db/db'
 import { SyncController } from '../../src/sync/controller'
+import { signInDevice } from '../support/deviceSignIn'
 import { startServer } from '../support/realServer'
 
-const PASSPHRASE = 'channel integration passphrase'
 const bun = process.env.BUN_PATH ?? (existsSync(join(homedir(), '.bun/bin/bun')) ? join(homedir(), '.bun/bin/bun') : 'bun')
 
 const ChannelNotification = z.object({
@@ -29,7 +29,7 @@ let stop = () => {}
 const checkout = mkdtempSync(join(tmpdir(), 'codeducky-channel-int-'))
 
 beforeAll(async () => {
-  ;({ base, stop } = await startServer(PASSPHRASE))
+  ;({ base, stop } = await startServer())
   const git = (...args: string[]) => spawnSync('git', args, { cwd: checkout, stdio: 'ignore' })
   git('init', '-q', '-b', 'feature/tax')
   git('remote', 'add', 'origin', 'https://github.com/acme/invoice-service.git')
@@ -57,7 +57,7 @@ describe('Send to Claude against the real server', () => {
     client.setNotificationHandler(ChannelNotification, ({ params }) => void messages.push(params))
     client.setNotificationHandler(VerdictNotification, ({ params }) => void verdicts.push(params))
     try {
-      expect(await controller.signIn(PASSPHRASE, 'Laptop')).toBe('ok')
+      await signInDevice(controller, db, base, 'alice', 'Laptop')
       await vi.waitFor(() => expect(channel.getSnapshot().status).toBe('live'), { timeout: 10_000 })
       const { token } = await controller.mintToken('Claude channel')
 

@@ -6,14 +6,15 @@ import { addNote, deleteNote, editNote, setNoteStatus } from '../../src/db/notes
 import { saveOpenedRepo } from '../../src/db/repos'
 import { startOrResumeSession } from '../../src/db/sessions'
 import { SyncController } from '../../src/sync/controller'
-import { startServer } from '../support/realServer'
+import { signInDevice } from '../support/deviceSignIn'
+import { fakeSignIn, fetchSend } from '../support/fakeSignIn'
+import { ADMIN_PASSPHRASE, startServer } from '../support/realServer'
 
-const PASSPHRASE = 'integration passphrase'
 let BASE = ''
 let stop = () => {}
 
 beforeAll(async () => {
-  ;({ base: BASE, stop } = await startServer(PASSPHRASE))
+  ;({ base: BASE, stop } = await startServer())
 })
 
 afterAll(() => stop())
@@ -52,9 +53,8 @@ describe('sync against the real server', () => {
       const n1 = await addNote(a.db, { sessionId, path: 'server/app.ts', anchor, body: 'check auth', severity: 'issue' })
       const n2 = await addNote(a.db, { sessionId, path: 'server/app.ts', anchor, body: 'nit', severity: 'nit' })
       const listId = await createChecklist(a.db, 'global', { title: 'Push', items: ['Tests'] })
-      expect(await a.controller.signIn('wrong', 'A')).toBe('invalid')
-      expect(await a.controller.signIn(PASSPHRASE, 'Device A')).toBe('ok')
-      expect(await b.controller.signIn(PASSPHRASE, 'Device B')).toBe('ok')
+      await signInDevice(a.controller, a.db, BASE, 'alice', 'Device A')
+      await signInDevice(b.controller, b.db, BASE, 'alice', 'Device B')
       expect(await snapshot(b.db)).toEqual(await snapshot(a.db))
       expect(await saveOpenedRepo(b.db, folder('clone'), identity)).toBe(repoId)
 
@@ -100,5 +100,28 @@ describe('sync against the real server', () => {
         await d.db.delete()
       }
     }
+  })
+
+  it('keeps each GitHub user to their own data, and signs the admin in by passphrase only', async () => {
+    const alice = await fakeSignIn(fetchSend, BASE, 'int-alice')
+    const bob = await fakeSignIn(fetchSend, BASE, 'int-bob')
+    expect(bob.user.id).not.toBe(alice.user.id)
+    const push = (token: string, changes: unknown[]) =>
+      fetch(`${BASE}/api/sync`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cursor: 0, changes }),
+      }).then((res) => res.json() as Promise<{ changes: unknown[] }>)
+    await push(alice.token, [{ kind: 'inbox', id: 'inbox', changedAt: 1, deleted: false, data: { fetchedAt: 1, items: [] } }])
+    expect((await push(alice.token, [])).changes).toHaveLength(1)
+    expect((await push(bob.token, [])).changes).toEqual([])
+
+    const admin = await fetch(`${BASE}/api/auth/admin/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passphrase: ADMIN_PASSPHRASE, name: 'Admin' }),
+    })
+    expect(((await admin.json()) as { user: { role: string } }).user.role).toBe('admin')
+    expect((await fetch(`${BASE}/api/auth/login`, { method: 'POST', body: '{}' })).status).toBe(401)
   })
 })

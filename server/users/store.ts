@@ -86,3 +86,8 @@ export function ensureAdmin(db: Database, now = Date.now()): void {
     now,
   )
 }
+
+/** GitHub accounts; the admin is not counted. */
+export function countUsers(db: Database): number {
+  return db.query<{ n: number }, []>(`SELECT COUNT(*) AS n FROM users WHERE role = 'user'`).get()!.n
+}
