@@ -15,7 +15,8 @@
         try {
           theme = localStorage.getItem('rubberduck.theme')
           var palette = localStorage.getItem('rubberduck.palette')
-          if (palette) root.dataset.palette = palette
+          // Keep in step with PALETTES in src/db/schema.ts; a test checks it.
+          if (['terminal', 'fjord', 'solar', 'dusk', 'contrast'].indexOf(palette) !== -1) root.dataset.palette = palette
         } catch (e) {}
         if (theme !== 'dark' && theme !== 'light') {
           try {

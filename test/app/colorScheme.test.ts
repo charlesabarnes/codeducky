@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { PALETTES } from '../../src/db/schema'
 import { DARK_QUERY, prefersDark, resolveTheme } from '../../src/app/colorScheme'
 
 type Scheme = 'dark' | 'light' | 'no-preference'
@@ -83,6 +84,15 @@ describe('index.html first paint', () => {
   it('uses the cached choice over the OS', () => {
     const cache = { 'rubberduck.theme': 'light', 'rubberduck.palette': 'terminal' }
     expect(firstPaint(matchMediaFor('dark'), cache)).toEqual({ theme: 'light', palette: 'terminal' })
+  })
+
+  it('ignores an unknown cached palette', () => {
+    expect(firstPaint(matchMediaFor('light'), { 'rubberduck.palette': 'neon' }).palette).toBe('solar')
+  })
+
+  it('knows the same palettes as the app', () => {
+    const listed = /\[([^\]]*)\]\.indexOf\(palette\)/.exec(script)?.[1] ?? ''
+    expect(listed.split(',').map((name) => name.trim().replace(/'/g, ''))).toEqual([...PALETTES])
   })
 
   it('follows the OS when the cached theme is system', () => {
