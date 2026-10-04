@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { Dexie } from 'dexie'
 import { afterEach, describe, expect, it } from 'vitest'
-import { SkelbertDb } from '../../src/db/db'
+import { RubberduckDb } from '../../src/db/db'
 import { saveRepoInstructions } from '../../src/db/repos'
 import type { Note, NoteSource } from '../../src/db/schema'
 import { startNewSession, startOrResumeSession } from '../../src/db/sessions'
@@ -11,7 +11,7 @@ import { repoInstructions } from '../../shared/instructions'
 
 const opened: Dexie[] = []
 const open = (name: string) => {
-  const db = new SkelbertDb(name)
+  const db = new RubberduckDb(name)
   opened.push(db)
   return db
 }
@@ -24,7 +24,7 @@ const start = { repoId: 'r1', branch: 'feature', headSha: 'h1', baseSha: 'b1' }
 const anchor = { line: 3, side: 'new' as const, text: '  console.log(sum)', before: ['a'], after: ['b'] }
 
 /** A suggested note as add_note (MCP) or, for old data, the removed Claude pass left it. */
-async function suggest(db: SkelbertDb, sessionId: string, title: string, source: NoteSource = 'mcp'): Promise<string> {
+async function suggest(db: RubberduckDb, sessionId: string, title: string, source: NoteSource = 'mcp'): Promise<string> {
   const note: Note = { sessionId, path: 'src/cart.ts', anchor, title, body: `**${title}**`, severity: 'suggestion', status: 'suggested', source, createdAt: 1, updatedAt: 1 }
   return (await db.notes.add(note)) as string
 }

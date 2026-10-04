@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it } from 'vitest'
-import { SkelbertDb } from '../../src/db/db'
+import { RubberduckDb } from '../../src/db/db'
 import { loadLastLooks, markViewed, recordArchivedReview, recordReviewHead, recordReviewedFiles } from '../../src/db/fileViews'
 import type { FileView } from '../../src/db/schema'
 import { startNewSession, startOrResumeSession } from '../../src/db/sessions'
@@ -64,9 +64,9 @@ describe('last looks', () => {
   })
 })
 
-const opened: SkelbertDb[] = []
+const opened: RubberduckDb[] = []
 const open = (name: string) => {
-  const db = new SkelbertDb(`lastlook-${name}`)
+  const db = new RubberduckDb(`lastlook-${name}`)
   opened.push(db)
   return db
 }

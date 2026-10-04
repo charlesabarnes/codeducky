@@ -29,13 +29,13 @@ describe('Claude Code deep links', () => {
     expect(parse(claudeDeepLink('acme/app', 'x'.repeat(6000))).q).toHaveLength(MAX_PROMPT)
   })
 
-  it('names the Skelbert prompts, tools, repo and branch for a branch session', () => {
+  it('names the Rubberduck prompts, tools, repo and branch for a branch session', () => {
     const review = linkPrompt('review', branch)
-    expect(review).toContain('/mcp__skelbert__review acme/invoice-service feature/tax-rounding')
+    expect(review).toContain('/mcp__rubberduck__review acme/invoice-service feature/tax-rounding')
     expect(review).toContain('get_review_context with repo "acme/invoice-service" and branch "feature/tax-rounding"')
     expect(review).toContain('add_note')
     const fix = linkPrompt('fix', branch)
-    expect(fix).toContain('/mcp__skelbert__fix acme/invoice-service feature/tax-rounding')
+    expect(fix).toContain('/mcp__rubberduck__fix acme/invoice-service feature/tax-rounding')
     expect(fix).toContain('resolve_note')
     expect(fix).toContain('Never push')
   })
@@ -46,9 +46,9 @@ describe('Claude Code deep links', () => {
     expect(linkPrompt('fix', pull)).toContain('head branch fix/webhooks')
   })
 
-  it('adds the Skelbert context to a custom prompt and keeps it under the cap', () => {
+  it('adds the Rubberduck context to a custom prompt and keeps it under the cap', () => {
     const prompt = customPrompt('  Why is rounding done twice?  ', branch)
-    expect(prompt).toMatch(/^Why is rounding done twice\?\n\n\(Context: my Skelbert review of branch feature\/tax-rounding/)
+    expect(prompt).toMatch(/^Why is rounding done twice\?\n\n\(Context: my Rubberduck review of branch feature\/tax-rounding/)
     expect(customPrompt('y'.repeat(9000), pull).length).toBeLessThanOrEqual(MAX_PROMPT)
     expect(customPrompt('y'.repeat(9000), pull)).toContain('pr 42')
   })

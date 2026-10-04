@@ -8,7 +8,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { ChannelClient } from '../../src/channel/client'
-import { SkelbertDb } from '../../src/db/db'
+import { RubberduckDb } from '../../src/db/db'
 import { SyncController } from '../../src/sync/controller'
 import { startServer } from '../support/realServer'
 
@@ -26,7 +26,7 @@ const VerdictNotification = z.object({
 
 let base = ''
 let stop = () => {}
-const checkout = mkdtempSync(join(tmpdir(), 'skelbert-channel-int-'))
+const checkout = mkdtempSync(join(tmpdir(), 'rubberduck-channel-int-'))
 
 beforeAll(async () => {
   ;({ base, stop } = await startServer(PASSPHRASE))
@@ -42,7 +42,7 @@ afterAll(() => {
 
 describe('Send to Claude against the real server', () => {
   it('relays a task from the PWA to the plugin and status and a permission prompt back', async () => {
-    const db = new SkelbertDb('channel-int')
+    const db = new RubberduckDb('channel-int')
     const controller = new SyncController(db, { baseUrl: base, listenToBrowser: false, debounceMs: 60_000, intervalMs: 3_600_000 })
     const channel = new ChannelClient({
       token: () => controller.authToken(),
@@ -66,7 +66,7 @@ describe('Send to Claude against the real server', () => {
           command: bun,
           args: [resolve('plugin/server.ts')],
           cwd: checkout,
-          env: { PATH: process.env.PATH ?? '', HOME: homedir(), SKELBERT_URL: base, SKELBERT_TOKEN: token },
+          env: { PATH: process.env.PATH ?? '', HOME: homedir(), RUBBERDUCK_URL: base, RUBBERDUCK_TOKEN: token },
           stderr: 'ignore',
         }),
       )
@@ -81,8 +81,8 @@ describe('Send to Claude against the real server', () => {
 
       const { task } = await channel.sendTask(session.id, { kind: 'fix', target: { repo: 'acme/invoice-service', branch: 'feature/tax', sessionId: 'local-1' } })
       await vi.waitFor(() => expect(messages).toHaveLength(1))
-      expect(messages[0]!.content).toContain('Work through the Skelbert review notes on my branch')
-      expect(messages[0]!.meta).toMatchObject({ kind: 'fix', task_id: task.id, skelbert_session: 'local-1', session_url: `${base}/sessions/local-1` })
+      expect(messages[0]!.content).toContain('Work through the Rubberduck review notes on my branch')
+      expect(messages[0]!.meta).toMatchObject({ kind: 'fix', task_id: task.id, rubberduck_session: 'local-1', session_url: `${base}/sessions/local-1` })
 
       await client.callTool({ name: 'report_status', arguments: { task_id: task.id, state: 'working', message: 'Fixing 2 notes' } })
       await vi.waitFor(() => expect(channel.getSnapshot().state.tasks[0]).toMatchObject({ state: 'working', message: 'Fixing 2 notes' }))

@@ -285,7 +285,7 @@ describe('channel routes', () => {
       kind: 'review',
       repo: 'acme/invoice-service',
       branch: 'feature/tax',
-      skelbert_session: 'sess-1',
+      rubberduck_session: 'sess-1',
       session_url: 'http://localhost/sessions/sess-1',
       task_id: task.id,
     })

@@ -1,6 +1,6 @@
 import { MAX_INSTRUCTIONS } from '../../shared/instructions'
 import { repoIdFor } from '../sync/ids'
-import type { SkelbertDb } from './db'
+import type { RubberduckDb } from './db'
 import type { OpenedRepo, Repo } from './schema'
 
 export interface RepoIdentity {
@@ -9,7 +9,7 @@ export interface RepoIdentity {
   defaultBase: string | null
 }
 
-export async function findRepoByHandle(db: SkelbertDb, handle: FileSystemDirectoryHandle): Promise<Repo | undefined> {
+export async function findRepoByHandle(db: RubberduckDb, handle: FileSystemDirectoryHandle): Promise<Repo | undefined> {
   for (const { repoId, dirHandle } of await db.repoHandles.toArray()) {
     if (await dirHandle.isSameEntry(handle)) return db.repos.get(repoId)
   }
@@ -21,7 +21,7 @@ export async function findRepoByHandle(db: SkelbertDb, handle: FileSystemDirecto
  * opened on a second device attaches to the repo synced from the first. The handle stays local.
  */
 export async function saveOpenedRepo(
-  db: SkelbertDb,
+  db: RubberduckDb,
   handle: FileSystemDirectoryHandle,
   identity: RepoIdentity,
 ): Promise<string> {
@@ -59,7 +59,7 @@ export async function saveOpenedRepo(
 }
 
 /** Joins a repo with this device's folder handle, if it has one. */
-export async function openedRepo(db: SkelbertDb, repo: Repo | undefined): Promise<OpenedRepo | null> {
+export async function openedRepo(db: RubberduckDb, repo: Repo | undefined): Promise<OpenedRepo | null> {
   if (repo?.id === undefined) return null
   const local = await db.repoHandles.get(repo.id)
   return local ? { ...repo, id: repo.id, dirHandle: local.dirHandle } : null
@@ -68,6 +68,6 @@ export async function openedRepo(db: SkelbertDb, repo: Repo | undefined): Promis
 export const repoLabel = (repo: Pick<Repo, 'owner' | 'name'>) => (repo.owner ? `${repo.owner}/${repo.name}` : repo.name)
 
 /** Saves the repo's review instructions; the legacy field goes so the two cannot disagree. */
-export async function saveRepoInstructions(db: SkelbertDb, repoId: string, text: string): Promise<void> {
+export async function saveRepoInstructions(db: RubberduckDb, repoId: string, text: string): Promise<void> {
   await db.repos.update(repoId, { instructions: text.trim().slice(0, MAX_INSTRUCTIONS), claudeInstructions: undefined })
 }

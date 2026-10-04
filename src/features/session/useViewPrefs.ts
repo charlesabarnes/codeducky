@@ -4,9 +4,9 @@ import type { ViewMode } from '../../diff/DiffTable'
 import type { FileOrder } from '../../review/order'
 
 const KEYS = {
-  mode: 'skelbert.viewMode',
-  ignoreWhitespace: 'skelbert.ignoreWhitespace',
-  order: 'skelbert.fileOrder',
+  mode: 'rubberduck.viewMode',
+  ignoreWhitespace: 'rubberduck.ignoreWhitespace',
+  order: 'rubberduck.fileOrder',
 } as const
 
 /** A preference kept in localStorage on this device, or only in memory when storage fails. */

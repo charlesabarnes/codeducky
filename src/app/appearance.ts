@@ -7,10 +7,10 @@ export type Theme = 'dark' | 'light'
 
 /** Mirrors the stored settings so the first paint already uses them; IndexedDB answers too late for that. */
 const CACHE_KEYS: Record<AppearanceKey, string> = {
-  theme: 'skelbert.theme',
-  palette: 'skelbert.palette',
-  density: 'skelbert.density',
-  codeFont: 'skelbert.codeFont',
+  theme: 'rubberduck.theme',
+  palette: 'rubberduck.palette',
+  density: 'rubberduck.density',
+  codeFont: 'rubberduck.codeFont',
 }
 const LIGHT_QUERY = '(prefers-color-scheme: light)'
 /** Each palette's --bg, for the browser's title bar. */

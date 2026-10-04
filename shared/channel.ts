@@ -1,5 +1,5 @@
 /**
- * The "Send to Claude" channel: Claude Code sessions running the Skelbert channel plugin connect out to
+ * The "Send to Claude" channel: Claude Code sessions running the Rubberduck channel plugin connect out to
  * the server, and the PWA sends them tasks. These are the shapes the server and the PWA exchange; the
  * plugin (plugin/) is a separate package and keeps its own copy of the wire format.
  */
@@ -45,7 +45,7 @@ export interface ChannelTaskView {
   repo: string
   branch: string | null
   pr: number | null
-  /** The Skelbert session the task was sent from. */
+  /** The Rubberduck session the task was sent from. */
   sessionId: string | null
   state: ChannelTaskState
   /** Claude's last status message. */
@@ -77,7 +77,7 @@ export interface TaskTarget {
   repo: string
   branch?: string
   pr?: number
-  /** The Skelbert session id, for links back. */
+  /** The Rubberduck session id, for links back. */
   sessionId?: string
 }
 

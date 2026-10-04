@@ -1,14 +1,14 @@
 import type { FileChange } from '../git/types'
 import { currentOid, lastLooks, latestReview, type LastLook } from '../review/lastLook'
 import { contentHash } from '../review/viewed'
-import type { SkelbertDb } from './db'
+import type { RubberduckDb } from './db'
 import type { FileView, LastReview, Session } from './schema'
 
-export async function setViewed(db: SkelbertDb, view: FileView): Promise<void> {
+export async function setViewed(db: RubberduckDb, view: FileView): Promise<void> {
   await db.fileViews.put(view)
 }
 
-export function sessionViews(db: SkelbertDb, sessionId: string): Promise<FileView[]> {
+export function sessionViews(db: RubberduckDb, sessionId: string): Promise<FileView[]> {
   return db.fileViews.where({ sessionId }).toArray()
 }
 
@@ -26,7 +26,7 @@ export interface ViewedInput {
  * Marks a file viewed or not. Marking it viewed records the reviewed blob oid (synced, small); unmarking keeps the
  * last reviewed oid, since that look still happened. Only writes small records, so it stays instant on big files.
  */
-export async function markViewed(db: SkelbertDb, { sessionId, change, viewed, head }: ViewedInput, now = Date.now()): Promise<void> {
+export async function markViewed(db: RubberduckDb, { sessionId, change, viewed, head }: ViewedInput, now = Date.now()): Promise<void> {
   await db.transaction('rw', db.fileViews, db.sessions, async () => {
     const previous = await db.fileViews.get([sessionId, change.path])
     const view: FileView = { sessionId, path: change.path, contentHash: contentHash(change), viewed }
@@ -40,7 +40,7 @@ export async function markViewed(db: SkelbertDb, { sessionId, change, viewed, he
 }
 
 /** Records the head a local review happened at, once the git worker has read it. */
-export async function recordReviewHead(db: SkelbertDb, sessionId: string, path: string, head: string, now = Date.now()): Promise<void> {
+export async function recordReviewHead(db: RubberduckDb, sessionId: string, path: string, head: string, now = Date.now()): Promise<void> {
   await db.transaction('rw', db.fileViews, db.sessions, async () => {
     const view = await db.fileViews.get([sessionId, path])
     if (view?.reviewedOid && view.reviewedHead !== head) await db.fileViews.update([sessionId, path], { reviewedHead: head })
@@ -53,7 +53,7 @@ export async function recordReviewHead(db: SkelbertDb, sessionId: string, path: 
  * head as the session's last review.
  */
 export async function recordReviewedFiles(
-  db: SkelbertDb,
+  db: RubberduckDb,
   sessionId: string,
   head: string,
   files: readonly ViewedChange[],
@@ -80,7 +80,7 @@ export async function recordReviewedFiles(
 }
 
 /** At archive: a session with viewed files and no recorded review gets its head as the last review. */
-export async function recordArchivedReview(db: SkelbertDb, session: Session, now = Date.now()): Promise<void> {
+export async function recordArchivedReview(db: RubberduckDb, session: Session, now = Date.now()): Promise<void> {
   if (session.id === undefined || session.lastReview) return
   const viewed = await db.fileViews.where({ sessionId: session.id }).filter((view) => view.viewed).count()
   if (viewed > 0) await db.sessions.update(session.id, { lastReview: { headSha: session.headSha, at: now } })
@@ -92,7 +92,7 @@ export interface LastLookData {
 }
 
 /** Your last look at each file across the given sessions (one branch, or one pull request). */
-export async function loadLastLooks(db: SkelbertDb, sessions: readonly Session[]): Promise<LastLookData> {
+export async function loadLastLooks(db: RubberduckDb, sessions: readonly Session[]): Promise<LastLookData> {
   const ids = sessions.flatMap((session) => (session.id === undefined ? [] : [session.id]))
   const views = ids.length ? await db.fileViews.where('sessionId').anyOf(ids).toArray() : []
   return { looks: lastLooks(views), review: latestReview(sessions) }

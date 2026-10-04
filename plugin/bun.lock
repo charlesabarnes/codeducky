@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "skelbert-channel",
+      "name": "rubberduck-channel",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.32.0",
         "zod": "^4.6.5",

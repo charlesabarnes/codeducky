@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it } from 'vitest'
-import { SkelbertDb } from '../../src/db/db'
+import { RubberduckDb } from '../../src/db/db'
 import type { Note } from '../../src/db/schema'
 import { placeNotes } from '../../src/github/push'
 import {
@@ -18,7 +18,7 @@ import type { PendingReview } from '../../src/github/threads'
 import type { PullDetail, PullFile } from '../../src/github/types'
 import { fakeGitHub } from './fakeGitHub'
 
-const dbs: SkelbertDb[] = []
+const dbs: RubberduckDb[] = []
 afterEach(async () => {
   await Promise.all(dbs.splice(0).map((db) => db.delete()))
 })
@@ -43,7 +43,7 @@ const note = (id: string, extra: Partial<Note> = {}): Note => ({
 })
 
 async function seeded(notes: Note[]) {
-  const db = new SkelbertDb(`pr-review-${Math.random()}`)
+  const db = new RubberduckDb(`pr-review-${Math.random()}`)
   dbs.push(db)
   await db.sessions.add({ id: 's1', repoId: 'gh:acme/api', branch: 'f', headSha: HEAD, baseSha: 'm', baseSource: 'github', source: 'github-pr', startedAt: 1, status: 'active', pr: { ...ref, number: 7 } })
   await db.notes.bulkAdd(notes)

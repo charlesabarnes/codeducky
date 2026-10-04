@@ -105,9 +105,9 @@ describe('oauth metadata', () => {
   it('uses the forwarded host and protocol behind a proxy', async () => {
     const { app } = setup()
     const res = await app.request('http://127.0.0.1:8787/.well-known/oauth-protected-resource', {
-      headers: { 'X-Forwarded-Proto': 'https', 'X-Forwarded-Host': 'skelbert.example.com' },
+      headers: { 'X-Forwarded-Proto': 'https', 'X-Forwarded-Host': 'rubberduck.example.com' },
     })
-    expect(await res.json()).toMatchObject({ resource: 'https://skelbert.example.com/mcp' })
+    expect(await res.json()).toMatchObject({ resource: 'https://rubberduck.example.com/mcp' })
   })
 })
 
@@ -309,10 +309,10 @@ describe('redirect uri validation', () => {
   })
 
   it('accepts only this server as the resource', () => {
-    const origin = 'https://skelbert.example.com'
+    const origin = 'https://rubberduck.example.com'
     expect(canonicalResource(undefined, origin)).toBe(`${origin}/mcp`)
     expect(canonicalResource(`${origin}/mcp/`, origin)).toBe(`${origin}/mcp`)
-    expect(canonicalResource('HTTPS://SKELBERT.example.com/mcp', origin)).toBe(`${origin}/mcp`)
+    expect(canonicalResource('HTTPS://RUBBERDUCK.example.com/mcp', origin)).toBe(`${origin}/mcp`)
     expect(canonicalResource(origin, origin)).toBe(`${origin}/mcp`)
     expect(canonicalResource('https://other.example.com/mcp', origin)).toBeNull()
   })

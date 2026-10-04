@@ -66,7 +66,7 @@ export function SnapshotStatus({ state, pull }: { state: SnapshotState; pull: Pu
       <section className="page narrow stack">
         <h1>Add a GitHub token to open {label}</h1>
         <p>
-          Skelbert reads pull requests through the GitHub API with your personal access token. It stays in this browser and is never
+          Rubberduck reads pull requests through the GitHub API with your personal access token. It stays in this browser and is never
           synced.
         </p>
         <p>

@@ -62,7 +62,7 @@ describe('channel MCP server', () => {
     expect(statusFooter('t-1')).toContain('report_status tool of this channel (a tool call, not a shell command), task_id "t-1"')
   })
 
-  it('forwards report_status calls to Skelbert and validates them', async () => {
+  it('forwards report_status calls to Rubberduck and validates them', async () => {
     const { client, sent } = await setup()
     const ok = (await client.callTool({ name: STATUS_TOOL, arguments: { task_id: 't-1', state: 'done', message: 'Added 2 notes' } })) as CallToolResult
     expect(ok.isError).toBeFalsy()
@@ -75,15 +75,15 @@ describe('channel MCP server', () => {
     expect(sent).toHaveLength(1)
   })
 
-  it('tells Claude when Skelbert refuses a status or the channel is not configured', async () => {
+  it('tells Claude when Rubberduck refuses a status or the channel is not configured', async () => {
     const refused = await setup({ accept: false })
     const result = (await refused.client.callTool({ name: STATUS_TOOL, arguments: { task_id: 'x', state: 'acknowledged' } })) as CallToolResult
     expect(result.isError).toBe(true)
 
-    const unconfigured = await setup({ configError: 'No Skelbert URL' })
+    const unconfigured = await setup({ configError: 'No Rubberduck URL' })
     const missing = (await unconfigured.client.callTool({ name: STATUS_TOOL, arguments: { task_id: 'x', state: 'acknowledged' } })) as CallToolResult
     expect(missing.isError).toBe(true)
-    expect((missing.content[0] as { text: string }).text).toContain('No Skelbert URL')
+    expect((missing.content[0] as { text: string }).text).toContain('No Rubberduck URL')
     expect(unconfigured.sent).toEqual([])
   })
 

@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png', 'icon.svg'],
       manifest: {
-        name: 'Skelbert',
-        short_name: 'Skelbert',
+        name: 'Rubberduck',
+        short_name: 'Rubberduck',
         description: 'Review your own changes before you push them.',
         theme_color: '#0f0d0a',
         background_color: '#0f0d0a',
@@ -34,7 +34,7 @@ export default defineConfig({
   ],
   server: {
     proxy: Object.fromEntries(
-      SERVER_PREFIXES.map((path) => [path, `http://localhost:${process.env.SKELBERT_SERVER_PORT ?? 8787}`]),
+      SERVER_PREFIXES.map((path) => [path, `http://localhost:${process.env.RUBBERDUCK_SERVER_PORT ?? 8787}`]),
     ),
   },
   build: {

@@ -11,7 +11,7 @@ const SEGMENT = /^[A-Za-z0-9_.-]+$/
 const validRef = (owner: string, name: string, number: number): PullRef | null =>
   SEGMENT.test(owner) && SEGMENT.test(name) && Number.isSafeInteger(number) && number > 0 ? { owner, name, number } : null
 
-/** The canonical Skelbert path of a pull request: /pr/owner/name/123. */
+/** The canonical Rubberduck path of a pull request: /pr/owner/name/123. */
 export const prPath = ({ owner, name, number }: PullRef) =>
   `/pr/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/${number}`
 
@@ -23,7 +23,7 @@ const PR_PATH = /^\/pr\/([^/]+)\/([^/]+)\/(\d+)\/?$/
 /** github.com's own shape, so swapping the host in a PR URL works: /owner/name/pull/123, /files, /commits… */
 const MIRROR_PATH = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/(?:files|commits|checks|changes)(?:\/.*)?)?\/?$/
 
-/** The pull request a Skelbert or GitHub path points at, in either route shape. */
+/** The pull request a Rubberduck or GitHub path points at, in either route shape. */
 export function matchPrPath(pathname: string): PullRef | null {
   const match = PR_PATH.exec(pathname) ?? MIRROR_PATH.exec(pathname)
   if (!match) return null
@@ -35,7 +35,7 @@ export function matchPrPath(pathname: string): PullRef | null {
 }
 
 /**
- * Reads what someone pasted to open a pull request: a GitHub or Skelbert URL, "owner/name#123",
+ * Reads what someone pasted to open a pull request: a GitHub or Rubberduck URL, "owner/name#123",
  * or "#123" / "123" for the repo in `context`.
  */
 export function parsePrReference(input: string, context?: { owner: string; name: string } | null): PullRef | null {

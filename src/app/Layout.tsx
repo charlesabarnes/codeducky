@@ -16,7 +16,7 @@ export function Layout() {
           <header className="app-header">
             <NavLink to="/" className="brand">
               <span className="brand-mark" aria-hidden="true" />
-              skelbert
+              rubberduck
             </NavLink>
             <nav>
               <NavLink to="/inbox" title="Inbox (g then i)">

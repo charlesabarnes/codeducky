@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { checkedItems, createChecklist, setChecked } from '../../src/db/checklists'
-import { SkelbertDb } from '../../src/db/db'
+import { RubberduckDb } from '../../src/db/db'
 import { addNote, deleteNote, editNote, setNoteStatus } from '../../src/db/notes'
 import { saveOpenedRepo } from '../../src/db/repos'
 import { startOrResumeSession } from '../../src/db/sessions'
@@ -21,13 +21,13 @@ afterAll(() => stop())
 /** A fetch that can be cut off, standing in for a device going offline. */
 function device(name: string) {
   const link = { online: true }
-  const db = new SkelbertDb(name)
+  const db = new RubberduckDb(name)
   const flaky: typeof fetch = (input, init) => (link.online ? fetch(input, init) : Promise.reject(new TypeError('Failed to fetch')))
   const controller = new SyncController(db, { baseUrl: BASE, fetch: flaky, listenToBrowser: false, debounceMs: 60_000, intervalMs: 3_600_000 })
   return { db, controller, link }
 }
 
-async function snapshot(db: SkelbertDb) {
+async function snapshot(db: RubberduckDb) {
   return {
     repos: await db.repos.orderBy('id').toArray(),
     sessions: await db.sessions.orderBy('id').toArray(),
@@ -46,8 +46,8 @@ describe('sync against the real server', () => {
     const a = device('int-a')
     const b = device('int-b')
     try {
-      const identity = { owner: 'charlesabarnes', name: 'skelbert', defaultBase: 'main' }
-      const repoId = await saveOpenedRepo(a.db, folder('skelbert'), identity)
+      const identity = { owner: 'charlesabarnes', name: 'rubberduck', defaultBase: 'main' }
+      const repoId = await saveOpenedRepo(a.db, folder('rubberduck'), identity)
       const sessionId = await startOrResumeSession(a.db, { repoId, branch: 'phase7', headSha: 'h', baseSha: 'b' })
       const n1 = await addNote(a.db, { sessionId, path: 'server/app.ts', anchor, body: 'check auth', severity: 'issue' })
       const n2 = await addNote(a.db, { sessionId, path: 'server/app.ts', anchor, body: 'nit', severity: 'nit' })

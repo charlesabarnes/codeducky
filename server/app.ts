@@ -25,7 +25,7 @@ export interface AppDeps {
   /** Counts failed passphrase attempts from both the PWA sign-in and the OAuth consent page. */
   limiter?: FailureLimiter
   registrationLimiter?: FailureLimiter
-  /** The public origin, when the proxy in front does not forward the host (SKELBERT_PUBLIC_URL). */
+  /** The public origin, when the proxy in front does not forward the host (RUBBERDUCK_PUBLIC_URL). */
   publicUrl?: string
   /** Connected Claude Code channel sessions; tests pass one with a fake clock. */
   channel?: ChannelRegistry

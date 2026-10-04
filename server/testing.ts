@@ -9,7 +9,7 @@ export const PASSPHRASE = 'correct horse battery'
 
 /** An app over a fresh SQLite file in a temp dir; call `cleanup` when done. */
 export function makeApp(overrides: Partial<AppDeps> = {}) {
-  const dir = mkdtempSync(join(tmpdir(), 'skelbert-server-'))
+  const dir = mkdtempSync(join(tmpdir(), 'rubberduck-server-'))
   const db = openDatabase(join(dir, 'test.db'))
   const { app, tokens, channel } = createApp({ db, passphrase: PASSPHRASE, log: silentSink, ...overrides })
   return {
@@ -39,7 +39,7 @@ export async function login(app: App, name?: string): Promise<string> {
   return ((await res.json()) as { token: string }).token
 }
 
-export const TEST_ORIGIN = 'http://skelbert.test'
+export const TEST_ORIGIN = 'http://rubberduck.test'
 
 /** A fetch that answers from the app in process, for SDK clients. */
 export function appFetch(app: App): typeof fetch {
@@ -53,7 +53,7 @@ export function appFetch(app: App): typeof fetch {
 export async function mcpClient(app: App, token: string) {
   const { Client } = await import('@modelcontextprotocol/sdk/client/index.js')
   const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js')
-  const client = new Client({ name: 'skelbert-test', version: '1.0.0' })
+  const client = new Client({ name: 'rubberduck-test', version: '1.0.0' })
   const transport = new StreamableHTTPClientTransport(new URL(`${TEST_ORIGIN}/mcp`), {
     fetch: appFetch(app),
     requestInit: { headers: { Authorization: `Bearer ${token}` } },

@@ -1,48 +1,48 @@
 import { describe, expect, it } from 'vitest'
 import { githubPrUrl, matchPrPath, parsePrReference, prPath, prUrl } from '../../shared/links'
 
-const ref = { owner: 'charlesabarnes', name: 'skelbert', number: 12 }
+const ref = { owner: 'charlesabarnes', name: 'rubberduck', number: 12 }
 
 describe('pull request links', () => {
   it('builds the canonical path and URLs', () => {
-    expect(prPath(ref)).toBe('/pr/charlesabarnes/skelbert/12')
-    expect(prUrl('https://skelbert.example.com/', ref)).toBe('https://skelbert.example.com/pr/charlesabarnes/skelbert/12')
-    expect(githubPrUrl(ref)).toBe('https://github.com/charlesabarnes/skelbert/pull/12')
+    expect(prPath(ref)).toBe('/pr/charlesabarnes/rubberduck/12')
+    expect(prUrl('https://rubberduck.example.com/', ref)).toBe('https://rubberduck.example.com/pr/charlesabarnes/rubberduck/12')
+    expect(githubPrUrl(ref)).toBe('https://github.com/charlesabarnes/rubberduck/pull/12')
   })
 
   it('matches both route shapes', () => {
-    expect(matchPrPath('/pr/charlesabarnes/skelbert/12')).toEqual(ref)
-    expect(matchPrPath('/pr/charlesabarnes/skelbert/12/')).toEqual(ref)
-    expect(matchPrPath('/charlesabarnes/skelbert/pull/12')).toEqual(ref)
-    expect(matchPrPath('/charlesabarnes/skelbert/pull/12/files')).toEqual(ref)
-    expect(matchPrPath('/charlesabarnes/skelbert/pull/12/commits/0a1b2c')).toEqual(ref)
+    expect(matchPrPath('/pr/charlesabarnes/rubberduck/12')).toEqual(ref)
+    expect(matchPrPath('/pr/charlesabarnes/rubberduck/12/')).toEqual(ref)
+    expect(matchPrPath('/charlesabarnes/rubberduck/pull/12')).toEqual(ref)
+    expect(matchPrPath('/charlesabarnes/rubberduck/pull/12/files')).toEqual(ref)
+    expect(matchPrPath('/charlesabarnes/rubberduck/pull/12/commits/0a1b2c')).toEqual(ref)
     expect(matchPrPath('/my.org/repo_name-2/pull/7')).toEqual({ owner: 'my.org', name: 'repo_name-2', number: 7 })
   })
 
   it('rejects paths that are not pull requests', () => {
-    for (const path of ['/charlesabarnes/skelbert', '/charlesabarnes/skelbert/issues/12', '/pr/a/b/c', '/pr/a/b/0', '/a/b/pull/12/blame', '/a%2Fx/b/pull/1']) {
+    for (const path of ['/charlesabarnes/rubberduck', '/charlesabarnes/rubberduck/issues/12', '/pr/a/b/c', '/pr/a/b/0', '/a/b/pull/12/blame', '/a%2Fx/b/pull/1']) {
       expect(matchPrPath(path), path).toBeNull()
     }
   })
 
-  it('reads pasted GitHub and Skelbert URLs', () => {
-    expect(parsePrReference('https://github.com/charlesabarnes/skelbert/pull/12')).toEqual(ref)
-    expect(parsePrReference('  https://github.com/charlesabarnes/skelbert/pull/12/files#diff-abc  ')).toEqual(ref)
-    expect(parsePrReference('github.com/charlesabarnes/skelbert/pull/12?w=1')).toEqual(ref)
-    expect(parsePrReference('https://skelbert.example.com/pr/charlesabarnes/skelbert/12')).toEqual(ref)
-    expect(parsePrReference('https://skelbert.example.com/charlesabarnes/skelbert/pull/12/files')).toEqual(ref)
+  it('reads pasted GitHub and Rubberduck URLs', () => {
+    expect(parsePrReference('https://github.com/charlesabarnes/rubberduck/pull/12')).toEqual(ref)
+    expect(parsePrReference('  https://github.com/charlesabarnes/rubberduck/pull/12/files#diff-abc  ')).toEqual(ref)
+    expect(parsePrReference('github.com/charlesabarnes/rubberduck/pull/12?w=1')).toEqual(ref)
+    expect(parsePrReference('https://rubberduck.example.com/pr/charlesabarnes/rubberduck/12')).toEqual(ref)
+    expect(parsePrReference('https://rubberduck.example.com/charlesabarnes/rubberduck/pull/12/files')).toEqual(ref)
   })
 
   it('reads owner/repo#123, and #123 only with a current repo', () => {
-    expect(parsePrReference('charlesabarnes/skelbert#12')).toEqual(ref)
-    expect(parsePrReference('#12', { owner: 'charlesabarnes', name: 'skelbert' })).toEqual(ref)
-    expect(parsePrReference('12', { owner: 'charlesabarnes', name: 'skelbert' })).toEqual(ref)
+    expect(parsePrReference('charlesabarnes/rubberduck#12')).toEqual(ref)
+    expect(parsePrReference('#12', { owner: 'charlesabarnes', name: 'rubberduck' })).toEqual(ref)
+    expect(parsePrReference('12', { owner: 'charlesabarnes', name: 'rubberduck' })).toEqual(ref)
     expect(parsePrReference('#12')).toBeNull()
     expect(parsePrReference('#12', null)).toBeNull()
   })
 
   it('rejects anything else', () => {
-    for (const input of ['', '   ', 'skelbert#12', 'https://github.com/charlesabarnes/skelbert/issues/12', 'not a url', 'a/b#0', 'a/b#x']) {
+    for (const input of ['', '   ', 'rubberduck#12', 'https://github.com/charlesabarnes/rubberduck/issues/12', 'not a url', 'a/b#0', 'a/b#x']) {
       expect(parsePrReference(input), input).toBeNull()
     }
   })

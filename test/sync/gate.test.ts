@@ -5,16 +5,16 @@ import { validateChange } from '../../shared/sync'
 
 describe('pre-push gate setup commands', () => {
   it('installs the hook from this server and reads the token from the Keychain item', () => {
-    expect(installPrePushCommand('https://skel.example')).toBe(
-      'curl -fsSL https://skel.example/gate/pre-push.sh -o .git/hooks/pre-push && chmod +x .git/hooks/pre-push',
+    expect(installPrePushCommand('https://duck.example')).toBe(
+      'curl -fsSL https://duck.example/gate/pre-push.sh -o .git/hooks/pre-push && chmod +x .git/hooks/pre-push',
     )
-    expect(keychainCommand()).toBe('security add-generic-password -U -s skelbert -a "$USER" -w')
-    expect(installClaudeHookCommand('https://skel.example')).toContain('https://skel.example/gate/claude-code-hook.sh')
+    expect(keychainCommand()).toBe('security add-generic-password -U -s rubberduck -a "$USER" -w')
+    expect(installClaudeHookCommand('https://duck.example')).toContain('https://duck.example/gate/claude-code-hook.sh')
   })
 
   it('gives a PreToolUse Bash hook for Claude Code settings', () => {
     expect(JSON.parse(claudeHookSettings())).toEqual({
-      hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: '~/.claude/hooks/skelbert-gate.sh', timeout: 10 }] }] },
+      hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: '~/.claude/hooks/rubberduck-gate.sh', timeout: 10 }] }] },
     })
   })
 })

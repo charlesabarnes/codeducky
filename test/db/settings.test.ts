@@ -1,11 +1,11 @@
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it } from 'vitest'
-import { SkelbertDb } from '../../src/db/db'
+import { RubberduckDb } from '../../src/db/db'
 import { appearanceOf, loadSettings, saveSettings } from '../../src/db/settings'
 
-const opened: SkelbertDb[] = []
+const opened: RubberduckDb[] = []
 const openDb = (name: string) => {
-  const db = new SkelbertDb(name)
+  const db = new RubberduckDb(name)
   opened.push(db)
   return db
 }

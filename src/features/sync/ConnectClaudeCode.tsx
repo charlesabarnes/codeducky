@@ -33,7 +33,7 @@ export function ConnectClaudeCode({ signedIn, onMinted }: ConnectClaudeCodeProps
   return (
     <Panel icon={Bot} title="connect claude code" id="connect-claude-code">
       <p>
-        Skelbert is also an MCP server. Claude Code can list your open notes for the branch it is on, resolve them with a reply,
+        Rubberduck is also an MCP server. Claude Code can list your open notes for the branch it is on, resolve them with a reply,
         add notes as suggestions and tick checklist items. Changes reach this app on the next sync.
       </p>
       <CopyField label="MCP URL" value={url} />
@@ -62,12 +62,12 @@ export function ConnectClaudeCode({ signedIn, onMinted }: ConnectClaudeCodeProps
           to the current checkout, or pass them as <code>owner/name branch</code>.
         </p>
         <dl className="command-list">
-          <dt>/mcp__skelbert__review</dt>
+          <dt>/mcp__rubberduck__review</dt>
           <dd>
             reviews the branch against its merge base, following this repo's review instructions (on the repo page), and adds
             findings here as suggestions to accept or dismiss.
           </dd>
-          <dt>/mcp__skelbert__fix</dt>
+          <dt>/mcp__rubberduck__fix</dt>
           <dd>
             fixes open and accepted notes, runs the relevant tests and resolves each note with a reply. It asks before large
             refactors and never pushes.
