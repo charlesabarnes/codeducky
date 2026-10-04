@@ -38,7 +38,7 @@ export function PrOnlyRepo({ repo }: { repo: Repo & { id: string } }) {
         </Link>
       </PageHeader>
       <div className="sub-section">
-        <h3>pull request sessions</h3>
+        <h2 className="hash-heading">pull request sessions</h2>
         {sessions?.length === 0 ? (
           <p>None yet.</p>
         ) : (

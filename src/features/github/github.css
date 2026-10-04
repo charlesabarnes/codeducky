@@ -43,6 +43,15 @@
   gap: 6px;
 }
 
+.push-section-title {
+  display: block;
+  color: var(--fg-2);
+}
+
+.push-section-title::before {
+  content: none;
+}
+
 .push-section .strong {
   color: var(--fg);
 }

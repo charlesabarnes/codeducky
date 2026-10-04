@@ -25,13 +25,13 @@ export function SessionChecklists({ sessionId, repoId, readOnly }: SessionCheckl
     <div className="session-checklists stack">
       {lists.map((list) => (
         <section key={list.id}>
-          <div className="checklist-heading">
+          <h3 className="checklist-heading">
             <strong>{list.title}</strong>
             {list.required && <RequiredTag />}
             <span className="muted">
               {list.items.filter((item) => checked.has(item.id)).length}/{list.items.length}
             </span>
-          </div>
+          </h3>
           <ul className="checklist-items">
             {list.items.map((item) => (
               <li key={item.id}>
