@@ -1,14 +1,12 @@
 import { Hono, type Context } from 'hono'
 import { cors } from 'hono/cors'
 import { mcpResource, PROTECTED_RESOURCE_PATH, publicOrigin, MCP_PATH } from '../../origin'
-import { ADMIN_USER_ID } from '../../users/store'
 import { clientIp } from '../middleware'
-import { createFailureLimiter, passphraseMatches, type FailureLimiter } from '../passphrase'
-import { CHALLENGE, pkceChallenge, VERIFIER } from '../pkce'
-import { consentPage, errorPage, PAGE_HEADERS } from './consent'
+import { createFailureLimiter, type FailureLimiter } from '../passphrase'
+import { pkceChallenge, VERIFIER } from '../pkce'
+import { canonicalResource, OAUTH_SCOPE, readParams, type Authorizer, type Params } from './authorize'
 import { ClientLimitError, type ClientAuthMethod, type GrantType, type OAuthClient, type OAuthStore } from './store'
 
-export const OAUTH_SCOPE = 'codeducky'
 const AUTH_METHODS: readonly ClientAuthMethod[] = ['none', 'client_secret_post', 'client_secret_basic']
 const GRANT_TYPES: readonly GrantType[] = ['authorization_code', 'refresh_token']
 const MAX_REDIRECT_URIS = 10
@@ -35,100 +33,26 @@ export function isAllowedRedirectUri(value: unknown): value is string {
   return !BLOCKED_SCHEMES.has(url.protocol) && url.protocol.length > 2
 }
 
-/** RFC 8707: the resource must name this MCP server (its /mcp URL, or the bare origin). */
-export function canonicalResource(value: string | undefined, origin: string): string | null {
-  const expected = mcpResource(origin)
-  if (value === undefined || value === '') return expected
-  try {
-    const url = new URL(value)
-    if (url.hash || url.search) return null
-    const normalized = `${url.origin}${url.pathname.replace(/\/+$/, '')}`
-    return normalized === expected || normalized === origin ? expected : null
-  } catch {
-    return null
-  }
-}
-
-
-type Params = Record<string, string>
-
-async function readParams(c: Context): Promise<Params> {
-  const type = c.req.header('content-type') ?? ''
-  const raw: Record<string, unknown> = type.includes('application/json')
-    ? ((await c.req.json().catch(() => ({}))) as Record<string, unknown>)
-    : await c.req.parseBody().catch(() => ({}))
-  const params: Params = {}
-  for (const [key, value] of Object.entries(raw ?? {})) if (typeof value === 'string') params[key] = value
-  return params
-}
-
 function oauthError(c: Context, error: string, description: string, status: 400 | 401 = 400) {
   c.header('Cache-Control', 'no-store')
   return c.json({ error, error_description: description }, status)
 }
 
-const AUTHORIZE_FIELDS = ['client_id', 'redirect_uri', 'response_type', 'code_challenge', 'code_challenge_method', 'state', 'scope', 'resource']
-
-type AuthorizeCheck =
-  | { kind: 'fatal'; message: string }
-  | { kind: 'redirect'; location: string }
-  | { kind: 'ok'; client: OAuthClient; redirectUri: string; challenge: string; resource: string; state?: string; echo: Params }
-
 export interface OAuthRoutesOptions {
   store: OAuthStore
-  /** Until consent moves to GitHub sign-in, approving needs the admin passphrase; unset refuses every approval. */
-  adminPassphrase?: string
-  limiter: FailureLimiter
+  authorizer: Authorizer
   registrationLimiter?: FailureLimiter
   publicUrl?: string
 }
 
 export function oauthRoutes({
   store,
-  adminPassphrase,
-  limiter,
+  authorizer,
   registrationLimiter = createFailureLimiter({ perClient: 20, global: 200, windowMs: 60 * 60_000 }),
   publicUrl,
 }: OAuthRoutesOptions) {
   const routes = new Hono()
   const origin = (c: Context) => publicOrigin(c, publicUrl)
-
-  const redirectWith = (base: string, values: Record<string, string | undefined>) => {
-    const url = new URL(base)
-    for (const [key, value] of Object.entries(values)) if (value !== undefined) url.searchParams.set(key, value)
-    return url.toString()
-  }
-
-  /**
-   * Checks an authorization request. Until the client and redirect URI are known to be good the
-   * error is shown on the page; afterwards errors go back to the client, as OAuth requires.
-   */
-  function checkAuthorize(c: Context, params: Params): AuthorizeCheck {
-    const client = params.client_id ? store.getClient(params.client_id) : null
-    if (!client) return { kind: 'fatal', message: 'Unknown client. Register the client again and retry.' }
-    const redirectUri = params.redirect_uri ?? (client.redirectUris.length === 1 ? client.redirectUris[0] : undefined)
-    if (!redirectUri || !client.redirectUris.includes(redirectUri)) {
-      return { kind: 'fatal', message: 'The redirect URI does not match any URI this client registered.' }
-    }
-    const iss = origin(c)
-    const fail = (error: string, description: string) => ({
-      kind: 'redirect' as const,
-      location: redirectWith(redirectUri, { error, error_description: description, state: params.state, iss }),
-    })
-    if (params.response_type !== 'code') return fail('unsupported_response_type', 'Only response_type=code is supported')
-    if (!client.grantTypes.includes('authorization_code')) return fail('unauthorized_client', 'Client did not register authorization_code')
-    if (params.code_challenge_method !== 'S256' || !CHALLENGE.test(params.code_challenge ?? '')) {
-      return fail('invalid_request', 'PKCE with code_challenge_method=S256 is required')
-    }
-    const resource = canonicalResource(params.resource, iss)
-    if (!resource) return fail('invalid_target', `Unknown resource; use ${mcpResource(iss)}`)
-    const echo: Params = {}
-    for (const field of AUTHORIZE_FIELDS) if (params[field] !== undefined) echo[field] = params[field]
-    echo.redirect_uri = redirectUri
-    return { kind: 'ok', client, redirectUri, challenge: params.code_challenge!, resource, state: params.state, echo }
-  }
-
-  const htmlPage = (c: Context, body: string, status: 200 | 400 | 401 | 429 = 200) => c.body(body, status, PAGE_HEADERS)
 
   const publicCors = cors({
     origin: '*',
@@ -231,44 +155,8 @@ export function oauthRoutes({
     )
   })
 
-  routes.get('/oauth/authorize', (c) => {
-    const check = checkAuthorize(c, c.req.query())
-    if (check.kind === 'fatal') return htmlPage(c, errorPage(check.message), 400)
-    if (check.kind === 'redirect') return c.redirect(check.location, 302)
-    return htmlPage(c, consentPage({ clientName: check.client.name, redirectUri: check.redirectUri, params: check.echo }))
-  })
-
-  routes.post('/oauth/authorize', async (c) => {
-    const params = await readParams(c)
-    const check = checkAuthorize(c, params)
-    if (check.kind === 'fatal') return htmlPage(c, errorPage(check.message), 400)
-    if (check.kind === 'redirect') return c.redirect(check.location, 302)
-    const iss = origin(c)
-    if (params.decision !== 'approve') {
-      return c.redirect(redirectWith(check.redirectUri, { error: 'access_denied', state: check.state, iss }), 302)
-    }
-    const view = { clientName: check.client.name, redirectUri: check.redirectUri, params: check.echo }
-    const ip = clientIp(c)
-    const retryAfter = limiter.retryAfter(ip)
-    if (retryAfter !== null) {
-      c.header('Retry-After', String(retryAfter))
-      return htmlPage(c, consentPage({ ...view, error: 'Too many attempts. Wait a few minutes and try again.' }), 429)
-    }
-    if (!adminPassphrase || !passphraseMatches(params.passphrase, adminPassphrase)) {
-      limiter.fail(ip)
-      return htmlPage(c, consentPage({ ...view, error: 'Wrong passphrase.' }), 401)
-    }
-    limiter.succeed(ip)
-    const code = store.createCode({
-      userId: ADMIN_USER_ID,
-      clientId: check.client.id,
-      redirectUri: check.redirectUri,
-      codeChallenge: check.challenge,
-      scope: OAUTH_SCOPE,
-      resource: check.resource,
-    })
-    return c.redirect(redirectWith(check.redirectUri, { code, state: check.state, iss }), 302)
-  })
+  routes.get('/oauth/authorize', (c) => authorizer.start(c))
+  routes.post('/oauth/authorize', (c) => authorizer.decide(c))
 
   /** Client authentication for the token and revocation endpoints (RFC 6749 §2.3). */
   function authenticateClient(c: Context, params: Params): OAuthClient | null {

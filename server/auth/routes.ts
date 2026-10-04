@@ -5,9 +5,10 @@ import { createRateLimiters, type RateLimiters } from '../limits'
 import { silentSink, type LogSink } from '../log'
 import { getUsage } from '../records/quota'
 import { getUser } from '../users/store'
-import { createFlowStore } from './flows'
+import { createFlowStore, type FlowStore } from './flows'
 import type { IdentityProvider } from './github'
 import { requireToken, type AuthEnv } from './middleware'
+import type { Authorizer } from './oauth/authorize'
 import type { OAuthStore } from './oauth/store'
 import { createFailureLimiter, type FailureLimiter } from './passphrase'
 import { profile, signInRoutes } from './signin'
@@ -18,6 +19,8 @@ export interface AuthRoutesOptions {
   tokens: TokenStore
   oauth?: OAuthStore
   provider: IdentityProvider
+  flows?: FlowStore
+  authorizer?: Authorizer
   adminPassphrase?: string
   limiter?: FailureLimiter
   limiters?: RateLimiters
@@ -32,6 +35,8 @@ export function authRoutes({
   tokens,
   oauth,
   provider,
+  flows,
+  authorizer,
   adminPassphrase,
   limiter = createFailureLimiter({ perClient: 10, global: 100, windowMs: 15 * 60_000 }),
   limiters = createRateLimiters(),
@@ -41,9 +46,23 @@ export function authRoutes({
   now = Date.now,
 }: AuthRoutesOptions) {
   const routes = new Hono<AuthEnv>()
-  const flows = createFlowStore(db, now)
-
-  routes.route('/', signInRoutes({ db, tokens, flows, provider, adminPassphrase, limiter, limiters, signups, publicUrl, log, now }))
+  routes.route(
+    '/',
+    signInRoutes({
+      db,
+      tokens,
+      flows: flows ?? createFlowStore(db, now),
+      provider,
+      adminPassphrase,
+      limiter,
+      limiters,
+      signups,
+      authorizer,
+      publicUrl,
+      log,
+      now,
+    }),
+  )
 
   routes.use('*', requireToken(tokens))
 

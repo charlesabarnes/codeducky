@@ -3,6 +3,9 @@ import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { parseSyncRequest } from '../shared/sync'
 import { requireToken, type AuthEnv } from './auth/middleware'
+import { createFlowStore } from './auth/flows'
+import { flowCookie } from './auth/flowCookie'
+import { createAuthorizer } from './auth/oauth/authorize'
 import { oauthRoutes } from './auth/oauth/routes'
 import { createOAuthStore } from './auth/oauth/store'
 import type { IdentityProvider } from './auth/github'
@@ -31,7 +34,7 @@ export interface AppDeps {
   webDist?: string
   now?: () => number
   log?: LogSink
-  /** Counts failed admin passphrase attempts from both admin sign-in and the OAuth consent page. */
+  /** Counts failed admin passphrase attempts. */
   limiter?: FailureLimiter
   registrationLimiter?: FailureLimiter
   /** The public origin, when the proxy in front does not forward the host (CODEDUCKY_PUBLIC_URL). */
@@ -71,6 +74,16 @@ export function createApp({
   const api = new Hono<AuthEnv>()
   const tokens = createTokenStore(db, now)
   const oauth = createOAuthStore(db, tokens, now)
+  const flows = createFlowStore(db, now)
+  const authorizer = createAuthorizer({
+    db,
+    store: oauth,
+    flows,
+    provider,
+    cookie: flowCookie(publicUrl),
+    startLimiter: limiters.githubStart,
+    publicUrl,
+  })
   const registry = channel ?? createChannelRegistry({ now })
   if (!channel) setInterval(() => registry.sweep(), 15_000).unref()
 
@@ -79,7 +92,7 @@ export function createApp({
   const apiBody = tooLarge(MAX_API_BODY)
   api.use('*', (c, next) => (c.req.path === '/api/sync' ? next() : apiBody(c, next)))
   api.get('/health', (c) => c.json({ ok: true }))
-  api.route('/auth', authRoutes({ db, tokens, oauth, provider, adminPassphrase, limiter, limiters, signups, publicUrl, log, now }))
+  api.route('/auth', authRoutes({ db, tokens, oauth, provider, flows, authorizer, adminPassphrase, limiter, limiters, signups, publicUrl, log, now }))
 
   api.post(
     '/sync',
@@ -102,7 +115,7 @@ export function createApp({
   for (const path of ['/mcp', '/oauth/*', '/.well-known/*', '/gate/*']) server.use(path, requestLog(log))
   server.onError(logErrors(log))
   server.use('/oauth/*', tooLarge(MAX_OAUTH_BODY))
-  server.route('/', oauthRoutes({ store: oauth, adminPassphrase, limiter, registrationLimiter, publicUrl }))
+  server.route('/', oauthRoutes({ store: oauth, authorizer, registrationLimiter, publicUrl }))
   server.route('/', mcpRoutes({ db, tokens, publicUrl, limiter: limiters.mcp }))
   server.route('/', gateScripts(publicUrl))
 
