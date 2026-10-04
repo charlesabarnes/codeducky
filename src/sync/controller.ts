@@ -178,6 +178,11 @@ export class SyncController {
     return this.inFlight
   }
 
+  /** This device's bearer token, for requests apiRequest cannot make (streamed responses). */
+  authToken(): string | null {
+    return this.auth?.token ?? null
+  }
+
   async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     if (!this.auth) throw new UnauthorizedError()
     try {

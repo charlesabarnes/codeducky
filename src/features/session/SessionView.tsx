@@ -30,6 +30,7 @@ import type { PrThreadsApi } from '../pr/usePrThreads'
 import type { DiffSource } from './source'
 import { useBaseFreshness } from '../github/useBaseFreshness'
 import { CiChip } from '../ci/CiChip'
+import { ClaudeActions } from '../claude/ClaudeActions'
 import { useCiStatus } from '../ci/useCiStatus'
 import { exportSessionReport } from '../history/exportReport'
 import { useKeys, useShortcuts } from '../../keys/context'
@@ -356,6 +357,7 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
           </div>
           {scan.files && scan.files.length > 0 && <ViewedProgress viewed={viewed.size} total={scan.files.length} />}
           <CiChip view={ci} />
+          <ClaudeActions session={session} repo={repo} pr={pr && { number: pr.snapshot.pull.number, headRef: pr.snapshot.pull.headRef }} notes={notes} />
           {scan.renamesLimited && (
             <p className="muted" title="Too many added and deleted files to compare their contents">
               Only identical renames were detected.
