@@ -2,6 +2,8 @@ import type { Database } from 'bun:sqlite'
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { parseSyncRequest } from '../shared/sync'
+import { accountRoutes } from './account/routes'
+import { adminRoutes } from './admin/routes'
 import { requireToken, type AuthEnv } from './auth/middleware'
 import { createFlowStore } from './auth/flows'
 import { flowCookie } from './auth/flowCookie'
@@ -113,6 +115,8 @@ export function createApp({
 
   api.route('/gate', gateApi({ db, tokens, publicUrl, limiter: limiters.gate }))
   api.route('/channel', channelRoutes({ db, tokens, registry, publicUrl, taskLimiter: limiters.channelTasks }))
+  api.route('/account', accountRoutes({ db, tokens, registry }))
+  api.route('/admin', adminRoutes({ db, tokens, oauth, registry, signups, now }))
 
   api.all('*', (c) => c.json({ error: 'not_found' }, 404))
 

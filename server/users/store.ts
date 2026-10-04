@@ -91,3 +91,8 @@ export function ensureAdmin(db: Database, now = Date.now()): void {
 export function countUsers(db: Database): number {
   return db.query<{ n: number }, []>(`SELECT COUNT(*) AS n FROM users WHERE role = 'user'`).get()!.n
 }
+
+/** Deletes the account; its records, tokens, grants, codes and pending sign-ins go with it (foreign keys cascade). */
+export function deleteUser(db: Database, id: string): boolean {
+  return db.query('DELETE FROM users WHERE id = ?').run(id).changes > 0
+}

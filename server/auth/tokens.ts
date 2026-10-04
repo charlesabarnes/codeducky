@@ -157,6 +157,22 @@ export function createTokenStore(db: Database, now: () => number = Date.now) {
         .get(userId, kind, now())!.n
     },
 
+    /** Unexpired tokens of each kind, per user, for the admin's user list. */
+    countsByUser(): Map<string, Record<TokenKind, number>> {
+      const rows = db
+        .query<{ user_id: string; kind: TokenKind; n: number }, [number]>(
+          'SELECT user_id, kind, COUNT(*) AS n FROM tokens WHERE expires_at IS NULL OR expires_at > ? GROUP BY user_id, kind',
+        )
+        .all(now())
+      const counts = new Map<string, Record<TokenKind, number>>()
+      for (const { user_id, kind, n } of rows) {
+        const own = counts.get(user_id) ?? { session: 0, api: 0, oauth: 0 }
+        own[kind] = n
+        counts.set(user_id, own)
+      }
+      return counts
+    },
+
     /** Internal: callers check that the grant belongs to the user first. */
     revokeGrant(grantId: string): number {
       return db.query('DELETE FROM tokens WHERE grant_id = ?').run(grantId).changes

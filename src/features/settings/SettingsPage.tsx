@@ -7,6 +7,7 @@ import { useSyncState } from '../../sync/client'
 import { GithubIcon } from '../../ui/GithubIcon'
 import { PageHeader } from '../../ui/PageHeader'
 import { Panel } from '../../ui/Panel'
+import { AdminPanel } from '../admin/AdminPanel'
 import { TokenTest } from '../github/TokenTest'
 import { AppPanels } from '../pwa/AppPanels'
 import { ServerSection } from '../sync/ServerSection'
@@ -69,6 +70,7 @@ export function SettingsPage() {
       <AppearancePanel appearance={form} onChange={(next) => setForm({ ...form, ...next })} />
       <AppPanels />
       <ServerSection />
+      <AdminPanel />
     </section>
   )
 }
