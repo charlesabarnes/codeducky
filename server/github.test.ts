@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { GitHubError, githubProvider } from './auth/github'
+import type { LogEntry } from './log'
 
 interface Call {
   url: string
@@ -82,10 +83,25 @@ describe('github provider', () => {
     await expect(slow.exchange(params)).rejects.toBeInstanceOf(GitHubError)
   })
 
-  it('ignores a failed revoke', async () => {
-    const mock = mockFetch(json({ access_token: 'gho_secret' }), json(USER), new TypeError('network down'))
-    const provider = githubProvider({ clientId: 'id', clientSecret: 's', fetch: mock.fetch })
-    expect((await provider.exchange(params)).login).toBe('octocat')
+  it('logs a failed revoke without the token and still signs in', async () => {
+    const logged: LogEntry[] = []
+    const log = (entry: LogEntry) => void logged.push(entry)
+    const down = mockFetch(json({ access_token: 'gho_secret' }), json(USER), new TypeError('network down'))
+    expect((await githubProvider({ clientId: 'id', clientSecret: 's', fetch: down.fetch, log }).exchange(params)).login).toBe('octocat')
+    const refused = mockFetch(json({ access_token: 'gho_secret' }), json(USER), new Response(null, { status: 422 }))
+    expect((await githubProvider({ clientId: 'id', clientSecret: 's', fetch: refused.fetch, log }).exchange(params)).login).toBe('octocat')
+    expect(logged).toEqual([
+      expect.objectContaining({ level: 'warn', event: 'github_revoke_failed', error: expect.stringContaining('Could not reach GitHub') }),
+      expect.objectContaining({ level: 'warn', event: 'github_revoke_failed', error: 'GitHub answered 422' }),
+    ])
+    expect(JSON.stringify(logged)).not.toContain('gho_secret')
+  })
+
+  it('logs nothing when the revoke succeeds', async () => {
+    const logged: LogEntry[] = []
+    const mock = mockFetch(json({ access_token: 't' }), json(USER), new Response(null, { status: 204 }))
+    await githubProvider({ clientId: 'id', clientSecret: 's', fetch: mock.fetch, log: (entry) => void logged.push(entry) }).exchange(params)
+    expect(logged).toEqual([])
   })
 
   it('refuses a malformed user', async () => {
