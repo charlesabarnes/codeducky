@@ -18,7 +18,7 @@ import {
   Send,
   type LucideIcon,
 } from 'lucide-react'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { db } from '../../db/db'
 import { repoLabel } from '../../db/repos'
@@ -54,6 +54,7 @@ import { exportSessionReport } from '../history/exportReport'
 import { useKeys, useShortcuts } from '../../keys/context'
 import type { NavRequest } from '../../keys/diffNavContext'
 import { withShortcut } from '../../keys/help'
+import { isMac } from '../../keys/tokens'
 import { NotesPanel } from '../notes/NotesPanel'
 import { FileList, type FileNoteCount } from './FileList'
 import { filterFiles, nextUnviewed, stepFile } from './fileNav'
@@ -70,6 +71,10 @@ import { recordViewed } from '../modes/recordViewed'
 import { SinceBanner } from '../modes/SinceBanner'
 import { useReviewMode, type ReviewMode } from '../modes/useReviewMode'
 import { describeRange } from '../../review/commitRange'
+import type { EditSource } from '../editor/editSource'
+import { useLeaveGuard } from '../editor/useLeaveGuard'
+
+const EditorPane = lazy(async () => ({ default: (await import('../editor/EditorPane')).EditorPane }))
 
 const EMPTY_NOTES: Note[] = []
 const SESSION_HINTS: StatusHint[] = [
@@ -77,6 +82,11 @@ const SESSION_HINTS: StatusHint[] = [
   { keys: 'n/p', label: 'change' },
   { keys: ']/[', label: 'file' },
   { keys: 'c', label: 'comment' },
+]
+const EDIT_HINTS: StatusHint[] = [
+  { keys: isMac() ? '⌘S' : 'Ctrl+S', label: 'save' },
+  { keys: isMac() ? '⌘F' : 'Ctrl+F', label: 'find' },
+  { keys: 'esc tab', label: 'leave editor' },
 ]
 const NO_THREADS: ReviewThread[] = []
 
@@ -133,6 +143,7 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
   const [replyingId, setReplyingId] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const [navRequest, setNavRequest] = useState<NavRequest | null>(null)
+  const [dirtyPath, setDirtyPath] = useState<string | null>(null)
   const filterRef = useRef<HTMLInputElement>(null)
   const { announce } = useKeys()
   const isLocal = dirHandle !== null
@@ -174,6 +185,33 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
     () => display.files?.find((file) => file.path === selectedPath) ?? null,
     [display.files, selectedPath],
   )
+  const editing = params.get('view') === 'edit'
+  const prGh = pr?.gh
+  const prSnapshot = pr?.snapshot
+  const editSource = useMemo<EditSource | null>(
+    () => (dirHandle ? { kind: 'local', root: dirHandle } : prGh && prSnapshot ? { kind: 'github', gh: prGh, snapshot: prSnapshot } : null),
+    [dirHandle, prGh, prSnapshot],
+  )
+  const editBlockedFor = (change: FileChange | null) =>
+    !editSource
+      ? 'Editing needs the local checkout or a pull request'
+      : !change
+        ? 'Only files changed on the branch can be edited'
+        : change.status === 'deleted'
+          ? 'This file was deleted on the branch'
+          : null
+  const editBlocked = editBlockedFor(selected ? modes.branchChange(selected.path) : null)
+  // The editor follows the file in the URL, not the one the review mode shows, so a mode switch never swaps out
+  // unsaved edits; a dirty editor stays mounted (hidden) until it is saved or a guarded navigation discards it.
+  const editPath = requested ?? selectedPath
+  const editTarget = editPath ? modes.branchChange(editPath) : null
+  const editorChange = dirtyPath
+    ? modes.branchChange(dirtyPath)
+    : editing && editBlockedFor(editTarget) === null
+      ? editTarget
+      : null
+  const showEditor = editing && editorChange !== null && editorChange.path === editPath
+  useLeaveGuard(dirtyPath)
   const fileNotes = useMemo(
     () => notes.filter((note) => currentPath(note.path, renamed) === selectedPath),
     [notes, selectedPath, renamed],
@@ -214,11 +252,28 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
     scan.rescan()
     setGeneration((n) => n + 1)
   }
-  const selectFile = (path: string) => setParams({ file: path }, { replace: true })
+  /** Moving within the files keeps the editor open; jumping to a note, thread or change shows the diff. */
+  const selectFile = (path: string, keepView = false) =>
+    setParams(keepView && editing ? { file: path, view: 'edit' } : { file: path }, { replace: true })
   const goToFile = (path: string, target?: NavRequest['target'], scroll?: NavRequest['scroll']) => {
-    selectFile(path)
+    selectFile(path, !target)
     setNavRequest(target ? { at: Date.now(), target, scroll } : null)
     announce(`File ${path}`)
+  }
+  /** Opening edits the file the diff shows; closing keeps the edited file selected. */
+  const setEditing = (next: boolean) => {
+    const path = next ? selectedPath : editPath
+    if (!path) return
+    setParams(next ? { file: path, view: 'edit' } : { file: path }, { replace: true })
+    announce(next ? `Editing ${path}` : 'Diff', { visible: true })
+  }
+  const toggleEditor = () => {
+    if (!showEditor && editBlocked) return announce(editBlocked, { visible: true })
+    setEditing(!showEditor)
+  }
+  const onSaved = (message: string) => {
+    announce(message, { visible: true })
+    rescan()
   }
   const openMoved = useCallback(
     (target: MoveTarget) => {
@@ -348,6 +403,7 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
     'tab.files': () => switchTab('files'),
     'tab.notes': () => switchTab('notes'),
     'tab.checklists': () => switchTab('checklists'),
+    'file.edit': toggleEditor,
     'mode.since': toggleSince,
     'mode.all': () => switchMode({ kind: 'all' }, 'All changes'),
     'commit.next': () => stepCommits(1),
@@ -393,8 +449,9 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
           </>
         )}
       </Crumbs>
-      <StatusBar mode={pr ? 'pr review' : 'review'} hints={SESSION_HINTS}>
+      <StatusBar mode={showEditor ? 'edit' : pr ? 'pr review' : 'review'} hints={showEditor ? EDIT_HINTS : SESSION_HINTS}>
         {selected && <span className="strong">{selected.path.slice(selected.path.lastIndexOf('/') + 1)}</span>}
+        {dirtyPath && <span>unsaved</span>}
         {modes.mode.kind !== 'all' && <span>{modes.mode.kind === 'since' ? 'since last look' : 'commits'}</span>}
         {selected && (
           <span className="status-item">
@@ -542,6 +599,7 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
             noteCounts={noteCounts}
             viewed={viewed}
             onSelect={(path) => goToFile(path)}
+            dirtyPath={dirtyPath}
             onToggleViewed={toggleViewed}
             order={order}
             onOrderChange={prefs.setOrder}
@@ -554,71 +612,90 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
         {tab === 'checklists' && <SessionChecklists sessionId={sessionId} repoId={repo.id!} />}
         {tab === 'conversation' && pr && <ConversationPanel pull={pr.snapshot.pull} state={pr.conversation} />}
       </aside>
-      <section className="session-content">
-        {isLocal && <BaseBanner state={freshness} session={session} repo={repo} />}
-        {pr && <PrHeader snapshot={pr.snapshot} conversation={pr.conversation} pendingReview={pr.threads.data?.pendingReview ?? null} />}
-        {pr?.threads.error && <p className="diff-notice error">Review threads: {pr.threads.error}</p>}
-        {!bannerDismissed && modes.lastLook.headChange && modes.lastLook.counts && (
-          <SinceBanner
-            change={modes.lastLook.headChange}
-            counts={modes.lastLook.counts}
-            active={modes.mode.kind === 'since'}
-            onShow={() => switchMode({ kind: 'since' })}
-            onDismiss={() => setBannerDismissed(true)}
-          />
+      <section className={showEditor ? 'session-content editing' : 'session-content'}>
+        {editorChange && editSource && (
+          <Suspense fallback={showEditor && <p className="diff-notice muted">Loading the editor…</p>}>
+            <EditorPane
+              key={editorChange.path}
+              change={editorChange}
+              source={editSource}
+              hidden={!showEditor}
+              dirty={dirtyPath === editorChange.path}
+              onDirtyChange={(dirty) => setDirtyPath((current) => (dirty ? editorChange.path : current === editorChange.path ? null : current))}
+              onSaved={onSaved}
+              onShowDiff={() => setEditing(false)}
+            />
+          </Suspense>
         )}
-        {scan.files && scan.files.length > 0 && (
-          <ModeBar
-            mode={modes.mode}
-            onModeChange={(next) => switchMode(next)}
-            counts={modes.lastLook.counts}
-            showUnchanged={modes.showUnchanged}
-            onShowUnchangedChange={modes.setShowUnchanged}
-            commits={modes.commits}
-            range={modes.range}
-            onPickCommit={(index, extend) => {
-              modes.pickCommit(index, extend)
-              setNavRequest(null)
-            }}
-            isPr={pr !== null}
-          />
-        )}
-        {selected ? (
-          <FilePane
-            key={`${display.source.key}:${selected.path}`}
-            sessionId={sessionId}
-            source={display.source}
-            threads={fileThreads}
-            threadActions={threadActions}
-            change={selected}
-            notes={fileNotes}
-            mode={mode}
-            onModeChange={changeMode}
-            ignoreWhitespace={ignoreWhitespace}
-            onIgnoreWhitespaceChange={toggleWhitespace}
-            moved={display.moved[selected.path]}
-            onOpenMoved={openMoved}
-            ci={ci}
-            generation={generation}
-            viewed={viewed.has(selected.path)}
-            onToggleViewed={() => toggleViewed(selected)}
-            focus={focus}
-            navRequest={navRequest}
-            onBoundary={onBoundary}
-            noteView={modes.noteViewFor(selected.path)}
-            finalLines={modes.finalLines}
-            collapseViewed={branchWide}
-            viewedDisabled={!branchWide && modes.branchChange(selected.path) === null}
-            onNoteRefused={(message) => announce(message, { visible: true })}
-          />
-        ) : branchWide && selectedPath && fileNotes.length > 0 && scan.files ? (
-          <OrphanPane path={selectedPath} notes={fileNotes} focus={focus} />
-        ) : (
-          !display.scanning && (
-            <p className="diff-notice muted">
-              {modes.mode.kind === 'since' && display.files?.length === 0 ? 'Nothing changed since your last look.' : 'Select a file.'}
-            </p>
-          )
+        {!showEditor && (
+          <>
+            {isLocal && <BaseBanner state={freshness} session={session} repo={repo} />}
+            {pr && <PrHeader snapshot={pr.snapshot} conversation={pr.conversation} pendingReview={pr.threads.data?.pendingReview ?? null} />}
+            {pr?.threads.error && <p className="diff-notice error">Review threads: {pr.threads.error}</p>}
+            {!bannerDismissed && modes.lastLook.headChange && modes.lastLook.counts && (
+              <SinceBanner
+                change={modes.lastLook.headChange}
+                counts={modes.lastLook.counts}
+                active={modes.mode.kind === 'since'}
+                onShow={() => switchMode({ kind: 'since' })}
+                onDismiss={() => setBannerDismissed(true)}
+              />
+            )}
+            {scan.files && scan.files.length > 0 && (
+              <ModeBar
+                mode={modes.mode}
+                onModeChange={(next) => switchMode(next)}
+                counts={modes.lastLook.counts}
+                showUnchanged={modes.showUnchanged}
+                onShowUnchangedChange={modes.setShowUnchanged}
+                commits={modes.commits}
+                range={modes.range}
+                onPickCommit={(index, extend) => {
+                  modes.pickCommit(index, extend)
+                  setNavRequest(null)
+                }}
+                isPr={pr !== null}
+              />
+            )}
+            {selected ? (
+              <FilePane
+                key={`${display.source.key}:${selected.path}`}
+                sessionId={sessionId}
+                source={display.source}
+                threads={fileThreads}
+                threadActions={threadActions}
+                change={selected}
+                notes={fileNotes}
+                mode={mode}
+                onModeChange={changeMode}
+                ignoreWhitespace={ignoreWhitespace}
+                onIgnoreWhitespaceChange={toggleWhitespace}
+                moved={display.moved[selected.path]}
+                onOpenMoved={openMoved}
+                ci={ci}
+                generation={generation}
+                viewed={viewed.has(selected.path)}
+                onToggleViewed={() => toggleViewed(selected)}
+                focus={focus}
+                navRequest={navRequest}
+                onBoundary={onBoundary}
+                noteView={modes.noteViewFor(selected.path)}
+                finalLines={modes.finalLines}
+                collapseViewed={branchWide}
+                viewedDisabled={!branchWide && modes.branchChange(selected.path) === null}
+                onNoteRefused={(message) => announce(message, { visible: true })}
+                edit={{ onEdit: () => setEditing(true), blocked: editBlocked, dirty: dirtyPath === selected.path }}
+              />
+            ) : branchWide && selectedPath && fileNotes.length > 0 && scan.files ? (
+              <OrphanPane path={selectedPath} notes={fileNotes} focus={focus} />
+            ) : (
+              !display.scanning && (
+                <p className="diff-notice muted">
+                  {modes.mode.kind === 'since' && display.files?.length === 0 ? 'Nothing changed since your last look.' : 'Select a file.'}
+                </p>
+              )
+            )}
+          </>
         )}
       </section>
       {pushOpen && (

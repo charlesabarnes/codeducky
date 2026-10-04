@@ -1,0 +1,77 @@
+.editor-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.editor-pane[hidden] {
+  display: none;
+}
+
+.editor-pane > * {
+  flex: none;
+}
+
+.editor-pane > .code-editor {
+  flex: 1;
+  min-height: 240px;
+}
+
+.editor-meta {
+  color: var(--fg-2);
+  white-space: nowrap;
+}
+
+.editor-toolbar .save-button:not(:disabled) > .lucide {
+  color: var(--accent);
+}
+
+.editor-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0;
+  padding: var(--pad-y) var(--pad-x);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+  box-shadow: inset 2px 0 0 var(--sev-s);
+}
+
+.editor-notice > span {
+  flex: 1 1 320px;
+}
+
+.editor-notice > .lucide {
+  flex: none;
+  color: var(--sev-s);
+}
+
+.editor-notice.warn {
+  box-shadow: inset 2px 0 0 var(--mod-fg);
+}
+
+.editor-notice.warn > .lucide {
+  color: var(--mod-fg);
+}
+
+.editor-notice.error {
+  box-shadow: inset 2px 0 0 var(--del-fg);
+}
+
+.editor-notice.error > .lucide {
+  color: var(--del-fg);
+}
+
+.commit-dialog {
+  width: min(560px, calc(100vw - 2rem));
+}
+
+.commit-dialog .modal-body {
+  padding: 12px 14px;
+}
+
+.commit-dialog input[type='text'] {
+  width: 100%;
+  font-family: var(--font-code);
+}

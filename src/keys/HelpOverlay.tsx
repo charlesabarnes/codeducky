@@ -46,7 +46,7 @@ export function HelpOverlay({ active, enabled, onEnabledChange, onClose }: HelpO
           <span className="key">?</span> or <span className="key">esc</span> close
         </button>
       </header>
-      {!enabled && <p className="notice">Single-key shortcuts are off. Only Esc and {mod}+Enter work.</p>}
+      {!enabled && <p className="notice">Single-key shortcuts are off. Only Esc, {mod}+Enter and {mod}+S work.</p>}
       <div className="help-groups">
         {groups.map(({ group, bindings }) => (
           <section key={group}>
@@ -64,13 +64,16 @@ export function HelpOverlay({ active, enabled, onEnabledChange, onClose }: HelpO
           </section>
         ))}
       </div>
-      {!active.has('line.next') && <p className="muted help-note">Open a review session for diff and note shortcuts.</p>}
+      {!active.has('line.next') && !active.has('file.save') && <p className="muted help-note">Open a review session for diff and note shortcuts.</p>}
       <footer className="modal-foot">
         <label>
           <input type="checkbox" checked={enabled} onChange={(event) => onEnabledChange(event.target.checked)} />
           single-key shortcuts
         </label>
-        <small>Shortcuts never use Ctrl, ⌘ or Alt, except {mod}+Enter, and pause while you type.</small>
+        <small>
+          Shortcuts never use Ctrl, ⌘ or Alt, except {mod}+Enter and {mod}+S, and pause while you type. The file editor keeps every key
+          to itself.
+        </small>
       </footer>
     </dialog>
   )
