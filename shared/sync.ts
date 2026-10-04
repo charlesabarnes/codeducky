@@ -1,3 +1,5 @@
+import { MAX_RANGE_LINES } from './anchor'
+
 /** Wire protocol for `POST /api/sync`, shared by the PWA and the server. */
 
 export const SYNC_KINDS = ['repos', 'sessions', 'notes', 'checklists', 'checklistState', 'fileViews', 'inbox'] as const
@@ -96,7 +98,25 @@ const shape =
   (v) =>
     isObject(v) && Object.entries(fields).every(([key, check]) => check(v[key]))
 
-const anchor = shape({ line: num, side: oneOf('old', 'new'), text: str, before: arrayOf(str), after: arrayOf(str) })
+const anchorShape = shape({
+  line: num,
+  side: oneOf('old', 'new'),
+  text: str,
+  before: arrayOf(str),
+  after: arrayOf(str),
+  endLine: optional(num),
+  rangeText: optional(arrayOf(str)),
+})
+
+/** A range ends after its first line, spans at most MAX_RANGE_LINES, and its text (empty on a line-only anchor) has one entry per line. */
+function rangeFits(v: Record<string, unknown>): boolean {
+  const { line, endLine, rangeText } = v as { line: number; endLine?: number | null; rangeText?: string[] | null }
+  if (endLine === undefined || endLine === null) return rangeText === undefined || rangeText === null
+  if (!Number.isInteger(endLine) || endLine <= line || endLine - line + 1 > MAX_RANGE_LINES) return false
+  return !rangeText || rangeText.length === 0 || rangeText.length === endLine - line + 1
+}
+
+const anchor: Check = (v) => anchorShape(v) && rangeFits(v as Record<string, unknown>)
 
 /** 'claude' only appears on notes from the removed in-app Claude pass. */
 export const NOTE_SOURCES = ['me', 'claude', 'mcp'] as const

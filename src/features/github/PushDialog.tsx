@@ -4,6 +4,7 @@ import type { Note, Session } from '../../db/schema'
 import { errorMessage } from '../../github/errors'
 import type { PlacedNote, UnplacedNote } from '../../github/push'
 import { pushErrorHint, type PushPreview, type PushResult } from '../../github/pushReview'
+import { lastLine, lineSpan, linesLabel } from '../../review/anchor'
 import type { PushTarget } from './pushTargets'
 import type { PullRequest } from '../../github/types'
 import { NoteTags } from '../notes/NoteBadges'
@@ -239,12 +240,13 @@ function NoteRow({ note, where, extra, selected, onToggle }: { note: Note; where
 
 function PlacedRow({ entry, selected, onToggle }: RowProps<PlacedNote>) {
   const { note, comment, exact } = entry
-  const moved = comment.line !== note.anchor.line
+  const placedAt = { line: comment.startLine ?? comment.line, endLine: comment.line }
+  const moved = placedAt.line !== note.anchor.line || placedAt.endLine !== lastLine(note.anchor)
   const where = (
     <>
-      {comment.path}:{comment.line}
+      {comment.path}:{lineSpan(placedAt)}
       {comment.side === 'LEFT' && ' (base)'}
-      {moved && ` (line ${note.anchor.line} locally)`}
+      {moved && ` (${linesLabel(note.anchor)} locally)`}
     </>
   )
   const extra = !exact && (
@@ -259,7 +261,7 @@ function UnplacedRow({ entry, selected, onToggle }: RowProps<UnplacedNote>) {
   const { note, reason } = entry
   const where = (
     <>
-      {note.path}:{note.anchor.line} · {reason}
+      {note.path}:{lineSpan(note.anchor)} · {reason}
     </>
   )
   return <NoteRow note={note} where={where} selected={selected} onToggle={onToggle} />

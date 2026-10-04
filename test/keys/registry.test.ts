@@ -7,11 +7,12 @@ describe('keymap', () => {
     expect(new Set(KEYMAP.map((binding) => binding.id)).size).toBe(KEYMAP.length)
   })
 
-  it('never dispatches a browser or OS combo other than Cmd/Ctrl+Enter and Cmd/Ctrl+S', () => {
+  it('never dispatches a browser or OS combo other than Cmd/Ctrl+Enter and Cmd/Ctrl+S (Shift+↑/↓ grow a line selection)', () => {
+    const ours = new Set(['mod+Enter', 'mod+s', 'shift+ArrowUp', 'shift+ArrowDown'])
     for (const binding of KEYMAP.filter((candidate) => !('docOnly' in candidate))) {
       for (const keys of binding.keys) {
         for (const token of parseSequence(keys)) {
-          expect(token === 'mod+Enter' || token === 'mod+s' || !token.includes('+'), `${binding.id}: ${token}`).toBe(true)
+          expect(ours.has(token) || !token.includes('+'), `${binding.id}: ${token}`).toBe(true)
         }
       }
     }
@@ -36,6 +37,8 @@ describe('keymap', () => {
     expect(keysOf('file.next')).toEqual([']'])
     expect(keysOf('hunk.next')).toEqual(['n'])
     expect(keysOf('change.next')).toEqual(['J'])
+    expect(keysOf('line.extendNext')).toEqual(['shift+ArrowDown'])
+    expect(keysOf('line.extendPrev')).toEqual(['shift+ArrowUp'])
     expect(keysOf('tab.notes')).toEqual(['g n'])
     expect(keysOf('files.filter')).toEqual(['/'])
     expect(keysOf('help')).toEqual(['?'])
@@ -51,7 +54,7 @@ describe('keymap', () => {
   })
 
   it('gives pull request keys their own keys in a session', () => {
-    const sessionIds = ['file.edit', 'line.next', 'line.prev', 'change.next', 'change.prev', 'hunk.next', 'hunk.prev', 'file.next', 'file.prev', 'note.next', 'note.prev', 'side.old', 'side.new', 'gap.expand', 'note.comment', 'note.edit', 'note.resolve', 'note.accept', 'note.dismiss', 'file.viewed', 'view.mode', 'view.whitespace', 'files.filter', 'tab.files', 'tab.notes', 'tab.checklists', 'thread.next', 'thread.prev', 'thread.reply', 'thread.resolve', 'tab.conversation', 'nav.inbox', 'help']
+    const sessionIds = ['file.edit', 'line.next', 'line.prev', 'line.extendNext', 'line.extendPrev', 'change.next', 'change.prev', 'hunk.next', 'hunk.prev', 'file.next', 'file.prev', 'note.next', 'note.prev', 'side.old', 'side.new', 'gap.expand', 'note.comment', 'note.edit', 'note.resolve', 'note.accept', 'note.dismiss', 'file.viewed', 'view.mode', 'view.whitespace', 'files.filter', 'tab.files', 'tab.notes', 'tab.checklists', 'thread.next', 'thread.prev', 'thread.reply', 'thread.resolve', 'tab.conversation', 'nav.inbox', 'help']
     const keys = sessionIds.flatMap((id) => BINDINGS.get(id)!.keys.map((key) => ({ id, key })))
     for (const { id, key } of keys) {
       expect(keys.filter((other) => other.key === key).map((other) => other.id), `${id}: ${key}`).toEqual([id])

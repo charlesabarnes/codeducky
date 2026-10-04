@@ -1,4 +1,5 @@
 import type { Note, Session } from '../db/schema'
+import { anchoredText, lastLine, linesLabel } from './anchor'
 import { compareNotes, countNotes } from './summary'
 
 export interface ReportChecklist {
@@ -25,12 +26,13 @@ export function fenceFor(text: string): string {
 }
 
 export function noteExcerpt(note: Note): string {
-  const { line, before, text, after } = note.anchor
+  const { line, before, after } = note.anchor
+  const end = lastLine(note.anchor)
   const first = line - before.length
-  const rows = [...before, text, ...after]
+  const rows = [...before, ...anchoredText(note.anchor), ...after]
   const width = String(first + rows.length - 1).length
   return rows
-    .map((row, i) => `${first + i === line ? '>' : ' '} ${String(first + i).padStart(width)} | ${row}`.trimEnd())
+    .map((row, i) => `${first + i >= line && first + i <= end ? '>' : ' '} ${String(first + i).padStart(width)} | ${row}`.trimEnd())
     .join('\n')
 }
 
@@ -72,8 +74,8 @@ function checklistSection(checklists: ReportChecklist[]): string[] {
 
 function noteHeading(note: Note): string {
   const where = note.anchorLost
-    ? `last seen at line ${note.anchor.line}`
-    : `line ${note.anchor.line}${note.anchor.side === 'old' ? ' (base)' : ''}`
+    ? `last seen at ${linesLabel(note.anchor)}`
+    : `${linesLabel(note.anchor)}${note.anchor.side === 'old' ? ' (base)' : ''}`
   const status = note.anchorLost && note.status === 'open' ? 'open, possibly resolved' : note.status
   return `**${note.severity}** · ${status} · ${where}${SOURCE_LABELS[note.source]}`
 }

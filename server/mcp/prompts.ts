@@ -49,7 +49,7 @@ export function reviewPrompt(data: DataSnapshot, target: Target): GetPromptResul
    Check the recurring patterns from get_review_context first; they are mistakes I tend to repeat here.
    Do not report style nits, formatting or matters of taste, or anything a linter or formatter would catch.
 5. Follow the repo instructions from get_review_context. They override these defaults.
-6. For each real finding, call add_note with repo and branch, the file path, the line number on the new side (the working tree file, 1-based), a severity (blocker: must not ship; issue: should be fixed before pushing; suggestion: worth considering), a short title, and a body that explains the problem and a concrete fix. Pass lineText with the exact text of that line, and before/after with up to 3 lines of context, so the note stays anchored when the file changes. Skip anything already covered by an open or suggested note.
+6. For each real finding, call add_note with repo and branch, the file path, the line number on the new side (the working tree file, 1-based), a severity (blocker: must not ship; issue: should be fixed before pushing; suggestion: worth considering), a short title, and a body that explains the problem and a concrete fix. When the finding is about a block of code (a function, a loop, a few related lines) rather than one line, pass line as its first line and endLine as its last. Pass lineText with the exact text of that line (for a range, every line from line to endLine, joined with newlines), and before/after with up to 3 lines of context, so the note stays anchored when the file changes. Skip anything already covered by an open or suggested note.
 7. Do not edit files. Finish with a short summary: the notes you added by severity, and anything you were unsure about.${instructionsBlock(data, target.repo)}`)
 }
 
@@ -59,7 +59,7 @@ export function fixPrompt(data: DataSnapshot, target: Target): GetPromptResult {
 1. ${locate(target)}
 2. Call the Code Ducky tool get_review_context with repo and branch for the repo instructions and the open notes. Open notes include suggestions I accepted. Leave pending suggestions (status "suggested") and dismissed notes alone unless I say otherwise.
 3. Take the notes one at a time, blockers first, then issues, suggestions and nits:
-   - Find the code from the note's anchor (the line text plus the lines around it); line numbers may have moved. If the anchor is lost or the code is gone, check whether it is already fixed.
+   - Find the code from the note's anchor (the line text plus the lines around it); line numbers may have moved. A note with endLine covers every line from line to endLine (rangeText holds their text), so the fix may touch any of them. If the anchor is lost or the code is gone, check whether it is already fixed.
    - Make the smallest change that fixes it, following the repo instructions and the code's existing style.
    - Run the tests that cover the change (the test file next to the code, or the project's test command for that area) and fix any failure you caused.
    - Call resolve_note with the note id and a short reply: what changed and where, and which tests you ran.

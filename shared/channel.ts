@@ -86,6 +86,8 @@ export interface TaskNote {
   id: string
   path: string
   line: number
+  /** The last line of a multi-line note. */
+  endLine?: number
   severity: string
   title?: string
   body: string

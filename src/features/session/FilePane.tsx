@@ -8,6 +8,7 @@ import type { FileChange } from '../../git/types'
 import { useShortcuts } from '../../keys/context'
 import { DiffNavContext, type DiffNavApi, type NavRequest } from '../../keys/diffNavContext'
 import { withShortcut } from '../../keys/help'
+import { lastLine } from '../../review/anchor'
 import { sideLines, type NumberedLine } from '../../review/lines'
 import { anchorForView, placeNotes, type NoteView } from '../../review/viewNotes'
 import { UnplacedAnnotations } from '../ci/CiAnnotationCard'
@@ -89,8 +90,8 @@ export function FilePane(props: FilePaneProps) {
     focusedId,
     anchorFor: branchWide
       ? undefined
-      : async (side, line) =>
-          anchorForView(noteView, side, line, lines, noteView.kind === 'commit' && finalLines ? await finalLines(change.path) : null),
+      : async (side, line, endLine) =>
+          anchorForView(noteView, side, line, lines, noteView.kind === 'commit' && finalLines ? await finalLines(change.path) : null, endLine),
     refuseSide: branchWide
       ? undefined
       : (side) => (side === 'old' ? 'In this view, comment on the new (right-hand) side. Base lines take notes in All changes.' : null),
@@ -111,7 +112,7 @@ export function FilePane(props: FilePaneProps) {
   const noteRequest = useMemo<NavRequest | null>(
     () =>
       focus && focusedNote && !focusedNote.anchorLost
-        ? { at: focus.at, target: { side: focusedNote.anchor.side, line: focusedNote.anchor.line } }
+        ? { at: focus.at, target: { side: focusedNote.anchor.side, line: lastLine(focusedNote.anchor) } }
         : null,
     [focus, focusedNote],
   )

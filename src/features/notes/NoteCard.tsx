@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { db } from '../../db/db'
 import { deleteNote, editNote, setNoteStatus } from '../../db/notes'
 import type { Note } from '../../db/schema'
+import { linesLabel } from '../../review/anchor'
 import { SuggestionActions } from './SuggestionActions'
 import { Markdown } from './Markdown'
 import { NoteEditor } from './NoteEditor'
@@ -19,7 +20,7 @@ interface NoteCardProps {
   onEditingChange?: (editing: boolean) => void
 }
 
-const lineLabel = (note: Note) => (note.anchorLost ? null : `line ${note.anchor.line}${note.anchor.side === 'old' ? ' (base)' : ''}`)
+const lineLabel = (note: Note) => (note.anchorLost ? null : `${linesLabel(note.anchor)}${note.anchor.side === 'old' ? ' (base)' : ''}`)
 
 export function NoteCard({ note, readOnly, focused, ...controlled }: NoteCardProps) {
   const [localEditing, setLocalEditing] = useState(false)

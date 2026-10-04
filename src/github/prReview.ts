@@ -2,6 +2,7 @@ import type { CodeDuckyDb } from '../db/db'
 import { recordReviewedFiles } from '../db/fileViews'
 import type { FileChange } from '../git/types'
 import type { Note, SubmittedReviewState } from '../db/schema'
+import { lineSpan } from '../review/anchor'
 import { compareNotes } from '../review/summary'
 import type { GitHubClient } from './client'
 import { placeNotes, reviewBody, type Placement } from './push'
@@ -42,7 +43,7 @@ export function reviewSummary(notes: readonly Note[]): string {
   return [
     `${plural(open.length, 'note')}: ${counts.map(([severity, count]) => `${count} ${severity}`).join(', ')}.`,
     '',
-    ...ranked.map((note) => `- **${note.severity}** \`${note.path}:${note.anchor.line}\` ${firstLine(note)}`),
+    ...ranked.map((note) => `- **${note.severity}** \`${note.path}:${lineSpan(note.anchor)}\` ${firstLine(note)}`),
   ].join('\n')
 }
 

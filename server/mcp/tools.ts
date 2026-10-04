@@ -2,6 +2,7 @@ import type { Database } from 'bun:sqlite'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
+import { MAX_RANGE_LINES } from '../../shared/anchor'
 import { uuidv7 } from '../../shared/ids'
 import { prUrl } from '../../shared/links'
 import { pairId } from '../../shared/sync'
@@ -11,6 +12,7 @@ import {
   repoLabel,
   repoMatches,
   type DataSnapshot,
+  type NoteAnchor,
   type NoteRecord,
   type RepoRecord,
   type SessionRecord,
@@ -30,6 +32,7 @@ const SEVERITIES = ['nit', 'suggestion', 'issue', 'blocker'] as const
 const STATUSES = ['open', 'resolved', 'suggested', 'dismissed'] as const
 const SOURCES = ['me', 'claude', 'mcp'] as const
 const MAX_CONTEXT = 10
+const MAX_RANGE_TEXT = 100_000
 
 const json = (value: unknown): CallToolResult => ({ content: [{ type: 'text', text: JSON.stringify(value, null, 2) }] })
 const fail = (message: string): CallToolResult => ({ isError: true, content: [{ type: 'text', text: message }] })
@@ -94,6 +97,29 @@ function resolveSession(data: DataSnapshot, target: SessionTarget): SessionRecor
     )
   }
   return session
+}
+
+interface AnchorInput {
+  line: number
+  endLine?: number
+  side: 'old' | 'new'
+  lineText?: string
+  before?: string[]
+  after?: string[]
+}
+
+/** With no line text this is a line-only anchor; the PWA fills in text and context from the file. */
+function newAnchor({ line, endLine, side, lineText, before = [], after = [] }: AnchorInput): NoteAnchor {
+  if (endLine !== undefined && endLine < line) throw new ToolError(`endLine ${endLine} is before line ${line}.`)
+  if (endLine !== undefined && endLine - line + 1 > MAX_RANGE_LINES) throw new ToolError(`A note can cover at most ${MAX_RANGE_LINES} lines.`)
+  const range = endLine !== undefined && endLine > line ? endLine : undefined
+  if (lineText === undefined) return { line, side, text: '', before: [], after: [], ...(range ? { endLine: range } : {}) }
+  if (!range) return { line, side, text: lineText, before, after }
+  const text = lineText.replace(/\r?\n$/, '').split(/\r?\n/)
+  if (text.length !== range - line + 1) {
+    throw new ToolError(`lineText has ${text.length} ${text.length === 1 ? 'line' : 'lines'}, but lines ${line}–${range} are ${range - line + 1}. Pass the text of every line in the range.`)
+  }
+  return { line, side, text: text[0]!, before, after, endLine: range, rangeText: text }
 }
 
 function noteCounts(notes: NoteRecord[]) {
@@ -222,7 +248,7 @@ export function createMcpServer({ db, userId, actor, origin = '', now = Date.now
     {
       title: 'List review notes',
       description:
-        'Lists review notes with their anchor (the line text plus context lines). By default only open notes in the current ' +
+        'Lists review notes with their anchor (the line text plus context lines; a note on several lines has endLine and rangeText). By default only open notes in the current ' +
         'session of each matching repo and branch. Filter by repo, branch, session, path, severity, status and source.',
       inputSchema: {
         ...sessionTarget,
@@ -276,7 +302,7 @@ export function createMcpServer({ db, userId, actor, origin = '', now = Date.now
     'get_note',
     {
       title: 'Get a note',
-      description: 'Returns one note by id, with its anchor, context and any resolution.',
+      description: 'Returns one note by id, with its anchor (line, or line to endLine for a range), context and any resolution.',
       inputSchema: { id: z.string().describe('Note id.') },
       annotations: read,
     },
@@ -321,23 +347,28 @@ export function createMcpServer({ db, userId, actor, origin = '', now = Date.now
     {
       title: 'Add a note',
       description:
-        'Adds a review note on a line. It arrives in Code Ducky as a suggestion the user accepts or dismisses. ' +
+        'Adds a review note on a line, or on a range of lines with endLine. It arrives in Code Ducky as a suggestion the user accepts or dismisses. ' +
         'Pass lineText (and a few lines of before/after context) so the note stays anchored when the file changes.',
       inputSchema: {
         ...sessionTarget,
         path: z.string().min(1).max(1000).describe('File path relative to the repo root.'),
-        line: z.number().int().min(1).describe('1-based line number.'),
+        line: z.number().int().min(1).describe('1-based line number; the first line of a range.'),
+        endLine: z.number().int().min(1).optional().describe('Last line of a multi-line note (after line). Omit for a single line.'),
         side: z.enum(['new', 'old']).default('new').describe('"new" for the working tree, "old" for the base version.'),
         severity: z.enum(SEVERITIES).default('suggestion'),
         title: z.string().max(200).optional().describe('Short summary shown in the note list.'),
         body: z.string().min(1).max(20_000).describe('Markdown note text.'),
-        lineText: z.string().max(2000).optional().describe('Exact text of the line.'),
+        lineText: z
+          .string()
+          .max(MAX_RANGE_TEXT)
+          .optional()
+          .describe('Exact text of the line; for a range, the lines from line to endLine joined with newlines.'),
         before: z.array(z.string().max(2000)).max(MAX_CONTEXT).optional().describe('Lines just above, in file order.'),
-        after: z.array(z.string().max(2000)).max(MAX_CONTEXT).optional().describe('Lines just below, in file order.'),
+        after: z.array(z.string().max(2000)).max(MAX_CONTEXT).optional().describe('Lines just below (below endLine for a range), in file order.'),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
-    guarded(({ session, repo, branch, pr, path, line, side, severity, title, body, lineText, before, after }) => {
+    guarded(({ session, repo, branch, pr, path, line, endLine, side, severity, title, body, lineText, before, after }) => {
       const data = loadData(db, userId)
       const target = resolveSession(data, { session, repo, branch, pr })
       const at = now()
@@ -345,8 +376,7 @@ export function createMcpServer({ db, userId, actor, origin = '', now = Date.now
         id: uuidv7(at),
         sessionId: target.id,
         path: path.replace(/^\.?\//, ''),
-        // With no line text this is a line-only anchor; the PWA fills in text and context from the file.
-        anchor: lineText === undefined ? { line, side, text: '', before: [], after: [] } : { line, side, text: lineText, before: before ?? [], after: after ?? [] },
+        anchor: newAnchor({ line, endLine, side, lineText, before, after }),
         body: body.trim(),
         severity,
         status: 'suggested',
