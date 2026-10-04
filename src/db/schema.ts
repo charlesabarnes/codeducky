@@ -210,7 +210,11 @@ export interface CachedBlob {
   at: number
 }
 
+export const THEME_PREFERENCES = ['dark', 'light', 'system'] as const
+export type ThemePreference = (typeof THEME_PREFERENCES)[number]
+
 export interface Settings {
   id: 'app'
   githubPat: string
+  theme?: ThemePreference
 }
