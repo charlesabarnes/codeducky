@@ -48,7 +48,7 @@ export function mcpRoutes({ db, tokens, publicUrl }: McpRoutesOptions) {
       return c.json({ jsonrpc: '2.0', error: { code: -32000, message: 'Method not allowed: this server is stateless' }, id: null }, 405)
     }
 
-    const server = createMcpServer({ db, actor: principal.name, origin: publicOrigin(c, publicUrl) })
+    const server = createMcpServer({ db, userId: principal.userId, actor: principal.name, origin: publicOrigin(c, publicUrl) })
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
     await server.connect(transport)
     try {

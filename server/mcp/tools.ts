@@ -8,17 +8,15 @@ import { pairId } from '../../shared/sync'
 import {
   currentPrSession,
   currentSession,
-  InvalidRecordError,
-  loadData,
   repoLabel,
   repoMatches,
-  saveRecord,
   type DataSnapshot,
   type NoteAnchor,
   type NoteRecord,
   type RepoRecord,
   type SessionRecord,
 } from './records'
+import { InvalidRecordError, loadData, saveRecord } from '../records/store'
 import { reviewContext } from '../review/context'
 import { registerPrompts } from './prompts'
 import { checklistView, compareNotes, iso, noteView, prView } from './views'
@@ -135,6 +133,8 @@ const pathMatches = (notePath: string, filter: string) => {
 
 export interface ToolContext {
   db: Database
+  /** The user whose records the tools read and write. */
+  userId: string
   /** Code Ducky's public origin, for links in results. */
   origin?: string
   /** Who is calling, recorded on resolutions as `mcp:<actor>`: the token or OAuth client name. */
@@ -142,10 +142,10 @@ export interface ToolContext {
   now?: () => number
 }
 
-export function createMcpServer({ db, actor, origin = '', now = Date.now }: ToolContext): McpServer {
+export function createMcpServer({ db, userId, actor, origin = '', now = Date.now }: ToolContext): McpServer {
   const server = new McpServer({ name: 'codeducky', version: '1.0.0' }, { instructions: SERVER_INSTRUCTIONS })
   const read = { readOnlyHint: true, openWorldHint: false }
-  registerPrompts(server, () => loadData(db))
+  registerPrompts(server, () => loadData(db, userId))
 
   server.registerTool(
     'get_review_context',
@@ -159,7 +159,7 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
       annotations: read,
     },
     guarded((target) => {
-      const data = loadData(db)
+      const data = loadData(db, userId)
       return json(reviewContext(data, resolveSession(data, target), origin))
     }),
   )
@@ -173,7 +173,7 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
       annotations: read,
     },
     guarded(() => {
-      const data = loadData(db)
+      const data = loadData(db, userId)
       const notes = data.notes()
       const repos = [...data.repos].sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)
       return json({
@@ -205,7 +205,7 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
       annotations: read,
     },
     guarded(({ repo, branch, status }) => {
-      const data = loadData(db)
+      const data = loadData(db, userId)
       const repoIds = repo ? new Set(findRepos(data, repo).map((r) => r.id)) : null
       const notes = data.notes()
       const matching = data.sessions.filter(
@@ -260,7 +260,7 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
       annotations: read,
     },
     guarded(({ session, repo, branch, pr, path, severity, status, source, allSessions, limit }) => {
-      const data = loadData(db)
+      const data = loadData(db, userId)
       let sessions: SessionRecord[]
       if (session) sessions = [resolveSession(data, { session })]
       else if (repo && pr !== undefined) sessions = [resolveSession(data, { repo, pr })]
@@ -305,7 +305,7 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
       annotations: read,
     },
     guarded(({ id }) => {
-      const data = loadData(db)
+      const data = loadData(db, userId)
       const note = data.notes().find((n) => n.id === id)
       if (!note) throw new ToolError(`No note with id ${id}.`)
       return json({ ...noteView(note, data), created: iso(note.createdAt), updated: iso(note.updatedAt) })
@@ -325,7 +325,7 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     guarded(({ id, reply }) => {
-      const data = loadData(db)
+      const data = loadData(db, userId)
       const note = data.notes().find((n) => n.id === id)
       if (!note) throw new ToolError(`No note with id ${id}.`)
       const at = now()
@@ -335,7 +335,7 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
         updatedAt: at,
         resolution: { by: `mcp:${actor}`, text: reply.trim(), at },
       }
-      saveRecord(db, 'notes', id, updated, at)
+      saveRecord(db, userId, 'notes', id, updated, at)
       return json({ resolved: noteView(updated, data) })
     }),
   )
@@ -367,7 +367,7 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     guarded(({ session, repo, branch, pr, path, line, endLine, side, severity, title, body, lineText, before, after }) => {
-      const data = loadData(db)
+      const data = loadData(db, userId)
       const target = resolveSession(data, { session, repo, branch, pr })
       const at = now()
       const note: NoteRecord = {
@@ -383,7 +383,7 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
         createdAt: at,
         updatedAt: at,
       }
-      saveRecord(db, 'notes', note.id, note, at)
+      saveRecord(db, userId, 'notes', note.id, note, at)
       return json({ added: noteView(note, data) })
     }),
   )
@@ -402,7 +402,7 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
       annotations: read,
     },
     guarded(({ section }) => {
-      const data = loadData(db)
+      const data = loadData(db, userId)
       const inbox = data.inbox()
       if (!inbox) return json({ fetchedAt: null, items: [], note: 'No inbox has been synced yet. Ask the owner to open the Inbox in Code Ducky.' })
       const items = inbox.items.filter((item) => section === 'all' || item.section === section)
@@ -437,7 +437,7 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
       annotations: read,
     },
     guarded((target) => {
-      const data = loadData(db)
+      const data = loadData(db, userId)
       return json(checklistView(data, resolveSession(data, target)))
     }),
   )
@@ -455,13 +455,13 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     guarded(({ itemId, checked, ...target }) => {
-      const data = loadData(db)
+      const data = loadData(db, userId)
       const session = resolveSession(data, target)
       const view = checklistView(data, session)
       const list = view.checklists.find((l) => l.items.some((item) => item.id === itemId))
       if (!list) throw new ToolError(`No item ${itemId} in this session's checklists. Use get_checklist for item ids.`)
       const at = now()
-      saveRecord(db, 'checklistState', pairId(session.id, itemId), { sessionId: session.id, itemId, checked }, at)
+      saveRecord(db, userId, 'checklistState', pairId(session.id, itemId), { sessionId: session.id, itemId, checked }, at)
       const item = list.items.find((i) => i.id === itemId)!
       const done = list.items.filter((i) => (i.id === itemId ? checked : i.checked)).length
       return json({ item: { ...item, checked }, checklist: list.title, done: `${done}/${list.items.length}` })

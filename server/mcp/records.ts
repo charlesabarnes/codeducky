@@ -1,7 +1,3 @@
-import type { Database } from 'bun:sqlite'
-import { pairId, validateChange, type RecordData, type SyncKind } from '../../shared/sync'
-import { writeRecord } from '../sync'
-
 /** Server-side views of the synced records (see src/db/schema.ts for the PWA's types). */
 export interface RepoRecord {
   id: string
@@ -80,31 +76,6 @@ export interface ChecklistRecord {
   required?: boolean
 }
 
-export function listRecords<T>(db: Database, kind: SyncKind): T[] {
-  return db
-    .query<{ id: string; data: string }, [string]>('SELECT id, data FROM records WHERE kind = ? AND deleted = 0')
-    .all(kind)
-    .map((row) => ({ ...(JSON.parse(row.data) as object), id: row.id }) as T)
-}
-
-export function getRecord<T>(db: Database, kind: SyncKind, id: string): T | null {
-  const row = db
-    .query<{ data: string }, [string, string]>('SELECT data FROM records WHERE kind = ? AND id = ? AND deleted = 0')
-    .get(kind, id)
-  return row ? ({ ...(JSON.parse(row.data) as object), id } as T) : null
-}
-
-export class InvalidRecordError extends Error {}
-
-/** Validates like a pushed change, then writes through `writeRecord`, so the PWA picks it up on its next sync. */
-export function saveRecord(db: Database, kind: SyncKind, id: string, record: object, now = Date.now()): void {
-  const data: RecordData = {}
-  for (const [field, value] of Object.entries(record)) if (field !== 'id' && value !== undefined) data[field] = value
-  const error = validateChange({ kind, id, changedAt: now, deleted: false, data })
-  if (error) throw new InvalidRecordError(error)
-  writeRecord(db, kind, id, data, now)
-}
-
 export const repoLabel = (repo: Pick<RepoRecord, 'owner' | 'name'>) => (repo.owner ? `${repo.owner}/${repo.name}` : repo.name)
 
 /** Matches "owner/name" (case-insensitive), a bare name for repos without a GitHub remote, or a repo id. */
@@ -137,24 +108,16 @@ export function currentPrSession(sessions: SessionRecord[], number: number): Ses
   return currentSession(sessions.filter((session) => isPrSession(session) && session.pr?.number === number))
 }
 
-/** Read-only snapshot of everything the tools look at, loaded once per request. */
-export function loadData(db: Database) {
-  const repos = listRecords<RepoRecord>(db, 'repos')
-  const sessions = listRecords<SessionRecord>(db, 'sessions')
-  const repoById = new Map(repos.map((repo) => [repo.id, repo]))
-  return {
-    repos,
-    sessions,
-    repoById,
-    notes: () => listRecords<NoteRecord>(db, 'notes'),
-    checklists: () => listRecords<ChecklistRecord>(db, 'checklists'),
-    inbox: () => getRecord<InboxRecord>(db, 'inbox', 'inbox'),
-    checked: (sessionId: string, itemId: string) =>
-      getRecord<{ checked: boolean }>(db, 'checklistState', pairId(sessionId, itemId))?.checked ?? false,
-  }
+/** Read-only snapshot of one user's records that the tools look at; see `loadData` in records/store.ts. */
+export interface DataSnapshot {
+  repos: RepoRecord[]
+  sessions: SessionRecord[]
+  repoById: Map<string, RepoRecord>
+  notes: () => NoteRecord[]
+  checklists: () => ChecklistRecord[]
+  inbox: () => InboxRecord | null
+  checked: (sessionId: string, itemId: string) => boolean
 }
-
-export type DataSnapshot = ReturnType<typeof loadData>
 
 /** The repos matching a query and the current session for the branch, if Code Ducky has one. */
 export function findBranchSession(data: DataSnapshot, repoQuery: string, branch: string) {

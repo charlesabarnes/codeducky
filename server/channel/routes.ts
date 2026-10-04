@@ -4,8 +4,8 @@ import { bodyLimit } from 'hono/body-limit'
 import { streamSSE, type SSEStreamingApi } from 'hono/streaming'
 import { bearerToken, requireToken, type AuthEnv } from '../auth/middleware'
 import type { TokenInfo, TokenStore } from '../auth/tokens'
-import { loadData } from '../mcp/records'
 import { publicOrigin } from '../origin'
+import { loadData } from '../records/store'
 import { taskContent, taskMeta } from './content'
 import type { ChannelOwner, ChannelRegistry, PluginSink } from './registry'
 import { parse, pluginEventSchema, registrationSchema, taskRequestSchema, verdictSchema } from './schemas'
@@ -133,7 +133,7 @@ export function channelRoutes({ db, tokens, registry, publicUrl }: ChannelRoutes
       branch: request.target.branch ?? null,
       pr: request.target.pr ?? null,
       sessionId: request.target.sessionId ?? null,
-      content: taskContent(loadData(db), request),
+      content: taskContent(loadData(db, c.get('principal').userId), request),
       meta: taskMeta(request, publicOrigin(c, publicUrl)),
     })
     if (task === 'not_found') return c.json({ error: 'not_found' }, 404)

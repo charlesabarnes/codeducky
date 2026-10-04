@@ -23,6 +23,8 @@ export interface OAuthClient {
 }
 
 export interface AuthorizationCode {
+  /** The user who approved; the grant and its tokens act for them. */
+  userId: string
   clientId: string
   redirectUri: string
   codeChallenge: string
@@ -32,6 +34,7 @@ export interface AuthorizationCode {
 
 export interface Grant {
   id: string
+  userId: string
   clientId: string
   scope: string
   resource: string
@@ -61,6 +64,7 @@ interface ClientRow {
 
 interface GrantRow {
   id: string
+  user_id: string
   client_id: string
   scope: string
   resource: string
@@ -81,6 +85,7 @@ const toClient = (row: ClientRow): OAuthClient => ({
 
 const toGrant = (row: GrantRow): Grant => ({
   id: row.id,
+  userId: row.user_id,
   clientId: row.client_id,
   scope: row.scope,
   resource: row.resource,
@@ -90,7 +95,7 @@ const toGrant = (row: GrantRow): Grant => ({
 })
 
 const secretValue = (prefix: string) => `${prefix}${randomBytes(32).toString('base64url')}`
-const GRANT_COLUMNS = 'id, client_id, scope, resource, created_at, refreshed_at, expires_at'
+const GRANT_COLUMNS = 'id, user_id, client_id, scope, resource, created_at, refreshed_at, expires_at'
 
 /**
  * Registered clients, authorization codes and grants. A grant is one approval on the consent
@@ -117,6 +122,7 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
   const mint = (grant: Grant, client: OAuthClient): IssuedTokens => {
     tokens.revokeGrant(grant.id)
     const { token } = tokens.issue({
+      userId: grant.userId,
       name: client.name,
       kind: 'oauth',
       clientId: client.id,
@@ -183,9 +189,18 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
     createCode(code: AuthorizationCode): string {
       const value = secretValue('cda_')
       db.query(
-        `INSERT INTO oauth_codes (code_hash, client_id, redirect_uri, code_challenge, scope, resource, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ).run(hashToken(value), code.clientId, code.redirectUri, code.codeChallenge, code.scope, code.resource, now() + CODE_TTL_MS)
+        `INSERT INTO oauth_codes (code_hash, user_id, client_id, redirect_uri, code_challenge, scope, resource, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        hashToken(value),
+        code.userId,
+        code.clientId,
+        code.redirectUri,
+        code.codeChallenge,
+        code.scope,
+        code.resource,
+        now() + CODE_TTL_MS,
+      )
       return value
     },
 
@@ -193,12 +208,21 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
     consumeCode(value: string): AuthorizationCode | null {
       const row = db
         .query<
-          { client_id: string; redirect_uri: string; code_challenge: string; scope: string; resource: string; expires_at: number },
+          {
+            user_id: string
+            client_id: string
+            redirect_uri: string
+            code_challenge: string
+            scope: string
+            resource: string
+            expires_at: number
+          },
           [string]
         >('DELETE FROM oauth_codes WHERE code_hash = ? RETURNING *')
         .get(hashToken(value))
       if (!row || row.expires_at <= now()) return null
       return {
+        userId: row.user_id,
         clientId: row.client_id,
         redirectUri: row.redirect_uri,
         codeChallenge: row.code_challenge,
@@ -210,6 +234,7 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
     createGrant(client: OAuthClient, code: AuthorizationCode): IssuedTokens {
       const grant: Grant = {
         id: randomUUID(),
+        userId: code.userId,
         clientId: client.id,
         scope: code.scope,
         resource: code.resource,
@@ -218,9 +243,19 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
         expiresAt: now() + REFRESH_TOKEN_TTL_MS,
       }
       db.query(
-        `INSERT INTO oauth_grants (id, client_id, refresh_hash, scope, resource, created_at, refreshed_at, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(grant.id, grant.clientId, `pending:${grant.id}`, grant.scope, grant.resource, grant.createdAt, grant.refreshedAt, grant.expiresAt)
+        `INSERT INTO oauth_grants (id, user_id, client_id, refresh_hash, scope, resource, created_at, refreshed_at, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        grant.id,
+        grant.userId,
+        grant.clientId,
+        `pending:${grant.id}`,
+        grant.scope,
+        grant.resource,
+        grant.createdAt,
+        grant.refreshedAt,
+        grant.expiresAt,
+      )
       return mint(grant, client)
     },
 
@@ -267,14 +302,19 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
     getGrant,
     revokeGrant,
 
-    listGrants(): (Grant & { clientName: string; lastUsedAt: number | null })[] {
+    /** Revokes a grant only if it belongs to the user; another user's grant id is treated as unknown. */
+    revokeUserGrant(userId: string, id: string): boolean {
+      return getGrant(id)?.userId === userId && revokeGrant(id)
+    },
+
+    listGrants(userId: string): (Grant & { clientName: string; lastUsedAt: number | null })[] {
       pruneClients()
       return db
-        .query<GrantRow & { client_name: string | null }, []>(
-          `SELECT g.id, g.client_id, g.scope, g.resource, g.created_at, g.refreshed_at, g.expires_at, c.name AS client_name
-           FROM oauth_grants g LEFT JOIN oauth_clients c ON c.id = g.client_id ORDER BY g.created_at DESC`,
+        .query<GrantRow & { client_name: string | null }, [string]>(
+          `SELECT g.id, g.user_id, g.client_id, g.scope, g.resource, g.created_at, g.refreshed_at, g.expires_at, c.name AS client_name
+           FROM oauth_grants g LEFT JOIN oauth_clients c ON c.id = g.client_id WHERE g.user_id = ? ORDER BY g.created_at DESC`,
         )
-        .all()
+        .all(userId)
         .map((row) => ({
           ...toGrant(row),
           clientName: row.client_name ?? 'Removed client',

@@ -13,8 +13,9 @@ import { channelRoutes } from './channel/routes'
 import { gateApi, gateScripts } from './gate/routes'
 import { logErrors, requestLog, stdoutSink, type LogSink } from './log'
 import { mcpRoutes } from './mcp/route'
+import { sync } from './records/store'
 import { serveWeb } from './static'
-import { sync } from './sync'
+import { ensureAdmin } from './users/store'
 
 export interface AppDeps {
   db: Database
@@ -44,6 +45,7 @@ export function createApp({
   publicUrl,
   channel,
 }: AppDeps) {
+  ensureAdmin(db)
   const app = new Hono()
   const api = new Hono<AuthEnv>()
   const tokens = createTokenStore(db, now)
@@ -63,7 +65,7 @@ export function createApp({
     async (c) => {
       const parsed = parseSyncRequest(await c.req.json().catch(() => null))
       if ('error' in parsed) return c.json({ error: parsed.error }, 400)
-      return c.json(sync(db, parsed.cursor, parsed.changes, parsed.rejected))
+      return c.json(sync(db, c.get('principal').userId, parsed.cursor, parsed.changes, parsed.rejected))
     },
   )
 
