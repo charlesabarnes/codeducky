@@ -1,11 +1,32 @@
 <!doctype html>
-<html lang="en" data-theme="dark" data-palette="terminal" data-density="default" data-code-font="plex">
+<html lang="en" data-theme="light" data-palette="solar" data-density="default" data-code-font="plex">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
-    <meta name="theme-color" content="#0f0d0a" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#002c37" />
+    <meta name="theme-color" content="#fcf5e3" />
+    <script>
+      // First-paint hint ahead of src/app/appearance.ts, with its rules: the cached choice, else dark only on an explicit OS match.
+      ;(function () {
+        var root = document.documentElement
+        var theme = null
+        try {
+          theme = localStorage.getItem('rubberduck.theme')
+          var palette = localStorage.getItem('rubberduck.palette')
+          if (palette) root.dataset.palette = palette
+        } catch (e) {}
+        if (theme !== 'dark' && theme !== 'light') {
+          try {
+            theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+          } catch (e) {
+            theme = 'light'
+          }
+        }
+        root.dataset.theme = theme
+      })()
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Rubberduck</title>
   </head>

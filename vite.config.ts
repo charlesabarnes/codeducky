@@ -13,8 +13,8 @@ export default defineConfig({
         name: 'Rubberduck',
         short_name: 'Rubberduck',
         description: 'Review your own changes before you push them.',
-        theme_color: '#0f0d0a',
-        background_color: '#0f0d0a',
+        theme_color: '#fcf5e3',
+        background_color: '#fcf5e3',
         display: 'standalone',
         start_url: '/',
         icons: [
