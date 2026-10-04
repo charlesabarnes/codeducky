@@ -1,6 +1,6 @@
 import { Ban, Check, Pencil, Trash2, UserCheck, X } from 'lucide-react'
 import { Fragment, useState, type FormEvent } from 'react'
-import { timeAgo } from '../pr/time'
+import { shortAge } from '../pr/time'
 import { Avatar } from '../sync/Avatar'
 import { formatBytes } from '../sync/usage'
 import { errorMessage, parseQuotaDraft, quotaDraft, tokenLine, type AdminUser, type QuotaDraft, type QuotaOverride } from './adminApi'
@@ -19,7 +19,6 @@ export function UsersTable({ users, actions, now }: { users: AdminUser[]; action
         <thead>
           <tr>
             <th>account</th>
-            <th>status</th>
             <th>storage</th>
             <th>access</th>
             <th />
@@ -37,7 +36,7 @@ export function UsersTable({ users, actions, now }: { users: AdminUser[]; action
 
 type Mode = { kind: 'idle' } | { kind: 'confirm'; action: 'disable' | 'enable' | 'remove' } | { kind: 'quota' }
 
-const ago = (at: number | null, now: number) => (at ? timeAgo(new Date(at).toISOString(), now) : 'never')
+const ago = (at: number | null, now: number) => (at ? `${shortAge(new Date(at).toISOString(), now)} ago` : 'never')
 
 const CONFIRM_COPY = {
   disable: { verb: 'disable', icon: Ban, text: 'Signs @{login} out on every device and revokes their tokens and connected apps. Their data stays.' },
@@ -69,56 +68,56 @@ function UserRow({ user, actions, now }: { user: AdminUser; actions: UserActions
     <Fragment>
       <tr className={user.status === 'disabled' ? 'disabled-account' : undefined}>
         <td>
-          <span className="cell-icon account-cell">
+          <div className="account-cell">
             <Avatar user={user} size={18} />
-            <span className="stack account-lines">
-              <span>
-                <strong>@{user.login}</strong>
-                {user.name && <span className="muted"> {user.name}</span>}
-              </span>
-              <small className="muted">
+            <div className="cell-lines">
+              <div className="account-name-line">
+                <strong title={user.name ?? undefined}>@{user.login}</strong>
+                {isAdmin ? (
+                  <span className="badge admin-badge">admin</span>
+                ) : (
+                  <span className={`badge status-${user.status}`}>{user.status}</span>
+                )}
+              </div>
+              <div className="muted" title={`Last sign-in: ${user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : 'never'}`}>
                 joined {ago(user.createdAt, now)} · seen {ago(user.lastSeenAt, now)}
-              </small>
-            </span>
-          </span>
-        </td>
-        <td>
-          {isAdmin ? (
-            <span className="badge admin-badge">admin</span>
-          ) : (
-            <span className={`badge status-${user.status}`}>{user.status}</span>
-          )}
+              </div>
+            </div>
+          </div>
         </td>
         <td>
           {isAdmin ? (
             <span className="muted">—</span>
           ) : (
-            <span className="stack account-lines">
-              <span>
+            <div className="cell-lines">
+              <div>
                 {formatBytes(user.usage.bytes)} <span className="muted">/ {formatBytes(user.quota.bytes)}</span>
-              </span>
-              <small className="muted">
+                {overridden && <span className="override-mark"> custom</span>}
+              </div>
+              <div className="muted">
                 {user.usage.records.toLocaleString('en-US')} / {user.quota.records.toLocaleString('en-US')} records
-                {overridden && <span className="override-mark"> · custom</span>}
-              </small>
-            </span>
+              </div>
+            </div>
           )}
         </td>
         <td>
-          <span className="stack account-lines">
-            <span>{tokenLine(user.tokens)}</span>
-            <small className="muted">
-              {user.grants} {user.grants === 1 ? 'app' : 'apps'} · {user.channelSessions} connected
-            </small>
-          </span>
+          <div className="cell-lines">
+            <div>{tokenLine(user.tokens)}</div>
+            <div className="muted">
+              {user.grants} {user.grants === 1 ? 'app' : 'apps'} · {user.channelSessions} live
+            </div>
+          </div>
         </td>
         <td className="num">
           {!isAdmin && mode.kind === 'idle' && (
-            <span className="row admin-actions">
-              <button type="button" className="link" onClick={() => setMode({ kind: 'quota' })} aria-label={`Edit quota for @${user.login}`}>
-                <Pencil size={12} aria-hidden />
-                quota
-              </button>
+            <div className="admin-actions">
+              <div>
+                <button type="button" className="link" onClick={() => setMode({ kind: 'quota' })} aria-label={`Edit quota for @${user.login}`}>
+                  <Pencil size={12} aria-hidden />
+                  quota
+                </button>
+              </div>
+              <div>
               {user.status === 'active' ? (
                 <button type="button" className="link danger" onClick={() => setMode({ kind: 'confirm', action: 'disable' })}>
                   <Ban size={12} aria-hidden />
@@ -134,13 +133,14 @@ function UserRow({ user, actions, now }: { user: AdminUser; actions: UserActions
                 <Trash2 size={12} aria-hidden />
                 delete
               </button>
-            </span>
+              </div>
+            </div>
           )}
         </td>
       </tr>
       {mode.kind !== 'idle' && (
         <tr className="admin-detail">
-          <td colSpan={5}>
+          <td colSpan={4}>
             {mode.kind === 'confirm' ? (
               <ConfirmStep
                 user={user}
@@ -177,25 +177,26 @@ function ConfirmStep({ user, action, busy, onConfirm, onCancel }: ConfirmStepPro
   const { verb, icon: Icon, text } = CONFIRM_COPY[action]
   const destructive = action !== 'enable'
   return (
-    <div className="row admin-confirm">
-      <span className="prompt" aria-hidden>
-        &gt;
-      </span>
-      <span>
+    <div className="admin-confirm">
+      <p>
+        <span className="prompt" aria-hidden>
+          &gt;{' '}
+        </span>
         <strong>
           {verb} @{user.login}?
         </strong>{' '}
         <span className="muted">{text.replace('{login}', user.login)}</span>
-      </span>
-      <span className="spacer" />
-      <button type="button" className={destructive ? 'danger-button' : undefined} onClick={onConfirm} disabled={busy}>
-        <Icon size={13} aria-hidden />
-        {busy ? 'working…' : `yes, ${verb}`}
-      </button>
-      <button type="button" className="secondary" onClick={onCancel} disabled={busy}>
-        <X size={13} aria-hidden />
-        cancel
-      </button>
+      </p>
+      <div className="admin-buttons">
+        <button type="button" className={destructive ? 'danger-button' : undefined} onClick={onConfirm} disabled={busy}>
+          <Icon size={13} aria-hidden />
+          {busy ? 'working…' : `yes, ${verb}`}
+        </button>
+        <button type="button" className="secondary" onClick={onCancel} disabled={busy}>
+          <X size={13} aria-hidden />
+          cancel
+        </button>
+      </div>
     </div>
   )
 }
@@ -218,11 +219,13 @@ function QuotaEditor({ user, busy, onSave, onCancel }: QuotaEditorProps) {
   }
 
   return (
-    <form className="row admin-quota" onSubmit={submit}>
-      <span className="prompt" aria-hidden>
-        &gt;
-      </span>
-      <strong>quota @{user.login}</strong>
+    <form className="admin-quota" onSubmit={submit}>
+      <p>
+        <span className="prompt" aria-hidden>
+          &gt;{' '}
+        </span>
+        <strong>quota @{user.login}</strong> <span className="muted">blank uses the server default</span>
+      </p>
       <label className="quota-field">
         <span className="muted">records</span>
         <input
@@ -243,16 +246,16 @@ function QuotaEditor({ user, busy, onSave, onCancel }: QuotaEditorProps) {
           onChange={(e) => setDraft({ ...draft, megabytes: e.target.value })}
         />
       </label>
-      <span className="spacer" />
-      <button type="submit" disabled={busy || invalid !== null}>
-        <Check size={13} aria-hidden />
-        {busy ? 'saving…' : 'save'}
-      </button>
-      <button type="button" className="secondary" onClick={onCancel} disabled={busy}>
-        <X size={13} aria-hidden />
-        cancel
-      </button>
-      <small className="muted quota-hint">Blank uses the server default.</small>
+      <div className="admin-buttons">
+        <button type="submit" disabled={busy || invalid !== null}>
+          <Check size={13} aria-hidden />
+          {busy ? 'saving…' : 'save'}
+        </button>
+        <button type="button" className="secondary" onClick={onCancel} disabled={busy}>
+          <X size={13} aria-hidden />
+          cancel
+        </button>
+      </div>
     </form>
   )
 }

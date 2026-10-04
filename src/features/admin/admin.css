@@ -1,93 +1,109 @@
-.admin-stats {
+.admin-panel .admin-stats {
   font-family: var(--font-mono);
 }
 
-.admin-table-wrap {
+.admin-panel .admin-table-wrap {
   overflow-x: auto;
 }
 
-.admin-table td {
+.admin-panel .admin-table td {
   vertical-align: top;
+  white-space: nowrap;
 }
 
-.admin-table .account-cell {
+.admin-panel .account-cell {
+  display: flex;
   align-items: flex-start;
+  gap: 8px;
 }
 
-.admin-table .account-cell .avatar {
-  margin-top: 2px;
+.admin-panel .account-cell .avatar {
+  margin-top: 3px;
 }
 
-.account-lines {
-  gap: 0;
-}
-
-.admin-table small {
-  font-size: inherit;
-}
-
-.admin-table tr.disabled-account > td:not(.num) {
+.admin-panel tr.disabled-account > td:not(.num) {
   opacity: 0.6;
 }
 
-.badge.status-active {
+.admin-panel .badge.status-active {
   color: var(--add-fg);
   border-color: var(--add-fg);
 }
 
-.badge.status-disabled {
+.admin-panel .badge.status-disabled {
   color: var(--del-fg);
   border-color: var(--del-fg);
   border-style: dashed;
 }
 
-.override-mark {
+.admin-panel .override-mark {
   color: var(--accent);
 }
 
-.admin-actions {
+.admin-panel .admin-actions > div {
+  display: flex;
   justify-content: flex-end;
-  flex-wrap: nowrap;
-  gap: 10px;
+  gap: 12px;
 }
 
-.admin-table button.link.danger {
+.admin-panel .account-name-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-panel .admin-table button.link.danger {
   border: none;
   color: var(--del-fg);
 }
 
-.admin-table tr.admin-detail,
-.admin-table tr.admin-detail:hover {
+.admin-panel .admin-table tr.admin-detail,
+.admin-panel .admin-table tr.admin-detail:hover {
   border-top: 1px dashed var(--line);
   background: var(--bg-2);
 }
 
-.admin-confirm,
-.admin-quota {
-  font-family: var(--font-mono);
+.admin-panel .admin-detail td {
+  white-space: normal;
 }
 
-.admin-confirm .prompt,
-.admin-quota .prompt {
+.admin-panel .admin-confirm,
+.admin-panel .admin-quota {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.admin-panel .admin-confirm > p {
+  flex: 1 1 320px;
+}
+
+.admin-panel .admin-quota > p {
+  flex-basis: 100%;
+}
+
+.admin-panel .admin-detail .prompt {
   color: var(--accent);
   font-weight: 700;
 }
 
-.admin-quota .quota-field {
+.admin-panel .admin-buttons {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.admin-panel .quota-field {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
-.admin-quota .quota-field input {
+.admin-panel .quota-field input {
   width: 11ch;
 }
 
-.admin-quota input[aria-invalid='true'] {
+.admin-panel .admin-quota input[aria-invalid='true'] {
   border-color: var(--del-fg);
-}
-
-.admin-quota .quota-hint {
-  flex-basis: 100%;
-  font-size: inherit;
 }

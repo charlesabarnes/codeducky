@@ -43,8 +43,8 @@ describe('admin users table', () => {
     expect(html).toContain('50 MB')
     expect(html).toContain('3,100 / 20,000 records')
     expect(html).toContain('2 devices · 1 API')
-    expect(html).toContain('1 app · 1 connected')
-    expect(html).toContain('joined 3 days ago')
+    expect(html).toContain('1 app · 1 live')
+    expect(html).toContain('joined 3d ago · seen 1h ago')
     expect(html).toContain('status-active')
   })
 
