@@ -31,13 +31,13 @@ export function PermissionPrompt({ request, session }: { request: PermissionView
         {session && <span className="muted"> in {session.label}</span>}
         {request.description && <>: {request.description}</>}
       </p>
-      {request.inputPreview && <pre className="mono claude-preview">{request.inputPreview}</pre>}
+      {request.inputPreview && <pre className="claude-preview">{request.inputPreview}</pre>}
       <div className="row">
         <button type="button" disabled={busy} onClick={() => void answer('allow')}>
-          Allow
+          allow
         </button>
         <button type="button" className="secondary" disabled={busy} onClick={() => void answer('deny')}>
-          Deny
+          deny
         </button>
         <span className="muted">or answer in the terminal</span>
         {error && <span className="error">{error}</span>}

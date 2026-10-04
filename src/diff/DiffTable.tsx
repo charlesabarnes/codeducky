@@ -1,3 +1,4 @@
+import { UnfoldVertical } from 'lucide-react'
 import { Fragment, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
 import type { Cursor } from '../keys/diffNav'
 import type { LineActions } from '../keys/lineActions'
@@ -23,8 +24,10 @@ export type ViewMode = 'unified' | 'split'
 
 const EXPAND_STEP = 20
 const RENDER_STEP = 2000
-const MARKERS = { add: '+', del: '-', context: ' ' } as const
+const MARKERS = { add: '+', del: '−', context: ' ' } as const
 const NO_PINS: ReadonlySet<string> = new Set()
+const LINE_NUMBER_WIDTH = 44
+const MARKER_WIDTH = 18
 
 export interface LineAnnotations {
   pinned: ReadonlySet<string>
@@ -149,21 +152,21 @@ export function DiffTable({ lines, mode, tokens, words, moved, annotations }: Di
   }
 
   return (
-    <table ref={tableRef} className={annotations?.onSelect ? 'diff-table selectable' : 'diff-table'}>
+    <table ref={tableRef} className={`diff-table ${mode}${annotations?.onSelect ? ' selectable' : ''}`}>
       {mode === 'split' ? (
         <colgroup>
-          <col className="ln" style={{ width: '3.5rem' }} />
-          <col style={{ width: '1.25rem' }} />
+          <col className="ln" style={{ width: LINE_NUMBER_WIDTH }} />
+          <col style={{ width: MARKER_WIDTH }} />
           <col />
-          <col style={{ width: '3.5rem' }} />
-          <col style={{ width: '1.25rem' }} />
+          <col style={{ width: LINE_NUMBER_WIDTH }} />
+          <col style={{ width: MARKER_WIDTH }} />
           <col />
         </colgroup>
       ) : (
         <colgroup>
-          <col style={{ width: '3.5rem' }} />
-          <col style={{ width: '3.5rem' }} />
-          <col style={{ width: '1.25rem' }} />
+          <col style={{ width: LINE_NUMBER_WIDTH }} />
+          <col style={{ width: LINE_NUMBER_WIDTH }} />
+          <col style={{ width: MARKER_WIDTH }} />
           <col />
         </colgroup>
       )}
@@ -192,11 +195,13 @@ export function DiffTable({ lines, mode, tokens, words, moved, annotations }: Di
           <tr className="gap">
             <td colSpan={columns}>
               <div className="gap-controls">
+                <UnfoldVertical size={12} aria-hidden />
                 <button type="button" className="link" onClick={() => setRenderLimit((n) => n + RENDER_STEP)}>
-                  Show {Math.min(RENDER_STEP, remaining)} more lines
+                  show {Math.min(RENDER_STEP, remaining)} more lines
                 </button>
+                ·
                 <button type="button" className="link" onClick={() => setRenderLimit(Number.MAX_SAFE_INTEGER)}>
-                  Show all {remaining} remaining lines
+                  show all {remaining} remaining lines
                 </button>
               </div>
             </td>
@@ -310,23 +315,31 @@ interface GapRowProps {
 
 function GapRow({ hidden, columns, isFirst, isLast, onExpand }: GapRowProps) {
   const step = Math.min(EXPAND_STEP, hidden)
+  const partial = hidden > EXPAND_STEP
   return (
     <tr className="gap">
       <td colSpan={columns}>
         <div className="gap-controls">
-          {!isFirst && hidden > EXPAND_STEP && (
-            <button type="button" className="link" onClick={() => onExpand({ top: step })}>
-              ↓ Expand {step}
-            </button>
-          )}
-          {!isLast && hidden > EXPAND_STEP && (
-            <button type="button" className="link" onClick={() => onExpand({ bottom: step })}>
-              ↑ Expand {step}
-            </button>
-          )}
-          <button type="button" className="link" onClick={() => onExpand('all')}>
-            Expand {hidden} unchanged {hidden === 1 ? 'line' : 'lines'}
+          <UnfoldVertical size={12} aria-hidden />
+          <button type="button" className="link" onClick={() => onExpand('all')} title="Expand (x)">
+            {hidden} unchanged {hidden === 1 ? 'line' : 'lines'} <span className="key">x</span> expand
           </button>
+          {!isFirst && partial && (
+            <>
+              ·
+              <button type="button" className="link" onClick={() => onExpand({ top: step })} title={`Expand ${step} lines down`}>
+                ↓ {step}
+              </button>
+            </>
+          )}
+          {!isLast && partial && (
+            <>
+              ·
+              <button type="button" className="link" onClick={() => onExpand({ bottom: step })} title={`Expand ${step} lines up`}>
+                ↑ {step}
+              </button>
+            </>
+          )}
         </div>
       </td>
     </tr>

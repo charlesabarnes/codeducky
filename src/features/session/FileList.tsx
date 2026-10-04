@@ -1,3 +1,4 @@
+import { MessageSquare, Search } from 'lucide-react'
 import type { Ref } from 'react'
 import { changeKind, type ChangeKind, type FileChange, type FileStats } from '../../git/types'
 import type { FileOrder, Risk } from '../../review/order'
@@ -7,8 +8,8 @@ import './session.css'
 
 const BADGES: Record<ChangeKind, string> = { added: 'A', modified: 'M', deleted: 'D', renamed: 'R' }
 const ORDER_LABELS: Record<FileOrder, { label: string; title: string }> = {
-  folders: { label: 'Folders', title: 'Folder order, with tests next to their source' },
-  risk: { label: 'Risk', title: 'Riskiest first: size, new files, sensitive paths, deleted tests and open notes' },
+  folders: { label: 'folders', title: 'Folder order, with tests next to their source' },
+  risk: { label: 'risk', title: 'Riskiest first: size, new files, sensitive paths, deleted tests and open notes' },
 }
 
 export interface FileNoteCount {
@@ -41,15 +42,16 @@ interface FileListProps {
 
 export function FileList(props: FileListProps) {
   const { files, total, filter, onFilterChange, filterRef, onSelect, order, onOrderChange } = props
-  if (total === 0) return <p className="muted" style={{ padding: '1rem' }}>No changes against the base.</p>
+  if (total === 0) return <p className="muted panel-message">No changes against the base.</p>
   return (
     <>
       <div className="file-filter">
+        <Search size={13} aria-hidden />
         <input
           ref={filterRef}
           type="text"
           value={filter}
-          placeholder="Filter files"
+          placeholder="filter files  ( / )"
           aria-label="Filter files"
           aria-keyshortcuts="/"
           title="Filter files (/). Enter opens the first match, Esc leaves the field."
@@ -82,7 +84,7 @@ export function FileList(props: FileListProps) {
         </div>
       </div>
       {files.length === 0 ? (
-        <p className="muted" style={{ padding: '0 1rem' }}>No files match.</p>
+        <p className="muted panel-message">No files match.</p>
       ) : (
         <FileRows {...props} />
       )}
@@ -102,43 +104,56 @@ function FileRows({ files, stats, selected, noteCounts, viewed, onSelect, onTogg
     <ul className="file-list">
       {files.map((file) => {
         const kind = changeKind(file)
+        const badge = badges?.get(file.path)
+        const className = [viewed.has(file.path) && 'viewed', file.path === selected && 'current'].filter(Boolean).join(' ')
         return (
-        <li key={file.path} className={viewed.has(file.path) ? 'viewed' : undefined}>
-          <input
-            type="checkbox"
-            checked={viewed.has(file.path)}
-            onChange={() => onToggleViewed(file)}
-            disabled={canView ? !canView(file.path) : false}
-            aria-label={`Mark ${file.path} as viewed`}
-            title={canView && !canView(file.path) ? 'Not in the branch’s final diff' : 'Viewed'}
-          />
-          <button
-            type="button"
-            aria-current={file.path === selected}
-            onClick={() => onSelect(file.path)}
-            title={rowTitle(file, risks?.get(file.path))}
-          >
-            <span className={`status-badge status-${kind}`} title={kind}>
-              {BADGES[kind]}
-            </span>
-            <span className="file-path">
-              <bdi>{file.oldPath ? renameLabel(file.oldPath, file.path) : file.path}</bdi>
-            </span>
-            {file.similarity !== undefined && file.similarity < 100 && (
-              <span className="similarity muted">{file.similarity}%</span>
-            )}
-            {badges?.get(file.path) && (
-              <span className={`file-badge since-${badges.get(file.path)!.kind}`} title={badges.get(file.path)!.title}>
-                {badges.get(file.path)!.label}
+          <li key={file.path} className={className || undefined}>
+            <input
+              type="checkbox"
+              checked={viewed.has(file.path)}
+              onChange={() => onToggleViewed(file)}
+              disabled={canView ? !canView(file.path) : false}
+              aria-label={`Mark ${file.path} as viewed`}
+              title={canView && !canView(file.path) ? 'Not in the branch’s final diff' : 'Viewed'}
+            />
+            <button
+              type="button"
+              aria-current={file.path === selected}
+              onClick={() => onSelect(file.path)}
+              title={rowTitle(file, risks?.get(file.path))}
+            >
+              <span className={`status-badge status-${kind}`} title={kind}>
+                {BADGES[kind]}
               </span>
-            )}
-            <NoteCount count={noteCounts.get(file.path)} />
-            <Counts stats={stats[file.path]} />
-          </button>
-        </li>
+              <span className="file-path">
+                <bdi>{file.oldPath ? renameLabel(file.oldPath, file.path) : <SplitPath path={file.path} />}</bdi>
+              </span>
+              <span className="file-extras">
+                {file.similarity !== undefined && file.similarity < 100 && <span className="similarity">{file.similarity}%</span>}
+                {badge && (
+                  <span className={`file-badge since-${badge.kind}`} title={badge.title}>
+                    {badge.label}
+                  </span>
+                )}
+                <NoteCount count={noteCounts.get(file.path)} />
+              </span>
+              <Counts stats={stats[file.path]} />
+            </button>
+          </li>
         )
       })}
     </ul>
+  )
+}
+
+/** A path with its folders dimmed. */
+export function SplitPath({ path }: { path: string }) {
+  const cut = path.lastIndexOf('/') + 1
+  return (
+    <>
+      <span className="file-dir">{path.slice(0, cut)}</span>
+      <span className="file-name">{path.slice(cut)}</span>
+    </>
   )
 }
 
@@ -147,6 +162,7 @@ function NoteCount({ count }: { count: FileNoteCount | undefined }) {
   const title = `${count.open} open ${count.open === 1 ? 'note' : 'notes'}${count.lost ? `, ${count.lost} possibly resolved` : ''}`
   return (
     <span className={`note-count${count.lost ? ' lost' : ''}`} title={title}>
+      <MessageSquare size={11} aria-hidden />
       {count.open}
     </span>
   )

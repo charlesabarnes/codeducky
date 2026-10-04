@@ -1,3 +1,4 @@
+import { Check, Copy } from 'lucide-react'
 import { useState } from 'react'
 
 /** A labelled value with a copy button; `block` keeps line breaks, for multi-line snippets. */
@@ -11,10 +12,18 @@ export function CopyField({ label, value, block }: { label: string; value: strin
   return (
     <div className="copy-field">
       <span className="copy-label">{label}</span>
-      <div className="row">
-        <code className={block ? 'mono copy-value block' : 'mono copy-value'}>{value}</code>
+      <div className="copy-row">
+        <code className={block ? 'copy-value block' : 'copy-value'}>
+          {!block && (
+            <span className="prompt" aria-hidden="true">
+              ${' '}
+            </span>
+          )}
+          {value}
+        </code>
         <button type="button" className="secondary" onClick={() => void copy()}>
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? <Check size={13} aria-hidden /> : <Copy size={13} aria-hidden />}
+          {copied ? 'copied' : 'copy'}
         </button>
       </div>
     </div>

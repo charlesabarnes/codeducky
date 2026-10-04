@@ -15,7 +15,7 @@ export function LostNotes({ notes, heading, focusedId, readOnly }: LostNotesProp
     <section className="lost-notes stack">
       <h3>{heading}</h3>
       {notes.map((note) => (
-        <div key={note.id} className="stack" style={{ gap: '0.25rem' }}>
+        <div key={note.id} className="lost-note">
           <NoteCard note={note} readOnly={readOnly} focused={note.id === focusedId} />
           <AnchorExcerpt note={note} />
         </div>

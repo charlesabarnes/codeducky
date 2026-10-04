@@ -37,11 +37,11 @@ export function SinceBanner({ change, counts, active, onShow, onDismiss }: Since
       <div className="row">
         {!active && (
           <button type="button" onClick={onShow} title={withShortcut('Show only what changed since your last look', 'mode.since')}>
-            Show changes since last look
+            show changes since last look
           </button>
         )}
         <button type="button" className="secondary" onClick={onDismiss}>
-          Dismiss
+          dismiss
         </button>
       </div>
     </div>

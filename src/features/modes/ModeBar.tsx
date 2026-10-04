@@ -1,3 +1,4 @@
+import { ChevronDown } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { isMergeCommit, type BranchCommit } from '../../git/types'
 import { withShortcut } from '../../keys/help'
@@ -32,7 +33,7 @@ export function ModeBar(props: ModeBarProps) {
       <div className="row mode-row">
         <div className="segmented" role="group" aria-label="What to review">
           <button type="button" aria-pressed={mode.kind === 'all'} onClick={() => onModeChange({ kind: 'all' })} title={withShortcut('All changes on the branch', 'mode.all')}>
-            All changes
+            all changes
           </button>
           <button
             type="button"
@@ -41,7 +42,7 @@ export function ModeBar(props: ModeBarProps) {
             onClick={() => onModeChange(mode.kind === 'since' ? { kind: 'all' } : { kind: 'since' })}
             title={withShortcut('Only what changed since you last viewed each file', 'mode.since')}
           >
-            Since last look{changedCount !== null && changedCount > 0 && <span className="mode-count">{changedCount}</span>}
+            since last look{changedCount !== null && changedCount > 0 && <span className="mode-count">{changedCount}</span>}
           </button>
           <CommitPicker {...props} />
         </div>
@@ -125,8 +126,8 @@ function CommitPicker({ mode, onModeChange, commits, range, onPickCommit }: Mode
         ? `${shortSha(list[range.from]!.sha)} ${summaryOf(list[range.from]!)}`
         : describeRange(list, range)
       : commits.status === 'ready'
-        ? `Commits (${list.length})`
-        : 'Commits'
+        ? `commits (${list.length})`
+        : 'commits'
   return (
     <div className="commit-picker" ref={root}>
       <button
@@ -137,7 +138,8 @@ function CommitPicker({ mode, onModeChange, commits, range, onPickCommit }: Mode
         onClick={() => setOpen(!open)}
         title={withShortcut('Review one commit, or shift-click for a range', 'commit.next')}
       >
-        <span className="commit-picker-label">{label}</span> ▾
+        <span className="commit-picker-label">{label}</span>
+        <ChevronDown size={12} aria-hidden />
       </button>
       {open && (
         <div className="commit-popover" role="listbox" aria-label="Commits" aria-multiselectable="true">

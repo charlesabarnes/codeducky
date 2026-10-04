@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 import { setChecked } from '../../db/checklists'
 import { db } from '../../db/db'
+import { RequiredTag } from './RequiredTag'
 import { useChecklistProgress } from './useChecklistProgress'
 
 interface SessionChecklistsProps {
@@ -15,7 +16,7 @@ export function SessionChecklists({ sessionId, repoId, readOnly }: SessionCheckl
   const { lists, checked } = data
   if (lists.length === 0) {
     return (
-      <p className="muted" style={{ padding: '0 1rem' }}>
+      <p className="muted panel-message">
         No checklists for this repo. <Link to="/checklists">Create one</Link>.
       </p>
     )
@@ -24,17 +25,13 @@ export function SessionChecklists({ sessionId, repoId, readOnly }: SessionCheckl
     <div className="session-checklists stack">
       {lists.map((list) => (
         <section key={list.id}>
-          <h3>
-            {list.title}{' '}
-            {list.required && (
-              <span className="badge" title="Unticked items block a push through the pre-push gate">
-                required
-              </span>
-            )}{' '}
+          <div className="checklist-heading">
+            <strong>{list.title}</strong>
+            {list.required && <RequiredTag />}
             <span className="muted">
               {list.items.filter((item) => checked.has(item.id)).length}/{list.items.length}
             </span>
-          </h3>
+          </div>
           <ul className="checklist-items">
             {list.items.map((item) => (
               <li key={item.id}>
@@ -44,8 +41,8 @@ export function SessionChecklists({ sessionId, repoId, readOnly }: SessionCheckl
                     disabled={readOnly}
                     checked={checked.has(item.id)}
                     onChange={(event) => setChecked(db, sessionId, item.id, event.target.checked)}
-                  />{' '}
-                  {item.text}
+                  />
+                  <span>{item.text}</span>
                 </label>
               </li>
             ))}
@@ -54,7 +51,7 @@ export function SessionChecklists({ sessionId, repoId, readOnly }: SessionCheckl
       ))}
       {!readOnly && (
         <Link to="/checklists" className="muted">
-          Manage checklists
+          manage checklists
         </Link>
       )}
     </div>

@@ -35,7 +35,7 @@ export function BaseBanner({ state, session, repo }: BaseBannerProps) {
   const applyLocalBase = () => act(() => switchToLocalBase(session, repo))
   const localButton = (
     <button type="button" className="secondary" disabled={busy} onClick={applyLocalBase}>
-      Use local base
+      use local base
     </button>
   )
 
@@ -70,7 +70,7 @@ export function BaseBanner({ state, session, repo }: BaseBannerProps) {
         <>
           {moved && (
             <button type="button" disabled={busy} onClick={() => applyGitHubBase(freshness.remoteTip)}>
-              Update GitHub base
+              update github base
             </button>
           )}
           {localButton}
@@ -93,7 +93,7 @@ export function BaseBanner({ state, session, repo }: BaseBannerProps) {
       if (canUseGitHub) {
         actions = (
           <button type="button" disabled={busy} onClick={() => applyGitHubBase(freshness.remoteTip)}>
-            Use GitHub base
+            use github base
           </button>
         )
       }

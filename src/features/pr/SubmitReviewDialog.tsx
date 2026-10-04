@@ -1,3 +1,4 @@
+import { Send } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { db } from '../../db/db'
 import type { Note } from '../../db/schema'
@@ -73,11 +74,19 @@ export function SubmitReviewDialog({ sessionId, gh, snapshot, notes, pending, vi
   }
 
   return (
-    <dialog ref={dialog} className="push-dialog submit-review" onClose={onClose} aria-labelledby="submit-title" onKeyDown={onKeyDown}>
+    <dialog ref={dialog} className="modal push-dialog submit-review" onClose={onClose} aria-labelledby="submit-title" onKeyDown={onKeyDown}>
       <form method="dialog">
-        <h2 id="submit-title">
-          Submit review on #{pull.number} {pull.title}
-        </h2>
+        <header className="modal-bar">
+          <Send size={14} aria-hidden />
+          <h2 id="submit-title">
+            submit review on #{pull.number} <span className="muted">{pull.title}</span>
+          </h2>
+          <span className="spacer" />
+          <button type="button" className="link" onClick={() => dialog.current?.close()}>
+            <span className="key">esc</span> close
+          </button>
+        </header>
+        <div className="modal-body">
         {pending && (
           <p className="notice">
             Submits your pending review ({pending.comments} {pending.comments === 1 ? 'comment' : 'comments'} on GitHub).
@@ -98,7 +107,7 @@ export function SubmitReviewDialog({ sessionId, gh, snapshot, notes, pending, vi
           })}
         </fieldset>
         <label className="field">
-          <span>Summary</span>
+          <span>summary</span>
           <textarea rows={8} value={body} onChange={(e) => setBody(e.target.value)} aria-label="Review summary" />
           <small className="muted">Defaults to a summary of your open notes. Markdown.</small>
         </label>
@@ -113,16 +122,17 @@ export function SubmitReviewDialog({ sessionId, gh, snapshot, notes, pending, vi
         )}
         {missingBody && <p className="muted">GitHub needs a summary or at least one comment for this review.</p>}
         {error && <p className="error">{error}</p>}
-        <footer>
-          <span className="muted">
-            <kbd>{isMac() ? '⌘' : 'Ctrl'}</kbd>+<kbd>Enter</kbd> to submit. The session is archived afterwards.
-          </span>
-          <span className="spacer" />
+        </div>
+        <footer className="modal-foot">
+          <p>
+            <span className="key">{isMac() ? '⌘↵' : 'Ctrl+↵'}</span> to submit. The session is archived afterwards.
+          </p>
           <button type="submit" className="secondary">
-            Cancel
+            cancel
           </button>
           <button type="button" disabled={busy || missingBody || blocked} onClick={submit}>
-            {busy ? 'Submitting…' : `Submit: ${EVENT_LABEL[event]}`}
+            <Send size={13} aria-hidden />
+            {busy ? 'submitting…' : `submit: ${EVENT_LABEL[event].toLowerCase()}`}
           </button>
         </footer>
       </form>

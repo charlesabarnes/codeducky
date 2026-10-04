@@ -1,4 +1,6 @@
+import { Lock, Unlock } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
+import { Panel } from '../../ui/Panel'
 import { hasReadPermission, requestReadPermission } from '../../fs/permission'
 
 type State = 'checking' | 'granted' | 'prompt' | 'denied'
@@ -27,16 +29,19 @@ export function PermissionGate({ handle, children }: PermissionGateProps) {
   const request = async () => setState((await requestReadPermission(handle)) ? 'granted' : 'denied')
 
   return (
-    <div className="page card stack" style={{ margin: '1.5rem', maxWidth: '36rem' }}>
+    <div className="page narrow stack">
+      <Panel icon={Lock} title="folder access">
       <p>
         Skelbert needs read access to <strong>{handle.name}</strong> again. Browsers ask each time the app is reopened.
       </p>
       {state === 'denied' && <p className="error">Access was not granted.</p>}
       <div>
         <button type="button" onClick={request}>
-          Allow read access
+          <Unlock size={13} aria-hidden />
+          allow read access
         </button>
       </div>
+      </Panel>
     </div>
   )
 }

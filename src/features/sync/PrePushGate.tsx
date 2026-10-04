@@ -1,4 +1,7 @@
+import { KeyRound, ShieldCheck } from 'lucide-react'
 import { useState } from 'react'
+import { Panel } from '../../ui/Panel'
+import { Step } from '../../ui/Step'
 import { syncController } from '../../sync/client'
 import {
   claudeHookSettings,
@@ -34,47 +37,47 @@ export function PrePushGate({ signedIn, onMinted }: PrePushGateProps) {
   }
 
   return (
-    <section className="sync-section stack" id="pre-push-gate">
-      <div>
-        <h2>Pre-push gate</h2>
-        <p className="muted">
-          Blocks <code className="mono">git push</code> while the branch's session has open blocker or issue notes, or unticked
-          items on a checklist marked required. It fails open: with no token, no network or no answer within 2 seconds it
-          warns and lets the push through. <code className="mono">git push --no-verify</code> skips it.
-        </p>
-      </div>
-
-      <h3>1. Store a token in the Keychain</h3>
-      {token ? (
-        <div className="stack">
-          <CopyField label="Token (shown only this once)" value={token} />
-          <p className="muted">It appears as “Pre-push gate” under Access tokens, where you can revoke it.</p>
-        </div>
-      ) : (
-        <div className="row">
-          <button type="button" className="secondary" disabled={!signedIn || busy} onClick={() => void mint()}>
-            {busy ? 'Creating…' : 'Create a token'}
-          </button>
-          {!signedIn && <span className="muted">Sign in above to create a token.</span>}
-          {error && <span className="error">{error}</span>}
-        </div>
-      )}
-      <CopyField label="Then run this and paste the token when asked" value={keychainCommand()} />
-      <p className="muted">
-        Elsewhere than macOS, export <code className="mono">SKELBERT_TOKEN</code> instead. The scripts use this server unless
-        <code className="mono"> git config skelbert.url</code> says otherwise.
+    <Panel icon={ShieldCheck} title="pre-push gate" id="pre-push-gate">
+      <p>
+        Blocks <code>git push</code> while the branch's session has open blocker or issue notes, or unticked items on a checklist
+        marked required. It fails open: with no token, no network or no answer within 2 seconds it warns and lets the push
+        through. <code>git push --no-verify</code> skips it.
       </p>
-
-      <h3>2. Install the git hook in a repo</h3>
-      <CopyField label="Run in the repo's root" value={installPrePushCommand(origin)} />
-
-      <h3>3. Gate pushes from Claude Code (optional)</h3>
-      <CopyField label="Download the hook script" value={installClaudeHookCommand(origin)} />
-      <CopyField label="Merge into ~/.claude/settings.json" value={claudeHookSettings()} block />
-      <p className="muted">
-        The hook runs on every Bash command but only acts on <code className="mono">git push</code>; when the gate fails it
-        denies the command and gives Claude the reasons.
-      </p>
-    </section>
+      <ol className="steps">
+        <Step number={1} title="Store a token in the Keychain">
+          {token ? (
+            <div className="stack">
+              <CopyField label="Token (shown only this once)" value={token} />
+              <p>It appears as “Pre-push gate” under Access tokens, where you can revoke it.</p>
+            </div>
+          ) : (
+            <div className="row">
+              <button type="button" className="secondary" disabled={!signedIn || busy} onClick={() => void mint()}>
+                <KeyRound size={13} aria-hidden />
+                {busy ? 'creating…' : 'create a token'}
+              </button>
+              {!signedIn && <span className="muted">Sign in above to create a token.</span>}
+              {error && <span className="error">{error}</span>}
+            </div>
+          )}
+          <CopyField label="Then run this and paste the token when asked" value={keychainCommand()} />
+          <p>
+            Elsewhere than macOS, export <code>SKELBERT_TOKEN</code> instead. The scripts use this server unless{' '}
+            <code>git config skelbert.url</code> says otherwise.
+          </p>
+        </Step>
+        <Step number={2} title="Install the git hook in a repo">
+          <CopyField label="Run in the repo's root" value={installPrePushCommand(origin)} />
+        </Step>
+        <Step number={3} title="Gate pushes from Claude Code" optional>
+          <CopyField label="Download the hook script" value={installClaudeHookCommand(origin)} />
+          <CopyField label="Merge into ~/.claude/settings.json" value={claudeHookSettings()} block />
+          <p>
+            The hook runs on every Bash command but only acts on <code>git push</code>; when the gate fails it denies the command and
+            gives Claude the reasons.
+          </p>
+        </Step>
+      </ol>
+    </Panel>
   )
 }

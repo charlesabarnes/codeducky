@@ -1,4 +1,23 @@
 import { useLiveQuery } from 'dexie-react-hooks'
+import {
+  ArrowLeft,
+  CircleCheck,
+  Download,
+  ExternalLink,
+  Eye,
+  FileDiff,
+  Files,
+  GitBranch,
+  GitCommitHorizontal,
+  GitPullRequest,
+  GitPullRequestArrow,
+  ListChecks,
+  MessageSquare,
+  MessagesSquare,
+  RefreshCw,
+  Send,
+  type LucideIcon,
+} from 'lucide-react'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { db } from '../../db/db'
@@ -45,6 +64,7 @@ import { useFileSummary } from './useFileSummary'
 import { useSessionScan } from './useSessionScan'
 import { useViewPrefs } from './useViewPrefs'
 import { repoPath } from '../../app/paths'
+import { Crumbs, StatusBar, type StatusHint } from '../../app/chrome'
 import { ModeBar } from '../modes/ModeBar'
 import { recordViewed } from '../modes/recordViewed'
 import { SinceBanner } from '../modes/SinceBanner'
@@ -52,6 +72,12 @@ import { useReviewMode, type ReviewMode } from '../modes/useReviewMode'
 import { describeRange } from '../../review/commitRange'
 
 const EMPTY_NOTES: Note[] = []
+const SESSION_HINTS: StatusHint[] = [
+  { keys: 'j/k', label: 'line' },
+  { keys: 'n/p', label: 'change' },
+  { keys: ']/[', label: 'file' },
+  { keys: 'c', label: 'comment' },
+]
 const NO_THREADS: ReviewThread[] = []
 
 type Tab = 'files' | 'notes' | 'checklists' | 'conversation'
@@ -344,60 +370,136 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
   const items = checklists?.lists.flatMap((list) => list.items) ?? []
   const ticked = items.filter((item) => checklists?.checked.has(item.id)).length
 
+  const fileOpenNotes = fileNotes.filter((note) => note.status === 'open').length
+  const shortSha = (sha: string) => sha.slice(0, 7)
+
   return (
     <div className="session-layout">
+      <Crumbs>
+        <Link to={repoPath(repo.id!)}>{repoLabel(repo)}</Link>
+        <span>/</span>
+        {pr ? (
+          <>
+            <strong>#{pr.snapshot.pull.number}</strong>
+            <span>{pr.snapshot.pull.headRef}</span>
+            <span>→</span>
+            <span>{pr.snapshot.pull.baseRef}</span>
+          </>
+        ) : (
+          <>
+            <strong>{session.branch}</strong>
+            <span>←</span>
+            <span>origin/{repo.baseBranch}</span>
+          </>
+        )}
+      </Crumbs>
+      <StatusBar mode={pr ? 'pr review' : 'review'} hints={SESSION_HINTS}>
+        {selected && <span className="strong">{selected.path.slice(selected.path.lastIndexOf('/') + 1)}</span>}
+        {modes.mode.kind !== 'all' && <span>{modes.mode.kind === 'since' ? 'since last look' : 'commits'}</span>}
+        {selected && (
+          <span className="status-item">
+            <MessageSquare size={12} aria-hidden />
+            {fileOpenNotes} {fileOpenNotes === 1 ? 'note' : 'notes'}
+          </span>
+        )}
+      </StatusBar>
       <aside className="session-sidebar">
-        <div className="session-meta stack" style={{ gap: '0.25rem' }}>
-          {pr ? (
-            <>
-              <Link to="/inbox">← Inbox</Link>
-              <div className="mono">
-                {repoLabel(repo)}#{pr.snapshot.pull.number}
-              </div>
-              <div className="muted mono">
-                {pr.snapshot.pull.baseRef} ← {pr.snapshot.pull.headRef} @ {session.headSha.slice(0, 7)}
-              </div>
-            </>
-          ) : (
-            <>
-              <Link to={repoPath(repo.id!)}>← {repoLabel(repo)}</Link>
-              <div className="mono">
-                {session.branch} vs origin/{repo.baseBranch}
-              </div>
-              <div className="muted mono">
-                merge base {session.baseSha.slice(0, 7)}
-                {session.baseSource === 'github' && ' (from GitHub)'}
-              </div>
-              {branchPull && repo.owner && (
-                <div className="row branch-pull">
-                  <span className="muted">PR #{branchPull.number}</span>
-                  <Link to={prPath({ owner: repo.owner, name: repo.name, number: branchPull.number })}>Open PR in Skelbert</Link>
-                  <a href={branchPull.htmlUrl} target="_blank" rel="noreferrer">
-                    Open on GitHub
-                  </a>
-                </div>
-              )}
-            </>
+        <div className="session-meta">
+          {pr && (
+            <Link to="/inbox" className="back-link">
+              <ArrowLeft size={13} aria-hidden />
+              inbox
+            </Link>
           )}
+          <dl className="meta-grid">
+            {pr ? (
+              <>
+                <MetaLabel icon={GitPullRequest} label="pr" />
+                <dd>
+                  <a href={pr.snapshot.pull.htmlUrl} target="_blank" rel="noreferrer">
+                    {repoLabel(repo)}#{pr.snapshot.pull.number}
+                  </a>
+                </dd>
+                <MetaLabel icon={GitBranch} label="branch" />
+                <dd>
+                  {pr.snapshot.pull.headRef} <span className="muted">→ {pr.snapshot.pull.baseRef}</span>
+                </dd>
+                <MetaLabel icon={GitCommitHorizontal} label="head" />
+                <dd>{shortSha(session.headSha)}</dd>
+              </>
+            ) : (
+              <>
+                <MetaLabel icon={GitBranch} label="branch" />
+                <dd>{session.branch}</dd>
+                <MetaLabel icon={GitCommitHorizontal} label="base" />
+                <dd>
+                  origin/{repo.baseBranch}{' '}
+                  <span className="muted">
+                    @ {shortSha(session.baseSha)}
+                    {session.baseSource === 'github' && ' (github)'}
+                  </span>
+                </dd>
+                {branchPull && repo.owner && (
+                  <>
+                    <MetaLabel icon={GitPullRequest} label="pr" />
+                    <dd className="row branch-pull">
+                      <Link to={prPath({ owner: repo.owner, name: repo.name, number: branchPull.number })} title="Open PR in Skelbert">
+                        #{branchPull.number}
+                      </Link>
+                      <a href={branchPull.htmlUrl} target="_blank" rel="noreferrer" className="icon-link muted">
+                        github
+                        <ExternalLink size={11} aria-hidden />
+                      </a>
+                    </dd>
+                  </>
+                )}
+              </>
+            )}
+            {scan.files && (
+              <>
+                <MetaLabel icon={FileDiff} label="diff" />
+                <dd>
+                  <Totals files={scan.files} stats={scan.stats} />
+                </dd>
+              </>
+            )}
+            {ci.status.kind !== 'off' && (
+              <>
+                <MetaLabel icon={CircleCheck} label="ci" />
+                <dd>
+                  <CiChip view={ci} />
+                </dd>
+              </>
+            )}
+            {scan.files && scan.files.length > 0 && (
+              <>
+                <MetaLabel icon={Eye} label="viewed" />
+                <dd>
+                  <ViewedProgress viewed={viewed.size} total={scan.files.length} />
+                </dd>
+              </>
+            )}
+          </dl>
           <div className="row">
             <button type="button" className="secondary" onClick={rescan} disabled={scan.scanning || pr?.refreshing}>
-              {pr ? (pr.refreshing ? 'Refreshing…' : 'Refresh') : scan.scanning ? 'Scanning…' : 'Rescan'}
+              <RefreshCw size={12} aria-hidden />
+              {pr ? (pr.refreshing ? 'refreshing…' : 'refresh') : scan.scanning ? 'scanning…' : 'rescan'}
             </button>
             <button type="button" className="secondary" onClick={exportReport} disabled={!scan.files}>
-              Export
+              <Download size={12} aria-hidden />
+              export
             </button>
             <button type="button" className="secondary" onClick={() => setPushOpen(true)} disabled={!repo.owner} title="Push open notes as a pending review">
-              Push
+              <GitPullRequestArrow size={12} aria-hidden />
+              push
             </button>
             {pr && (
               <button type="button" onClick={() => setSubmitOpen(true)} title="Approve, request changes or comment">
-                Submit review
+                <Send size={12} aria-hidden />
+                submit review
               </button>
             )}
-            {scan.files && <Totals files={scan.files} stats={scan.stats} />}
           </div>
-          {scan.files && scan.files.length > 0 && <ViewedProgress viewed={viewed.size} total={scan.files.length} />}
-          <CiChip view={ci} />
           <ClaudeActions session={session} repo={repo} pr={pr && { number: pr.snapshot.pull.number, headRef: pr.snapshot.pull.headRef }} notes={notes} />
           {scan.renamesLimited && (
             <p className="muted" title="Too many added and deleted files to compare their contents">
@@ -407,21 +509,27 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
           {exportError && <p className="error">{exportError}</p>}
         </div>
         <div className="tabs" role="tablist">
-          <TabButton tab="files" current={tab} onSelect={setTab} label={`Files ${display.files?.length ?? ''}`} />
-          <TabButton tab="notes" current={tab} onSelect={setTab} label={`Notes ${openNotes || ''}${suggested ? ` +${suggested}` : ''}`} />
+          <TabButton tab="files" current={tab} onSelect={setTab} icon={Files} label={`files ${display.files?.length ?? ''}`} />
+          <TabButton
+            tab="notes"
+            current={tab}
+            onSelect={setTab}
+            icon={MessageSquare}
+            label={`notes ${openNotes || ''}`}
+            extra={suggested ? `+${suggested}` : undefined}
+          />
           <TabButton
             tab="checklists"
             current={tab}
             onSelect={setTab}
-            label={items.length ? `Checklists ${ticked}/${items.length}` : 'Checklists'}
+            icon={ListChecks}
+            label={items.length ? `checks ${ticked}/${items.length}` : 'checks'}
           />
-          {pr && <TabButton tab="conversation" current={tab} onSelect={setTab} label="Conversation" />}
+          {pr && <TabButton tab="conversation" current={tab} onSelect={setTab} icon={MessagesSquare} label="comments" />}
         </div>
-        {scan.error && <p className="error" style={{ padding: '0 1rem' }}>{scan.error}</p>}
-        {tab === 'files' && display.error && display.error !== scan.error && (
-          <p className="error" style={{ padding: '0 1rem' }}>{display.error}</p>
-        )}
-        {tab === 'files' && !display.files && display.scanning && <p className="muted" style={{ padding: '0 1rem' }}>Loading…</p>}
+        {scan.error && <p className="error panel-message">{scan.error}</p>}
+        {tab === 'files' && display.error && display.error !== scan.error && <p className="error panel-message">{display.error}</p>}
+        {tab === 'files' && !display.files && display.scanning && <p className="muted panel-message">Loading…</p>}
         {tab === 'files' && display.files && (
           <FileList
             files={shownFiles}
@@ -537,7 +645,16 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
   )
 }
 
-function TabButton({ tab, current, onSelect, label }: { tab: Tab; current: Tab; onSelect: (tab: Tab) => void; label: string }) {
+interface TabButtonProps {
+  tab: Tab
+  current: Tab
+  onSelect: (tab: Tab) => void
+  icon: LucideIcon
+  label: string
+  extra?: string
+}
+
+function TabButton({ tab, current, onSelect, icon: Icon, label, extra }: TabButtonProps) {
   return (
     <button
       type="button"
@@ -546,19 +663,41 @@ function TabButton({ tab, current, onSelect, label }: { tab: Tab; current: Tab; 
       onClick={() => onSelect(tab)}
       title={withShortcut(`${tab[0]!.toUpperCase()}${tab.slice(1)} tab`, TAB_SHORTCUTS[tab])}
     >
+      <Icon size={12} aria-hidden />
       {label}
+      {extra && <span className="tab-extra">{extra}</span>}
     </button>
   )
 }
 
+function MetaLabel({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
+  return (
+    <dt>
+      <Icon size={12} aria-hidden />
+      {label}
+    </dt>
+  )
+}
+
+/** One block per file while they fit; a bar beyond that. */
+const MAX_BLOCKS = 16
+
 function ViewedProgress({ viewed, total }: { viewed: number; total: number }) {
   return (
-    <div className="viewed-progress">
-      <progress max={total} value={viewed} />
-      <span className="muted">
-        {viewed}/{total} viewed
-      </span>
-    </div>
+    <span className="viewed-blocks" title={`${viewed} of ${total} files viewed`}>
+      {total <= MAX_BLOCKS ? (
+        <span className="viewed-bar" aria-hidden="true">
+          {Array.from({ length: total }, (_, index) => (
+            <span key={index} className={index < viewed ? 'on' : undefined} />
+          ))}
+        </span>
+      ) : (
+        <span className="viewed-bar continuous" aria-hidden="true">
+          <span style={{ width: `${(viewed / total) * 100}%` }} />
+        </span>
+      )}
+      {viewed}/{total}
+    </span>
   )
 }
 
@@ -572,7 +711,7 @@ function Totals({ files, stats }: { files: FileChange[]; stats: Record<string, F
     }
   }
   return (
-    <span className="counts muted">
+    <span className="counts">
       {files.length} {files.length === 1 ? 'file' : 'files'} <span className="add">+{additions}</span>
       <span className="del">−{deletions}</span>
     </span>

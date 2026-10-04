@@ -1,3 +1,4 @@
+import { ExternalLink, GitPullRequest, GitPullRequestArrow, Send } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Note, Session } from '../../db/schema'
 import { errorMessage } from '../../github/errors'
@@ -5,7 +6,8 @@ import type { PlacedNote, UnplacedNote } from '../../github/push'
 import { pushErrorHint, type PushPreview, type PushResult } from '../../github/pushReview'
 import type { PushTarget } from './pushTargets'
 import type { PullRequest } from '../../github/types'
-import { NoteBadges } from '../notes/NoteBadges'
+import { NoteTags } from '../notes/NoteBadges'
+import { SeverityLabel } from '../notes/Severity'
 import './github.css'
 
 type State =
@@ -89,26 +91,29 @@ export function PushDialog({ session, notes, target, onClose }: PushDialogProps)
   }
 
   return (
-    <dialog ref={dialog} className="push-dialog" onClose={onClose} aria-labelledby="push-title">
+    <dialog ref={dialog} className="modal push-dialog" onClose={onClose} aria-labelledby="push-title">
       <form method="dialog">
-        <h2 id="push-title">Push notes to GitHub</h2>
-        <Body state={state} selected={selected} onToggle={toggle} branch={session.branch} />
-        {pushError && <p className="error">{pushError}</p>}
-        <footer>
-          {state.status === 'ready' && (
-            <span className="muted">{target.notice}</span>
-          )}
+        <header className="modal-bar">
+          <GitPullRequestArrow size={14} aria-hidden />
+          <h2 id="push-title">push notes to github</h2>
           <span className="spacer" />
+          <button type="button" className="link" onClick={() => dialog.current?.close()}>
+            <span className="key">esc</span> close
+          </button>
+        </header>
+        <div className="modal-body">
+          <Body state={state} selected={selected} onToggle={toggle} branch={session.branch} />
+          {pushError && <p className="error">{pushError}</p>}
+        </div>
+        <footer className="modal-foot">
+          <p>{state.status === 'ready' ? target.notice : null}</p>
           <button type="submit" className="secondary">
-            {state.status === 'pushed' ? 'Close' : 'Cancel'}
+            {state.status === 'pushed' ? 'close' : 'cancel'}
           </button>
           {state.status === 'ready' && (
-            <button
-              type="button"
-              disabled={pushing || selected.size === 0}
-              onClick={() => push(state.preview)}
-            >
-              {pushing ? 'Creating…' : 'Create pending review'}
+            <button type="button" disabled={pushing || selected.size === 0} onClick={() => push(state.preview)}>
+              <Send size={13} aria-hidden />
+              {pushing ? 'creating…' : 'create pending review'}
             </button>
           )}
         </footer>
@@ -139,7 +144,7 @@ function Body({ state, selected, onToggle, branch }: BodyProps) {
       )
     case 'pushed':
       return (
-        <div className="stack" style={{ gap: '0.5rem' }}>
+        <div className="stack">
           <p className="ok">
             Pending review created with {state.comments} inline {state.comments === 1 ? 'comment' : 'comments'}
             {state.inBody > 0 && ` and ${state.inBody} ${state.inBody === 1 ? 'note' : 'notes'} in the review body`}.
@@ -162,12 +167,13 @@ function Preview({ preview, selected, onToggle }: { preview: PushPreview; select
   const total = placement.placed.length + placement.unplaced.length
   return (
     <>
-      <p>
-        <a href={pr.htmlUrl} target="_blank" rel="noreferrer">
-          #{pr.number} {pr.title}
-        </a>
-        {pr.draft && <span className="badge muted"> draft</span>}
-      </p>
+      <a href={pr.htmlUrl} target="_blank" rel="noreferrer" className="pr-link">
+        <GitPullRequest size={13} aria-hidden className="pr-icon" />
+        <span className="muted">#{pr.number}</span>
+        <span className="pr-link-title">{pr.title}</span>
+        <ExternalLink size={11} aria-hidden className="muted" />
+        {pr.draft && <span className="badge">draft</span>}
+      </a>
       {localHead !== pr.headSha && (
         <p className="notice">
           Your local HEAD ({short(localHead)}) is not the pull request head ({short(pr.headSha)}). Notes were re-anchored
@@ -176,14 +182,14 @@ function Preview({ preview, selected, onToggle }: { preview: PushPreview; select
       )}
       {total === 0 && <p className="muted">There are no open notes to push.</p>}
       {placement.placed.length > 0 && (
-        <NoteSection title={`Inline comments (${placement.placed.length})`}>
+        <NoteSection title="inline comments" count={placement.placed.length}>
           {placement.placed.map((entry) => (
             <PlacedRow key={entry.note.id} entry={entry} selected={selected} onToggle={onToggle} />
           ))}
         </NoteSection>
       )}
       {placement.unplaced.length > 0 && (
-        <NoteSection title={`Not on the diff (${placement.unplaced.length})`} hint="Ticked notes go in the review body, with an excerpt.">
+        <NoteSection title="not on the diff" count={placement.unplaced.length} hint="Ticked notes go in the review body, with an excerpt.">
           {placement.unplaced.map((entry) => (
             <UnplacedRow key={entry.note.id} entry={entry} selected={selected} onToggle={onToggle} />
           ))}
@@ -193,11 +199,13 @@ function Preview({ preview, selected, onToggle }: { preview: PushPreview; select
   )
 }
 
-function NoteSection({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+function NoteSection({ title, count, hint, children }: { title: string; count: number; hint?: string; children: ReactNode }) {
   return (
-    <section className="stack" style={{ gap: '0.35rem' }}>
-      <h3>{title}</h3>
-      {hint && <p className="muted">{hint}</p>}
+    <section className="push-section">
+      <div className="muted">
+        {title} <span className="strong">{count}</span>
+        {hint && <span className="push-hint"> · {hint}</span>}
+      </div>
       <ul className="push-notes">{children}</ul>
     </section>
   )
@@ -215,12 +223,13 @@ function NoteRow({ note, where, extra, selected, onToggle }: { note: Note; where
     <li>
       <label>
         <input type="checkbox" checked={selected.has(id)} onChange={() => onToggle(id)} />
+        <SeverityLabel severity={note.severity} />
         <span className="push-note-text">
-          <span className="row" style={{ gap: '0.25rem' }}>
-            <NoteBadges note={note} />
+          <span className="note-where">
+            {where}
+            <NoteTags note={note} />
             {extra}
           </span>
-          <span className="note-where mono">{where}</span>
           <span className="note-snippet">{note.body.split('\n')[0] || 'No text.'}</span>
         </span>
       </label>
@@ -239,7 +248,7 @@ function PlacedRow({ entry, selected, onToggle }: RowProps<PlacedNote>) {
     </>
   )
   const extra = !exact && (
-    <span className="badge muted" title="The surrounding lines differ from the note's anchor">
+    <span className="badge" title="The surrounding lines differ from the note's anchor">
       nearest match
     </span>
   )

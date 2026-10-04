@@ -2,7 +2,7 @@ import type { UnplacedAnnotation } from '../../github/ci'
 import type { AnnotationLevel, CheckAnnotation, CheckRun } from '../../github/types'
 import './ci.css'
 
-const LEVEL_LABEL: Record<AnnotationLevel, string> = { failure: 'Failure', warning: 'Warning', notice: 'Notice' }
+const LEVEL_LABEL: Record<AnnotationLevel, string> = { failure: 'failure', warning: 'warning', notice: 'notice' }
 const LEVEL_ICON: Record<AnnotationLevel, string> = { failure: '✕', warning: '!', notice: 'i' }
 
 const lineSpan = ({ startLine, endLine }: CheckAnnotation) => (endLine > startLine ? `lines ${startLine}–${endLine}` : `line ${startLine}`)
@@ -57,7 +57,7 @@ export function UnplacedAnnotations({ items, runs }: UnplacedProps) {
         CI annotations not on the diff <span className="muted">({items.length})</span>
       </h3>
       {items.map(({ annotation, reason }, index) => (
-        <div key={index} className="stack" style={{ gap: '0.15rem' }}>
+        <div key={index} className="ci-unplaced-item">
           <span className="muted">
             {lineSpan(annotation)} · {reason}
           </span>

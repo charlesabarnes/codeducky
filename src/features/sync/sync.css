@@ -1,48 +1,26 @@
-.app-header .sync-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
-  color: var(--fg-muted);
-  text-decoration: none;
-  white-space: nowrap;
+.sync-indicator.ok .sync-icon,
+.sync-tone.ok {
+  color: var(--add-fg);
 }
 
-.app-header .sync-indicator:hover {
-  color: inherit;
+.sync-indicator.busy .sync-icon,
+.sync-tone.busy {
+  color: var(--accent);
 }
 
-.sync-dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.6;
+.sync-indicator.warn .sync-icon,
+.sync-tone.warn {
+  color: var(--mod-fg);
 }
 
-.sync-indicator.ok .sync-dot {
-  background: var(--add-fg);
-  opacity: 1;
-}
-
-.sync-indicator.busy .sync-dot {
-  background: var(--accent);
-  opacity: 1;
-  animation: sync-pulse 1s ease-in-out infinite alternate;
-}
-
-.sync-indicator.warn .sync-dot {
-  background: var(--mod-fg);
-  opacity: 1;
-}
-
-.app-header .sync-indicator.error {
+.sync-indicator.error,
+.sync-indicator.error .sync-icon,
+.sync-tone.error {
   color: var(--del-fg);
 }
 
-.sync-indicator.error .sync-dot {
-  background: var(--del-fg);
-  opacity: 1;
+.sync-indicator.busy .sync-icon {
+  animation: sync-pulse 1s ease-in-out infinite alternate;
 }
 
 @keyframes sync-pulse {
@@ -51,69 +29,67 @@
   }
 }
 
-.sync-section {
-  margin-top: 2rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--border);
+.sync-status {
+  gap: 10px;
 }
 
-.token-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-}
-
-.token-table th,
 .token-table td {
-  text-align: left;
-  padding: 0.35rem 0.5rem 0.35rem 0;
-  border-bottom: 1px solid var(--border);
+  padding: 3px 10px;
 }
 
 .minted-token {
   word-break: break-all;
-  user-select: all;
 }
 
 .note-resolution {
-  margin-top: 0.5rem;
-  padding: 0.4rem 0.6rem;
-  border-left: 3px solid var(--add-fg);
+  margin-top: 6px;
+  padding: 2px 8px;
   background: var(--add-bg);
-  font-size: 0.9rem;
+  box-shadow: inset 2px 0 0 var(--add-fg);
 }
 
 .note-resolution header {
-  font-size: 0.8rem;
-  color: var(--fg-muted);
+  color: var(--fg-2);
+  font: 12px/20px var(--font-mono);
 }
 
 .copy-field {
   display: grid;
-  gap: 0.25rem;
+  gap: 4px;
 }
 
 .copy-label {
-  font-weight: 500;
+  color: var(--fg-2);
 }
 
-.copy-field .row {
+.copy-row {
+  display: flex;
   align-items: flex-start;
+  gap: 8px;
 }
 
 .copy-value {
   flex: 1;
   min-width: 0;
-  padding: 0.4rem 0.6rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-subtle);
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
   overflow-wrap: anywhere;
   user-select: all;
 }
 
+.copy-value .prompt {
+  color: var(--accent);
+  user-select: none;
+}
+
 .copy-value.block {
+  padding: 6px 8px;
   white-space: pre;
   overflow-x: auto;
   overflow-wrap: normal;
+}
+
+.copy-row > button {
+  padding: 2px 10px;
 }
