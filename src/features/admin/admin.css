@@ -1,0 +1,93 @@
+.admin-stats {
+  font-family: var(--font-mono);
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-table td {
+  vertical-align: top;
+}
+
+.admin-table .account-cell {
+  align-items: flex-start;
+}
+
+.admin-table .account-cell .avatar {
+  margin-top: 2px;
+}
+
+.account-lines {
+  gap: 0;
+}
+
+.admin-table small {
+  font-size: inherit;
+}
+
+.admin-table tr.disabled-account > td:not(.num) {
+  opacity: 0.6;
+}
+
+.badge.status-active {
+  color: var(--add-fg);
+  border-color: var(--add-fg);
+}
+
+.badge.status-disabled {
+  color: var(--del-fg);
+  border-color: var(--del-fg);
+  border-style: dashed;
+}
+
+.override-mark {
+  color: var(--accent);
+}
+
+.admin-actions {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+
+.admin-table button.link.danger {
+  border: none;
+  color: var(--del-fg);
+}
+
+.admin-table tr.admin-detail,
+.admin-table tr.admin-detail:hover {
+  border-top: 1px dashed var(--line);
+  background: var(--bg-2);
+}
+
+.admin-confirm,
+.admin-quota {
+  font-family: var(--font-mono);
+}
+
+.admin-confirm .prompt,
+.admin-quota .prompt {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.admin-quota .quota-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-quota .quota-field input {
+  width: 11ch;
+}
+
+.admin-quota input[aria-invalid='true'] {
+  border-color: var(--del-fg);
+}
+
+.admin-quota .quota-hint {
+  flex-basis: 100%;
+  font-size: inherit;
+}

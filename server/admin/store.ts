@@ -57,7 +57,7 @@ export function listAccounts(db: Database): AccountSummary[] {
     .query<Row, []>(
       `SELECT id, login, name, avatar_url, role, status, created_at, last_login_at, last_seen_at,
          record_count, data_bytes, quota_records, quota_bytes
-       FROM users ORDER BY role = 'admin' DESC, created_at, id`,
+       FROM users ORDER BY role = 'admin' DESC, created_at, login, id`,
     )
     .all()
     .map((row) => ({
