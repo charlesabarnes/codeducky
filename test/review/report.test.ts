@@ -32,6 +32,12 @@ describe('report', () => {
     expect(noteExcerpt(note({}))).toBe(['  10 | // a', '  11 | // b', '> 12 | const x = 1', '  13 | export { x }'].join('\n'))
   })
 
+  it('marks every line of a range', () => {
+    const range = note({ anchor: { line: 12, endLine: 13, side: 'new', text: 'const x = 1', rangeText: ['const x = 1', 'const y = 2'], before: ['// b'], after: ['export { x }'] } })
+    expect(noteExcerpt(range)).toBe(['  11 | // b', '> 12 | const x = 1', '> 13 | const y = 2', '  14 | export { x }'].join('\n'))
+    expect(buildReport({ repoName: 'me/repo', baseBranch: 'main', session, notes: [range], checklists: [] })).toContain('**issue** · open · lines 12–13')
+  })
+
   it('builds summary, checklist state and notes grouped by file', () => {
     const markdown = buildReport({
       repoName: 'me/repo',

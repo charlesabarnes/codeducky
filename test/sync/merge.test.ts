@@ -75,6 +75,27 @@ describe('wire records', () => {
     expect(validateChange({ kind: 'notes', id: 'n1', changedAt: 1, deleted: true })).toBeNull()
   })
 
+  it('validates note ranges and still accepts single-line anchors without them', () => {
+    const withAnchor = (anchor: Record<string, unknown>) => ({
+      kind: 'notes',
+      id: 'n1',
+      changedAt: 1,
+      deleted: false,
+      data: { sessionId: 's', path: 'a', anchor, body: 'b', severity: 'nit', status: 'open', source: 'me', createdAt: 1, updatedAt: 1 },
+    })
+    const single = { line: 4, side: 'new', text: 'x', before: ['w'], after: ['y'] }
+    expect(validateChange(withAnchor(single))).toBeNull()
+    expect(validateChange(withAnchor({ ...single, endLine: 6, rangeText: ['x', 'y', 'z'] }))).toBeNull()
+    // A line-only range from MCP, before the PWA fills in its text.
+    expect(validateChange(withAnchor({ line: 4, side: 'new', text: '', before: [], after: [], endLine: 6 }))).toBeNull()
+    expect(validateChange(withAnchor({ ...single, endLine: 4, rangeText: ['x'] }))).toBe('notes.anchor is invalid')
+    expect(validateChange(withAnchor({ ...single, endLine: 3 }))).toBe('notes.anchor is invalid')
+    expect(validateChange(withAnchor({ ...single, endLine: 5.5 }))).toBe('notes.anchor is invalid')
+    expect(validateChange(withAnchor({ ...single, endLine: 6, rangeText: ['x', 'y'] }))).toBe('notes.anchor is invalid')
+    expect(validateChange(withAnchor({ ...single, rangeText: ['x'] }))).toBe('notes.anchor is invalid')
+    expect(validateChange(withAnchor({ ...single, endLine: '6' }))).toBe('notes.anchor is invalid')
+  })
+
   it('splits invalid changes out of a request', () => {
     const parsed = parseSyncRequest({ cursor: 0, changes: [{ kind: 'nope', id: 'x' }, { kind: 'notes', id: 'n', changedAt: 1, deleted: true }] })
     expect(parsed).toEqual({

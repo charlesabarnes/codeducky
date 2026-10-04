@@ -75,3 +75,36 @@ describe('reanchorNotes', () => {
     expect(calls).toEqual(['a.txt:old'])
   })
 })
+
+describe('reanchor ranges', () => {
+  const range = createAnchor(base, 3, 'new', 5)
+
+  it('moves both ends and refreshes the range text', () => {
+    const moved = reanchor(range, numberLines('zero\none\ntwo\nthree\nfour\nfive\nsix\nseven\n'))
+    expect(moved).toEqual({ anchorLost: false, anchor: createAnchor(numberLines('zero\none\ntwo\nthree\nfour\nfive\nsix\nseven\n'), 4, 'new', 6) })
+  })
+
+  it('grows with lines added inside it', () => {
+    const edited = numberLines('one\ntwo\nthree\nthree and a half\nfour\nfive\nsix\nseven\n')
+    const { anchor, anchorLost } = reanchor(range, edited)
+    expect(anchorLost).toBe(false)
+    expect(anchor).toMatchObject({ line: 3, endLine: 6, rangeText: ['three', 'three and a half', 'four', 'five'] })
+  })
+
+  it('is lost, keeping its anchor, when an end is gone', () => {
+    expect(reanchor(range, numberLines('one\ntwo\nfour\nfive\nsix\nseven\n'))).toEqual({ anchor: range, anchorLost: true })
+  })
+
+  it('fills in a line-only range (from MCP) from the file', () => {
+    const lineOnly = { line: 2, endLine: 4, side: 'new' as const, text: '', before: [], after: [] }
+    expect(reanchor(lineOnly, base)).toEqual({ anchorLost: false, anchor: createAnchor(base, 2, 'new', 4) })
+    expect(reanchor({ ...lineOnly, endLine: 99 }, base).anchorLost).toBe(true)
+  })
+
+  it('reports a range whose end moved even when its start did not', () => {
+    const notes = [note(1, 3, { anchor: range })]
+    const edited = numberLines('one\ntwo\nthree\nNEW\nfour\nfive\nsix\nseven\n')
+    expect(reanchorNotes(notes, () => edited).map((update) => [update.anchor.line, update.anchor.endLine])).toEqual([[3, 6]])
+    expect(reanchorNotes(notes, () => base)).toEqual([])
+  })
+})

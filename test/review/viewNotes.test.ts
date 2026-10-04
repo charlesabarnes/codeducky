@@ -73,3 +73,17 @@ describe('notes in commit and since-last-look views', () => {
     expect(anchorForView({ kind: 'interdiff' }, 'new', 4, shown, null)).toEqual({ anchor: createAnchor(FINAL, 4, 'new') })
   })
 })
+
+describe('ranges in commit views', () => {
+  it('moves both ends of a final-content range onto the commit’s lines', () => {
+    const range = note('range', { anchor: createAnchor(FINAL, 3, 'new', 5) })
+    const { placed } = placeNotes([range], COMMIT, { kind: 'commit', sha: 'c1' })
+    expect(placed.map((n) => [n.anchor.line, n.anchor.endLine])).toEqual([[4, 6]])
+  })
+
+  it('anchors a range made on a commit on the final content while it survives', () => {
+    const shown = { old: null, new: COMMIT }
+    expect(anchorForView({ kind: 'commit', sha: 'c1' }, 'new', 4, shown, FINAL, 6)).toEqual({ anchor: createAnchor(FINAL, 3, 'new', 5) })
+    expect(anchorForView({ kind: 'all' }, 'new', 3, { old: null, new: FINAL }, null, 5)).toEqual({ anchor: createAnchor(FINAL, 3, 'new', 5) })
+  })
+})

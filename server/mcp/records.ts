@@ -51,6 +51,8 @@ export interface NoteAnchor {
   text: string
   before: string[]
   after: string[]
+  endLine?: number
+  rangeText?: string[]
 }
 
 export interface NoteRecord {
