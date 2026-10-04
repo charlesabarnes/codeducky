@@ -91,3 +91,45 @@
 .access-state.denied {
   color: var(--del-fg);
 }
+
+#badge .segmented {
+  width: fit-content;
+}
+
+.check-list {
+  display: grid;
+  gap: 4px;
+}
+
+.check-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  cursor: pointer;
+}
+
+/*
+ * Window Controls Overlay: the installed app's header becomes its title bar. The titlebar-area values
+ * leave room for the window controls (left on macOS, right elsewhere); empty header space drags the
+ * window and everything you can click opts out. Without the .wco class nothing here applies.
+ */
+.wco {
+  --titlebar-x: env(titlebar-area-x, 0px);
+  --titlebar-width: env(titlebar-area-width, 100vw);
+  --titlebar-height: env(titlebar-area-height, var(--bar-h));
+}
+
+.wco .app-header {
+  height: var(--titlebar-height);
+  padding-left: calc(var(--titlebar-x) + var(--pad-x));
+  padding-right: calc(100vw - var(--titlebar-x) - var(--titlebar-width) + var(--pad-x));
+  /* The window controls sit on the theme colour, which is the page background. */
+  background: var(--bg);
+  app-region: drag;
+  -webkit-app-region: drag;
+}
+
+.wco .app-header :is(a, button, input, select, [role='menu']) {
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+}

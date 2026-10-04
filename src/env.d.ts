@@ -14,3 +14,11 @@ interface LaunchQueue {
 interface Window {
   readonly launchQueue?: LaunchQueue
 }
+
+interface WindowControlsOverlay extends EventTarget {
+  readonly visible: boolean
+}
+
+interface Navigator {
+  readonly windowControlsOverlay?: WindowControlsOverlay
+}

@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useParams } from 'react-router'
+import { rememberSession } from '../../app/lastSession'
 import { db } from '../../db/db'
 import { isPrSession, type OpenedRepo, type Session } from '../../db/schema'
 import { repoRef } from '../../github/connect'
@@ -17,6 +18,10 @@ export function SessionPage() {
     const repo = session ? await db.repos.get(session.repoId) : undefined
     return { session, repo }
   }, [sessionId])
+  const found = Boolean(data?.session)
+  useEffect(() => {
+    if (found) rememberSession(sessionId)
+  }, [found, sessionId])
 
   if (!data) return <p className="page muted">Loading…</p>
   const { session, repo } = data
