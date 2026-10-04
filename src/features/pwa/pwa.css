@@ -1,0 +1,93 @@
+.app-banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px var(--pad-x);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.app-banner > svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.app-banner.required {
+  box-shadow: inset 2px 0 0 var(--del-fg);
+}
+
+.app-banner.required > svg {
+  color: var(--del-fg);
+}
+
+.app-banner .pulse {
+  animation: app-banner-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes app-banner-pulse {
+  from {
+    opacity: 0.35;
+  }
+}
+
+.access-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--bg-2);
+  box-shadow: inset 2px 0 0 var(--mod-fg);
+}
+
+.access-notice > svg {
+  flex: none;
+  color: var(--mod-fg);
+}
+
+.access-notice > span {
+  flex: 1;
+}
+
+.access-notice > button {
+  flex: none;
+}
+
+.storage-meter {
+  height: 4px;
+  background: var(--bg-3);
+}
+
+.storage-meter > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.pwa-facts {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 6px 8px;
+  margin: 0;
+}
+
+.pwa-facts dt {
+  color: var(--fg-2);
+}
+
+.pwa-facts dd {
+  margin: 0;
+}
+
+.access-state.granted {
+  color: var(--add-fg);
+}
+
+.access-state.prompt {
+  color: var(--mod-fg);
+}
+
+.access-state.denied {
+  color: var(--del-fg);
+}

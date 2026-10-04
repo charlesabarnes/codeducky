@@ -9,6 +9,7 @@ import type { IdentityProvider } from './auth/github'
 import { createFailureLimiter, type FailureLimiter } from './auth/passphrase'
 import { authRoutes } from './auth/routes'
 import { createTokenStore } from './auth/tokens'
+import { requireClientBuild } from './clientVersion'
 import { createChannelRegistry, type ChannelRegistry } from './channel/registry'
 import { channelRoutes } from './channel/routes'
 import type { SignupPolicy } from './config'
@@ -42,6 +43,8 @@ export interface AppDeps {
   limits?: RateLimits
   /** Default per-user storage quotas; a user's own override wins. */
   quotas?: Quotas
+  /** The oldest PWA build the API serves; defaults to MIN_CLIENT_BUILD. */
+  minClientBuild?: string
 }
 
 const MAX_SYNC_BODY = 8 * 1024 * 1024
@@ -63,6 +66,7 @@ export function createApp({
   channel,
   limits,
   quotas,
+  minClientBuild,
 }: AppDeps) {
   ensureAdmin(db)
   if (quotas) setDefaultQuotas(db, quotas)
@@ -76,6 +80,7 @@ export function createApp({
 
   api.use('*', requestLog(log))
   api.onError(logErrors(log))
+  api.use('*', requireClientBuild(minClientBuild))
   const apiBody = tooLarge(MAX_API_BODY)
   api.use('*', (c, next) => (c.req.path === '/api/sync' ? next() : apiBody(c, next)))
   api.get('/health', (c) => c.json({ ok: true }))
