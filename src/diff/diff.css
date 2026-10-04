@@ -43,7 +43,7 @@
   color: var(--moved-fg);
   font: inherit;
   font-weight: 400;
-  line-height: 18px;
+  line-height: calc(var(--code-line) - 2px);
 }
 
 .moved-link:hover:not(:disabled) {

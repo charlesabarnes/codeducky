@@ -50,7 +50,7 @@
 
 .note-resolution header {
   color: var(--fg-2);
-  font: 12px/20px var(--font-mono);
+  font: var(--text-size)/var(--text-line) var(--font-mono);
 }
 
 .copy-field {

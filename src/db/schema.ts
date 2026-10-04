@@ -212,9 +212,18 @@ export interface CachedBlob {
 
 export const THEME_PREFERENCES = ['dark', 'light', 'system'] as const
 export type ThemePreference = (typeof THEME_PREFERENCES)[number]
+export const PALETTES = ['terminal', 'fjord', 'solar', 'dusk', 'contrast'] as const
+export type Palette = (typeof PALETTES)[number]
+export const DENSITIES = ['compact', 'default', 'comfortable'] as const
+export type Density = (typeof DENSITIES)[number]
+export const CODE_FONTS = ['plex', 'jetbrains', 'system'] as const
+export type CodeFont = (typeof CODE_FONTS)[number]
 
 export interface Settings {
   id: 'app'
   githubPat: string
   theme?: ThemePreference
+  palette?: Palette
+  density?: Density
+  codeFont?: CodeFont
 }

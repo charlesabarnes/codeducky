@@ -9,11 +9,12 @@ import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router'
 import { registerSW } from 'virtual:pwa-register'
 import { router } from './app/router'
-import { startTheme } from './app/theme'
+import { startAppearance } from './app/appearance'
 import { syncController } from './sync/client'
 import './styles.css'
+import './palettes.css'
 
-startTheme()
+startAppearance()
 registerSW({ immediate: true })
 void syncController.start()
 
