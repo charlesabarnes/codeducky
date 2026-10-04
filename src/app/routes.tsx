@@ -2,6 +2,7 @@ import type { RouteObject } from 'react-router'
 import { ChecklistsPage } from '../features/checklists/ChecklistsPage'
 import { HistoryPage } from '../features/history/HistoryPage'
 import { InboxPage } from '../features/inbox/InboxPage'
+import { LastSessionPage } from './LastSessionPage'
 import { PrOpenPage } from '../features/pr/PrOpenPage'
 import { Layout } from './Layout'
 import { RepoPage } from '../features/repos/RepoPage'
@@ -21,6 +22,7 @@ export const routes: RouteObject[] = [
       { id: 'session', path: 'sessions/:sessionId', element: <SessionPage /> },
       { id: 'settings', path: 'settings', element: <SettingsPage /> },
       { id: 'inbox', path: 'inbox', element: <InboxPage /> },
+      { id: 'last', path: 'last', element: <LastSessionPage /> },
       { id: 'signin-callback', path: 'signin/callback', element: <SignInCallback /> },
       { id: 'pr', path: 'pr/:owner/:repo/:number', element: <PrOpenPage /> },
       // github.com's PR paths, so replacing the host in a PR URL opens it here. Static routes rank above it.
