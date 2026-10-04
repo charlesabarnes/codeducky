@@ -3,7 +3,7 @@ import type { Ref } from 'react'
 import { changeKind, type ChangeKind, type FileChange, type FileStats } from '../../git/types'
 import type { FileOrder, Risk } from '../../review/order'
 import type { FileBadge } from '../modes/useReviewMode'
-import { renameLabel } from './renames'
+import { pathParts } from './renames'
 import './session.css'
 
 const BADGES: Record<ChangeKind, string> = { added: 'A', modified: 'M', deleted: 'D', renamed: 'R' }
@@ -126,7 +126,7 @@ function FileRows({ files, stats, selected, noteCounts, viewed, onSelect, onTogg
                 {BADGES[kind]}
               </span>
               <span className="file-path">
-                <bdi>{file.oldPath ? renameLabel(file.oldPath, file.path) : <SplitPath path={file.path} />}</bdi>
+                <SplitPath path={file.path} oldPath={file.oldPath} />
               </span>
               <span className="file-extras">
                 {file.similarity !== undefined && file.similarity < 100 && <span className="similarity">{file.similarity}%</span>}
@@ -146,13 +146,15 @@ function FileRows({ files, stats, selected, noteCounts, viewed, onSelect, onTogg
   )
 }
 
-/** A path with its folders dimmed. */
-export function SplitPath({ path }: { path: string }) {
-  const cut = path.lastIndexOf('/') + 1
+/** A path with its folders dimmed; a rename shows git's short form. */
+export function SplitPath({ path, oldPath }: { path: string; oldPath?: string }) {
+  const { dir, name } = pathParts(path, oldPath)
   return (
     <>
-      <span className="file-dir">{path.slice(0, cut)}</span>
-      <span className="file-name">{path.slice(cut)}</span>
+      <span className="file-dir">
+        <bdi>{dir}</bdi>
+      </span>
+      <span className="file-name">{name}</span>
     </>
   )
 }

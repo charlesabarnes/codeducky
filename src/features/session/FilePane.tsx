@@ -19,7 +19,6 @@ import type { ReviewThread } from '../../github/threads'
 import { ThreadCard, type ThreadActions } from '../pr/ThreadCard'
 import { useThreadAnnotations } from '../pr/useThreadAnnotations'
 import { SplitPath } from './FileList'
-import { renameLabel } from './renames'
 import type { DiffSource } from './source'
 import { useFileContents } from './useFileContents'
 
@@ -154,7 +153,7 @@ export function FilePane(props: FilePaneProps) {
     <>
       <div className="diff-toolbar" data-sticky-header>
         <span className="path" title={change.oldPath ? `Renamed from ${change.oldPath}` : undefined}>
-          {change.oldPath ? renameLabel(change.oldPath, change.path) : <SplitPath path={change.path} />}
+          <SplitPath path={change.path} oldPath={change.oldPath} />
           {change.oldPath && (
             <span className="rename-from"> · renamed{change.similarity !== undefined && `, ${change.similarity}% similar`}</span>
           )}

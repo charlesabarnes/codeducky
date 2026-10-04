@@ -1158,11 +1158,25 @@ tr.current .repo-link {
 }
 
 .file-path {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Folders give way first, cut from the left; the name is cut only when it alone does not fit. */
+.file-path .file-dir {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
   direction: rtl;
-  text-align: left;
+}
+
+.file-path .file-name {
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .file-dir {
