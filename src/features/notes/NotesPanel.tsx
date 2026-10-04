@@ -64,7 +64,7 @@ export function NotesPanel({ notes, selectedId, onSelect }: NotesPanelProps) {
                 </span>
                 <span className="note-where mono">
                   {note.path}
-                  {note.anchorLost ? '' : `:${note.anchor.line}${note.anchor.side === 'old' ? ' (base)' : ''}`}
+                  {note.anchorLost ? '' : `:${note.anchor.line}${note.anchor.side === 'old' ? ' (base)' : ''}${note.commit ? ` @${note.commit.slice(0, 7)}` : ''}`}
                 </span>
                 <span className="note-snippet">{note.title ?? note.body.split('\n')[0]}</span>
               </button>

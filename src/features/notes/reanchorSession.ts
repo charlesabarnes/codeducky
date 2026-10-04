@@ -15,7 +15,8 @@ export async function reanchorSession(
   readContents: (change: FileChange) => Promise<FileContents>,
   cancelled: () => boolean,
 ): Promise<void> {
-  const notes = await sessionNotes(db, sessionId)
+  // Notes kept on a commit's lines point at content that never changes.
+  const notes = (await sessionNotes(db, sessionId)).filter((note) => !note.commit)
   if (notes.length === 0) return
   // A note left on a file's old name follows it through a rename.
   const changes = new Map(files.flatMap((file) => (file.oldPath ? [[file.oldPath, file] as const] : [])))

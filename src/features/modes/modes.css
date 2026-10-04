@@ -1,0 +1,175 @@
+.mode-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.mode-row {
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.mode-bar .segmented > button,
+.commit-picker > button {
+  padding: 0.2rem 0.65rem;
+  font-size: 13px;
+}
+
+.commit-picker > button {
+  border-radius: 0 6px 6px 0;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  max-width: 26rem;
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.commit-picker > button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
+}
+
+.commit-picker-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mode-count {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  font-size: 11px;
+  background: var(--mod-fg);
+  color: var(--bg);
+}
+
+.commit-picker {
+  position: relative;
+}
+
+.commit-popover {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  left: 0;
+  width: min(36rem, 70vw);
+  max-height: 60vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+}
+
+.commit-option {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: 'sha summary badge' '. by by';
+  column-gap: 0.6rem;
+  align-items: baseline;
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
+  font-size: 13px;
+}
+
+.commit-option.all {
+  display: block;
+  font-weight: 600;
+}
+
+.commit-option:hover {
+  background: var(--bg-muted);
+}
+
+.commit-option[aria-selected='true'] {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.commit-option .commit-sha {
+  grid-area: sha;
+  color: var(--accent);
+}
+
+.commit-option .commit-summary {
+  grid-area: summary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-option .badge {
+  grid-area: badge;
+}
+
+.commit-option .commit-by {
+  grid-area: by;
+  font-size: 12px;
+}
+
+.commit-note {
+  margin: 0.35rem 0.5rem;
+  font-size: 12px;
+}
+
+.commit-header .commit-sha {
+  color: var(--accent);
+}
+
+.commit-header .row {
+  gap: 0.6rem;
+}
+
+.commit-body {
+  margin: 0.25rem 0 0;
+  white-space: pre-wrap;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.commit-meta,
+.since-summary {
+  margin: 0;
+  font-size: 12px;
+}
+
+.file-badge {
+  font-size: 10px;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.file-badge.since-new {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.file-badge.since-changed {
+  color: var(--mod-fg);
+  border-color: var(--mod-fg);
+}
+
+.file-badge.since-missing {
+  color: var(--del-fg);
+  border-color: var(--del-fg);
+}
+
+.elsewhere-notes h3 {
+  color: var(--fg-muted);
+}

@@ -12,6 +12,7 @@ import type {
   Note,
   Repo,
   RepoHandle,
+  ReviewSnapshot,
   Session,
   Settings,
 } from './schema'
@@ -27,6 +28,7 @@ export class SkelbertDb extends Dexie {
   settings!: EntityTable<Settings, 'id'>
   inbox!: EntityTable<InboxSnapshot, 'id'>
   githubBlobs!: Table<CachedBlob, string>
+  reviewSnapshots!: Table<ReviewSnapshot, string>
   outbox!: Table<OutboxEntry, string>
   rejected!: Table<RejectedEntry, string>
   syncMeta!: Table<MetaEntry, string>
@@ -87,6 +89,8 @@ export class SkelbertDb extends Dexie {
       .upgrade(restoreFromStaging)
     this.version(5).upgrade(dropClaudePass)
     this.version(6).stores({ inbox: 'id', githubBlobs: 'oid, at' })
+    // Local only: not a sync kind, so the sync middleware leaves it alone.
+    this.version(7).stores({ reviewSnapshots: 'oid, at, [at+size]' })
     this.use(syncMiddleware)
   }
 }

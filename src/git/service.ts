@@ -1,6 +1,7 @@
 import { HandleFs } from '../fs/handleFs'
 import git from 'isomorphic-git'
 import { analyzeChanges } from './analysis'
+import { branchCommits, headMoveSince, readBlobContents, readBlobOrNull, reviewSnapshot, treeChanges } from './commits'
 import { listChanges, listChangesAgainstOids } from './changes'
 import { missingBlobs, readFileContents, readFileStats } from './contents'
 import { createContext, type GitContext } from './context'
@@ -100,6 +101,44 @@ export function createGitService() {
     /** Line counts per file plus moved blocks across the change set. */
     async analyze(changes: FileChange[], maxBytes?: number) {
       return analyzeChanges(opened(), changes, maxBytes)
+    },
+    /** The branch's commits from the merge base to HEAD, oldest first (first parents only). */
+    async branchCommits(baseSha: string) {
+      return branchCommits(await fresh(), baseSha)
+    },
+    /** How far HEAD moved since a reviewed head. */
+    async headMoveSince(fromSha: string) {
+      return headMoveSince(await fresh(), fromSha)
+    },
+    /** The files a commit range changed: `from` (the parent of the first commit) to `to`, with renames paired. */
+    async commitChanges(from: string | null, to: string) {
+      const current = await fresh()
+      const changes = await treeChanges(current, from, to)
+      return detectRenames(changes, {
+        readOld: (change) => readOldBytes(current, change.oldOid!),
+        readNew: (change) => readOldBytes(current, change.newOid!),
+      })
+    },
+    /** Both sides read from blobs, not the working tree. */
+    async blobContents(change: FileChange, maxBytes?: number) {
+      return readBlobContents(opened(), change, maxBytes)
+    },
+    async analyzeBlobs(changes: FileChange[], maxBytes?: number) {
+      return analyzeChanges(opened(), changes, maxBytes, readBlobContents)
+    },
+    /** Which of the oids the object store (or supplied blobs) has. */
+    async hasBlobs(oids: string[]) {
+      const current = opened()
+      const found: string[] = []
+      for (const oid of new Set(oids)) if (await readBlobOrNull(current, oid)) found.push(oid)
+      return found
+    },
+    async blobOrNull(oid: string) {
+      return readBlobOrNull(opened(), oid)
+    },
+    /** Reads and hashes a just-viewed file here in the worker, so marking it viewed never waits on big files. */
+    async reviewSnapshot(path: string, oid: string, maxBytes: number) {
+      return reviewSnapshot(await fresh(), path, oid, maxBytes)
     },
     /** The blob oid of each path in a commit, or null where the path is not in it. */
     async oidsAt(commit: string, paths: string[]) {

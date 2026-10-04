@@ -8,6 +8,8 @@ export interface NewNote {
   anchor: NoteAnchor
   body: string
   severity: NoteSeverity
+  /** Set for notes kept on a commit's lines (see review/viewNotes.ts). */
+  commit?: string
 }
 
 export async function addNote(db: SkelbertDb, input: NewNote): Promise<string> {

@@ -1,6 +1,7 @@
 import { errorMessage } from '../github/errors'
 import { carryOverNotes } from '../review/carryOver'
 import type { SkelbertDb } from './db'
+import { recordArchivedReview } from './fileViews'
 import { isPrSession, type Session } from './schema'
 
 export interface SessionStart {
@@ -53,13 +54,15 @@ export async function startOrResumeSession(
 }
 
 export async function startNewSession(db: SkelbertDb, start: SessionStart): Promise<string> {
-  return db.transaction('rw', db.sessions, db.notes, async () => {
-    await db.sessions
+  return db.transaction('rw', db.sessions, db.notes, db.fileViews, async () => {
+    const archiving = await db.sessions
       .where({ repoId: start.repoId, branch: start.branch })
-      .filter((session) => !isPrSession(session))
-      .modify((session) => {
-        session.status = 'archived'
-      })
+      .filter((session) => !isPrSession(session) && session.status === 'active')
+      .toArray()
+    for (const session of archiving) {
+      await recordArchivedReview(db, session)
+      await db.sessions.update(session.id!, { status: 'archived' })
+    }
     return createSession(db, start)
   })
 }

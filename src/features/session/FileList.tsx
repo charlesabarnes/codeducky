@@ -1,6 +1,7 @@
 import type { Ref } from 'react'
 import { changeKind, type ChangeKind, type FileChange, type FileStats } from '../../git/types'
 import type { FileOrder, Risk } from '../../review/order'
+import type { FileBadge } from '../modes/useReviewMode'
 import { renameLabel } from './renames'
 import './session.css'
 
@@ -32,6 +33,10 @@ interface FileListProps {
   onOrderChange: (order: FileOrder) => void
   /** Scores behind the risk order, when it is on. */
   risks: ReadonlyMap<string, Risk> | null
+  /** Per-file badges, e.g. what changed since the last look. */
+  badges?: ReadonlyMap<string, FileBadge> | null
+  /** Files that can be marked viewed (in commit mode, only those in the branch's diff). */
+  canView?: (path: string) => boolean
 }
 
 export function FileList(props: FileListProps) {
@@ -92,7 +97,7 @@ function rowTitle(file: FileChange, risk: Risk | undefined): string {
   return lines.join('\n')
 }
 
-function FileRows({ files, stats, selected, noteCounts, viewed, onSelect, onToggleViewed, risks }: FileListProps) {
+function FileRows({ files, stats, selected, noteCounts, viewed, onSelect, onToggleViewed, risks, badges, canView }: FileListProps) {
   return (
     <ul className="file-list">
       {files.map((file) => {
@@ -103,8 +108,9 @@ function FileRows({ files, stats, selected, noteCounts, viewed, onSelect, onTogg
             type="checkbox"
             checked={viewed.has(file.path)}
             onChange={() => onToggleViewed(file)}
+            disabled={canView ? !canView(file.path) : false}
             aria-label={`Mark ${file.path} as viewed`}
-            title="Viewed"
+            title={canView && !canView(file.path) ? 'Not in the branch’s final diff' : 'Viewed'}
           />
           <button
             type="button"
@@ -120,6 +126,11 @@ function FileRows({ files, stats, selected, noteCounts, viewed, onSelect, onTogg
             </span>
             {file.similarity !== undefined && file.similarity < 100 && (
               <span className="similarity muted">{file.similarity}%</span>
+            )}
+            {badges?.get(file.path) && (
+              <span className={`file-badge since-${badges.get(file.path)!.kind}`} title={badges.get(file.path)!.title}>
+                {badges.get(file.path)!.label}
+              </span>
             )}
             <NoteCount count={noteCounts.get(file.path)} />
             <Counts stats={stats[file.path]} />
