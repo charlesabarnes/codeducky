@@ -1,9 +1,8 @@
 import { db } from '../db/db'
-import type { CodeFont, Palette, ThemePreference } from '../db/schema'
+import type { CodeFont, Palette } from '../db/schema'
 import { APPEARANCE_KEYS, DEFAULT_APPEARANCE, appearanceOf, loadSettings, type Appearance, type AppearanceKey } from '../db/settings'
+import { darkQuery, prefersDark, resolveTheme, type Theme } from './colorScheme'
 import { readStorage, writeStorage } from './storage'
-
-export type Theme = 'dark' | 'light'
 
 /** Mirrors the stored settings so the first paint already uses them; IndexedDB answers too late for that. */
 const CACHE_KEYS: Record<AppearanceKey, string> = {
@@ -12,7 +11,6 @@ const CACHE_KEYS: Record<AppearanceKey, string> = {
   density: 'rubberduck.density',
   codeFont: 'rubberduck.codeFont',
 }
-const LIGHT_QUERY = '(prefers-color-scheme: light)'
 /** Each palette's --bg, for the browser's title bar. */
 const THEME_COLORS: Record<Palette, Record<Theme, string>> = {
   terminal: { dark: '#0f0d0a', light: '#f7f5ef' },
@@ -37,11 +35,6 @@ function writeCache() {
   APPEARANCE_KEYS.every((key) => writeStorage(CACHE_KEYS[key], current[key]))
 }
 
-export function resolveTheme(pref: ThemePreference, prefersLight: boolean): Theme {
-  if (pref === 'system') return prefersLight ? 'light' : 'dark'
-  return pref
-}
-
 function loadCodeFont(font: CodeFont) {
   const load = FONT_LOADERS[font]
   if (!load || loadedFonts.has(font)) return
@@ -50,14 +43,14 @@ function loadCodeFont(font: CodeFont) {
 }
 
 function render() {
-  const theme = resolveTheme(current.theme, window.matchMedia(LIGHT_QUERY).matches)
+  const theme = resolveTheme(current.theme, prefersDark())
   const root = document.documentElement
   root.dataset.theme = theme
   root.dataset.palette = current.palette
   root.dataset.density = current.density
   root.dataset.codeFont = current.codeFont
   loadCodeFont(current.codeFont)
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_COLORS[current.palette][theme])
+  for (const meta of document.querySelectorAll('meta[name="theme-color"]')) meta.setAttribute('content', THEME_COLORS[current.palette][theme])
 }
 
 export function applyAppearance(next: Partial<Appearance>) {
@@ -71,7 +64,7 @@ export function applyAppearance(next: Partial<Appearance>) {
 export function startAppearance() {
   current = appearanceOf(Object.fromEntries(APPEARANCE_KEYS.map((key) => [key, readStorage(CACHE_KEYS[key])])))
   render()
-  window.matchMedia(LIGHT_QUERY).addEventListener('change', () => current.theme === 'system' && render())
+  darkQuery()?.addEventListener('change', () => current.theme === 'system' && render())
   loadSettings(db)
     .then((settings) => {
       const stored: Partial<Appearance> = appearanceOf(settings)

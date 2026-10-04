@@ -109,7 +109,10 @@
   --shadow: 0 12px 40px oklch(0.12 0.03 220 / 0.45);
 }
 
+/* Also what the page shows before appearance.ts sets the attributes: the default palette, light. */
+:root:not([data-theme]),
 [data-palette='solar'][data-theme='light'] {
+  color-scheme: light;
   --bg: oklch(0.97 0.025 90);
   --bg-2: oklch(0.93 0.03 90);
   --bg-3: oklch(0.89 0.035 88);

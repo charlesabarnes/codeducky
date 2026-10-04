@@ -8,17 +8,16 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png', 'icon.svg'],
+      includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon-180x180.png', 'rubberduck.svg'],
       manifest: {
         name: 'Rubberduck',
         short_name: 'Rubberduck',
         description: 'Review your own changes before you push them.',
-        theme_color: '#0f0d0a',
-        background_color: '#0f0d0a',
+        theme_color: '#fcf5e3',
+        background_color: '#fcf5e3',
         display: 'standalone',
         start_url: '/',
         icons: [
-          { src: 'pwa-64x64.png', sizes: '64x64', type: 'image/png' },
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
           { src: 'maskable-icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },

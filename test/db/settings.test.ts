@@ -10,7 +10,7 @@ const openDb = (name: string) => {
   return db
 }
 
-const DEFAULTS = { id: 'app', githubPat: '', theme: 'dark', palette: 'terminal', density: 'default', codeFont: 'plex' }
+const DEFAULTS = { id: 'app', githubPat: '', theme: 'system', palette: 'solar', density: 'default', codeFont: 'plex' }
 
 afterEach(async () => {
   await Promise.all(opened.splice(0).map((db) => db.delete()))
@@ -41,6 +41,16 @@ describe('settings', () => {
     await saveSettings(db, { density: 'compact' })
     await saveSettings(db, { codeFont: 'jetbrains' })
     expect(await loadSettings(db)).toEqual({ ...DEFAULTS, theme: 'system', palette: 'fjord', density: 'compact', codeFont: 'jetbrains' })
+  })
+
+  it('defaults to the solar palette following the system theme', async () => {
+    expect(await loadSettings(openDb('new-defaults'))).toMatchObject({ theme: 'system', palette: 'solar' })
+  })
+
+  it('keeps a theme and palette picked under the old defaults', async () => {
+    const db = openDb('old-choice')
+    await db.settings.put({ id: 'app', githubPat: '', theme: 'dark', palette: 'terminal' })
+    expect(await loadSettings(db)).toEqual({ ...DEFAULTS, theme: 'dark', palette: 'terminal' })
   })
 
   it('falls back to the defaults for unknown appearance values', async () => {

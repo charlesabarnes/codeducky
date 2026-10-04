@@ -6,7 +6,7 @@ export type SettingsInput = Partial<Omit<Settings, 'id'>>
 export type Appearance = Pick<LoadedSettings, 'theme' | 'palette' | 'density' | 'codeFont'>
 export type AppearanceKey = keyof Appearance
 
-export const DEFAULT_APPEARANCE: Appearance = { theme: 'dark', palette: 'terminal', density: 'default', codeFont: 'plex' }
+export const DEFAULT_APPEARANCE: Appearance = { theme: 'system', palette: 'solar', density: 'default', codeFont: 'plex' }
 export const APPEARANCE_OPTIONS: { [K in AppearanceKey]: readonly Appearance[K][] } = {
   theme: THEME_PREFERENCES,
   palette: PALETTES,
