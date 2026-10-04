@@ -32,7 +32,7 @@ const SIGN_IN_ERRORS: Record<Exclude<SignInResult, 'ok'>, string> = {
 
 function defaultDeviceName(): string {
   const platform = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform
-  return `Rubberduck on ${platform || 'this browser'}`
+  return `Code Ducky on ${platform || 'this browser'}`
 }
 
 const formatTime = (ms: number | null) => (ms ? new Date(ms).toLocaleString() : 'never')
@@ -45,7 +45,7 @@ export function ServerSection() {
     <>
       <Panel icon={RefreshCw} title="sync server" id="sync">
         <p>
-          Repos, sessions, notes, checklists and viewed files sync between your devices through the Rubberduck server. The GitHub
+          Repos, sessions, notes, checklists and viewed files sync between your devices through the Code Ducky server. The GitHub
           token and these settings never leave this browser.
         </p>
         {signedIn ? <SignedIn /> : <SignInForm expired={state.auth === 'expired'} />}

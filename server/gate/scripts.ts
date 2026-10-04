@@ -13,5 +13,5 @@ export const isGateScript = (name: string): name is GateScript => (GATE_SCRIPTS 
 /** A hook script with the shared helpers inlined and this server's origin as the default URL. */
 export function renderScript(name: GateScript, origin: string): string {
   const url = new URL(origin).origin.replace(/'/g, '')
-  return SOURCES[name].replace('# @common\n', COMMON).replace('__RUBBERDUCK_URL__', url)
+  return SOURCES[name].replace('# @common\n', COMMON).replace('__CODEDUCKY_URL__', url)
 }

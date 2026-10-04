@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { checkedItems, createChecklist, setChecked } from '../../src/db/checklists'
-import { RubberduckDb } from '../../src/db/db'
+import { CodeDuckyDb } from '../../src/db/db'
 import { addNote, deleteNote, editNote, setNoteStatus } from '../../src/db/notes'
 import { saveOpenedRepo } from '../../src/db/repos'
 import { startOrResumeSession } from '../../src/db/sessions'
@@ -9,7 +9,7 @@ import { runSync } from '../../src/sync/engine'
 import { SyncController } from '../../src/sync/controller'
 import { FakeSyncServer } from '../support/fakeSyncServer'
 
-const opened: { db: RubberduckDb; controller: SyncController }[] = []
+const opened: { db: CodeDuckyDb; controller: SyncController }[] = []
 afterEach(async () => {
   vi.useRealTimers()
   for (const { db, controller } of opened.splice(0)) {
@@ -19,7 +19,7 @@ afterEach(async () => {
 })
 
 function client(name: string, server: FakeSyncServer) {
-  const db = new RubberduckDb(name)
+  const db = new CodeDuckyDb(name)
   const controller = new SyncController(db, { fetch: server.fetch, listenToBrowser: false, debounceMs: 10_000, intervalMs: 3_600_000 })
   opened.push({ db, controller })
   return { db, controller }
@@ -27,10 +27,10 @@ function client(name: string, server: FakeSyncServer) {
 
 const anchor = { line: 1, side: 'new' as const, text: 'x', before: [], after: [] }
 const folder = (name: string) => ({ kind: 'directory', name }) as unknown as FileSystemDirectoryHandle
-const identity = { owner: 'charlesabarnes', name: 'rubberduck', defaultBase: 'main' }
+const identity = { owner: 'charlesabarnes', name: 'codeducky', defaultBase: 'main' }
 
 /** Comparable contents of every synced table. */
-async function contents(db: RubberduckDb) {
+async function contents(db: CodeDuckyDb) {
   const strip = <T extends object>(rows: T[]) => rows.map((row) => ({ ...row }))
   return {
     repos: strip(await db.repos.orderBy('id').toArray()),
@@ -49,7 +49,7 @@ describe('two clients', () => {
     const b = client('conv-b', server)
 
     // A has data from before sync existed; signing in uploads it.
-    const repoId = await saveOpenedRepo(a.db, folder('rubberduck'), identity)
+    const repoId = await saveOpenedRepo(a.db, folder('codeducky'), identity)
     const sessionId = await startOrResumeSession(a.db, { repoId, branch: 'feat', headSha: 'h', baseSha: 'b' })
     const keep = await addNote(a.db, { sessionId, path: 'src/a.ts', anchor, body: 'keep', severity: 'issue' })
     const doomed = await addNote(a.db, { sessionId, path: 'src/a.ts', anchor, body: 'doomed', severity: 'nit' })
@@ -63,7 +63,7 @@ describe('two clients', () => {
     expect(await b.db.repoHandles.count()).toBe(0)
 
     // B opens its own checkout: it attaches to the synced repo instead of creating a second one.
-    expect(await saveOpenedRepo(b.db, folder('rubberduck-clone'), identity)).toBe(repoId)
+    expect(await saveOpenedRepo(b.db, folder('codeducky-clone'), identity)).toBe(repoId)
     expect(await b.db.repos.count()).toBe(1)
 
     // Both go offline and edit.
@@ -209,7 +209,7 @@ describe('two clients', () => {
   it('syncs on its own shortly after a local write', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
     const server = new FakeSyncServer()
-    const db = new RubberduckDb('auto-a')
+    const db = new CodeDuckyDb('auto-a')
     const controller = new SyncController(db, { fetch: server.fetch, listenToBrowser: false, debounceMs: 50 })
     opened.push({ db, controller })
     await controller.signIn('pass', 'A')

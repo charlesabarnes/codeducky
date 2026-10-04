@@ -20,7 +20,7 @@ describe('config', () => {
   })
 
   it('prefers the environment, then git config and the Keychain', () => {
-    expect(resolveConfig(sources({ RUBBERDUCK_URL: 'https://s.example/', RUBBERDUCK_TOKEN: 'env' }, 'https://git.example', 'kc'))).toEqual({
+    expect(resolveConfig(sources({ CODEDUCKY_URL: 'https://s.example/', CODEDUCKY_TOKEN: 'env' }, 'https://git.example', 'kc'))).toEqual({
       ok: true,
       config: { url: 'https://s.example', token: 'env' },
     })
@@ -28,11 +28,11 @@ describe('config', () => {
   })
 
   it('explains what is missing or wrong', () => {
-    expect(resolveConfig(sources({}))).toMatchObject({ ok: false, error: expect.stringContaining('RUBBERDUCK_URL') })
-    expect(resolveConfig(sources({ RUBBERDUCK_URL: 'https://s.example' }))).toMatchObject({ ok: false, error: expect.stringContaining('Keychain') })
-    expect(resolveConfig(sources({ RUBBERDUCK_URL: 'http://s.example', RUBBERDUCK_TOKEN: 't' }))).toMatchObject({ ok: false, error: expect.stringContaining('https') })
-    expect(resolveConfig(sources({ RUBBERDUCK_URL: 'http://localhost:8787', RUBBERDUCK_TOKEN: 't' }))).toMatchObject({ ok: true })
-    expect(resolveConfig(sources({ RUBBERDUCK_URL: 'nope', RUBBERDUCK_TOKEN: 't' }))).toMatchObject({ ok: false })
+    expect(resolveConfig(sources({}))).toMatchObject({ ok: false, error: expect.stringContaining('CODEDUCKY_URL') })
+    expect(resolveConfig(sources({ CODEDUCKY_URL: 'https://s.example' }))).toMatchObject({ ok: false, error: expect.stringContaining('Keychain') })
+    expect(resolveConfig(sources({ CODEDUCKY_URL: 'http://s.example', CODEDUCKY_TOKEN: 't' }))).toMatchObject({ ok: false, error: expect.stringContaining('https') })
+    expect(resolveConfig(sources({ CODEDUCKY_URL: 'http://localhost:8787', CODEDUCKY_TOKEN: 't' }))).toMatchObject({ ok: true })
+    expect(resolveConfig(sources({ CODEDUCKY_URL: 'nope', CODEDUCKY_TOKEN: 't' }))).toMatchObject({ ok: false })
   })
 })
 
@@ -57,7 +57,7 @@ describe('checkout', () => {
       hostname: 'laptop',
       label: 'app on laptop',
     })
-    expect(readCheckout('/tmp', () => null, { RUBBERDUCK_CHANNEL_LABEL: 'scratch' }, 'h').label).toBe('scratch')
+    expect(readCheckout('/tmp', () => null, { CODEDUCKY_CHANNEL_LABEL: 'scratch' }, 'h').label).toBe('scratch')
   })
 })
 

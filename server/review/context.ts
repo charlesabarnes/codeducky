@@ -41,7 +41,7 @@ export function reviewContext(data: DataSnapshot, session: SessionRecord, origin
     instructions: repo ? repoInstructions(repo) : '',
     checklists: checklistView(data, session).checklists,
     files: {
-      // Recorded by Rubberduck's last scan, which may be older than the checkout; git diff is the source of truth.
+      // Recorded by Code Ducky's last scan, which may be older than the checkout; git diff is the source of truth.
       scanned: session.files !== undefined,
       count: files.length,
       ...totals,

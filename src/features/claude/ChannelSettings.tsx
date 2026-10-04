@@ -77,8 +77,8 @@ export function ChannelSettings({ signedIn, onMinted }: ChannelSettingsProps) {
         </Step>
         <Step number={2} title="Give it a token and this server's URL">
           <p>
-            It reads <code>RUBBERDUCK_TOKEN</code>, else the Keychain item “rubberduck” the pre-push gate uses; and <code>RUBBERDUCK_URL</code>,
-            else <code>git config rubberduck.url</code>. If the gate is set up already, skip this step.
+            It reads <code>CODEDUCKY_TOKEN</code>, else the Keychain item “codeducky” the pre-push gate uses; and <code>CODEDUCKY_URL</code>,
+            else <code>git config codeducky.url</code>. If the gate is set up already, skip this step.
           </p>
           {token ? (
             <CopyField label="Token (shown only this once; listed as “Claude channel” under Access tokens)" value={token} />
@@ -95,7 +95,7 @@ export function ChannelSettings({ signedIn, onMinted }: ChannelSettingsProps) {
           <CopyField label="Store it in the Keychain (paste the token when asked)" value={keychainCommand()} />
           <CopyField label="Point it at this server" value={serverUrlCommand(origin)} />
         </Step>
-        <Step number={3} title="Connect the Rubberduck MCP server">
+        <Step number={3} title="Connect the Code Ducky MCP server">
           <p>
             Tasks use its tools (get_review_context, add_note, resolve_note). See <a href="#connect-claude-code">Connect Claude Code</a>{' '}
             above.
@@ -105,7 +105,7 @@ export function ChannelSettings({ signedIn, onMinted }: ChannelSettingsProps) {
           <CopyField label="Run in the repo's checkout, then choose “I am using this for local development”" value={startCommand()} />
           <p>
             <code>--allowedTools {STATUS_TOOL_ID}</code> lets Claude report status here without asking each time; drop it to approve
-            those calls yourself. <code>--channels plugin:rubberduck@rubberduck</code> alone does not load it while it is off the allowlist.
+            those calls yourself. <code>--channels plugin:codeducky@codeducky</code> alone does not load it while it is off the allowlist.
           </p>
         </Step>
       </ol>

@@ -1,4 +1,4 @@
-import type { RubberduckDb } from '../db/db'
+import type { CodeDuckyDb } from '../db/db'
 import type { Note } from '../db/schema'
 import type { GitHubClient } from './client'
 import { isGitHubError } from './errors'
@@ -40,7 +40,7 @@ export interface PushResult {
 }
 
 export async function pushPendingReview(
-  db: RubberduckDb,
+  db: CodeDuckyDb,
   gh: GitHubClient,
   ref: RepoRef,
   pr: PullRequest,

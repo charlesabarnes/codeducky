@@ -1,4 +1,4 @@
-import type { RubberduckDb } from '../db/db'
+import type { CodeDuckyDb } from '../db/db'
 import { recordReviewedFiles } from '../db/fileViews'
 import type { FileChange } from '../git/types'
 import type { Note, SubmittedReviewState } from '../db/schema'
@@ -67,7 +67,7 @@ export function preparePrPush(pull: PullDetail, files: readonly PullFile[], note
   }
 }
 
-async function linkNotes(db: RubberduckDb, notes: readonly Note[], reviewId: number, commentIds: ReadonlyMap<string, number> = new Map()) {
+async function linkNotes(db: CodeDuckyDb, notes: readonly Note[], reviewId: number, commentIds: ReadonlyMap<string, number> = new Map()) {
   const updates = notes.flatMap((note) =>
     note.id === undefined ? [] : [{ key: note.id, changes: { github: { reviewId, commentId: commentIds.get(note.id) } } }],
   )
@@ -79,7 +79,7 @@ async function linkNotes(db: RubberduckDb, notes: readonly Note[], reviewId: num
  * that do not map onto the diff are appended to its body.
  */
 export async function pushToPendingReview(
-  db: RubberduckDb,
+  db: CodeDuckyDb,
   gh: GitHubClient,
   ref: RepoRef,
   number: number,
@@ -124,7 +124,7 @@ export function submitBody(input: SubmitInput): string {
  * submitted; without one, a review is created and submitted in a single call.
  */
 export async function submitPrReview(
-  db: RubberduckDb,
+  db: CodeDuckyDb,
   gh: GitHubClient,
   ref: RepoRef,
   pull: Pick<PullDetail, 'number' | 'headSha'>,
@@ -164,7 +164,7 @@ export interface ReviewedHead {
 }
 
 export async function archiveWithReview(
-  db: RubberduckDb,
+  db: CodeDuckyDb,
   sessionId: string,
   result: SubmitResult,
   now = Date.now(),

@@ -1,9 +1,9 @@
 {
-  "name": "rubberduck-channel",
+  "name": "codeducky-channel",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Claude Code channel plugin for Rubberduck",
+  "description": "Claude Code channel plugin for Code Ducky",
   "scripts": {
     "start": "bun server.ts",
     "test": "bun test"

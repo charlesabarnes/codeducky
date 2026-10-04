@@ -3,7 +3,7 @@ import type { HighlighterCore, LanguageRegistration, ThemedToken } from 'shiki/c
 export type LineTokens = ThemedToken[][]
 
 /** Token colours are CSS variables (--shiki-token-*, mapped in styles.css), so they follow the app theme. */
-const THEME = 'rubberduck'
+const THEME = 'codeducky'
 const MAX_HIGHLIGHT_BYTES = 256 * 1024
 
 type LanguageLoader = () => Promise<{ default: LanguageRegistration[] }>

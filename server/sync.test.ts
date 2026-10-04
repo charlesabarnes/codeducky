@@ -18,12 +18,12 @@ async function setup() {
   return { ...made, token, push }
 }
 
-const repo = (changedAt: number, name = 'rubberduck'): WireChange => ({
+const repo = (changedAt: number, name = 'codeducky'): WireChange => ({
   kind: 'repos',
-  id: 'gh:charlesabarnes/rubberduck',
+  id: 'gh:charlesabarnes/codeducky',
   changedAt,
   deleted: false,
-  data: { owner: 'charlesabarnes', name, folderName: 'rubberduck', baseBranch: 'main', lastOpenedAt: 1, checklistIds: [] },
+  data: { owner: 'charlesabarnes', name, folderName: 'codeducky', baseBranch: 'main', lastOpenedAt: 1, checklistIds: [] },
 })
 
 const view = (changedAt: number, viewed: boolean): WireChange => ({
@@ -43,7 +43,7 @@ describe('sync', () => {
       ['repos', 1],
       ['fileViews', 2],
     ])
-    expect(reply.changes[0]!.data).toMatchObject({ name: 'rubberduck' })
+    expect(reply.changes[0]!.data).toMatchObject({ name: 'codeducky' })
     expect(reply.newCursor).toBe(2)
     expect((await push([], 2)).changes).toEqual([])
   })

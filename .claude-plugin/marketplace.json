@@ -1,12 +1,12 @@
 {
-  "name": "rubberduck",
-  "description": "The Rubberduck channel plugin for Claude Code",
+  "name": "codeducky",
+  "description": "The Code Ducky channel plugin for Claude Code",
   "owner": { "name": "Charles Barnes" },
   "plugins": [
     {
-      "name": "rubberduck",
+      "name": "codeducky",
       "source": "./plugin",
-      "description": "Send review and fix tasks from Rubberduck into a running Claude Code session (research-preview channel)."
+      "description": "Send review and fix tasks from Code Ducky into a running Claude Code session (research-preview channel)."
     }
   ]
 }

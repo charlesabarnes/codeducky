@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { Dexie } from 'dexie'
 import { afterEach, describe, expect, it } from 'vitest'
-import { RubberduckDb } from '../../src/db/db'
+import { CodeDuckyDb } from '../../src/db/db'
 
 const names: string[] = []
 afterEach(async () => {
@@ -59,7 +59,7 @@ describe('migration to string ids', () => {
     await seed(legacy)
     legacy.close()
 
-    const db = new RubberduckDb('migrate-full')
+    const db = new CodeDuckyDb('migrate-full')
     await db.open()
     expect(db.verno).toBe(7)
     expect(db.tables.map((t) => t.name).sort()).toEqual(
@@ -122,7 +122,7 @@ describe('migration to string ids', () => {
     await v1.table('notes').add({ sessionId, path: 'a', anchor, body: 'x', severity: 'warning', status: 'open', source: 'me' })
     v1.close()
 
-    const db = new RubberduckDb('migrate-v1')
+    const db = new CodeDuckyDb('migrate-v1')
     const [note] = await db.notes.toArray()
     const [session] = await db.sessions.toArray()
     expect(note).toMatchObject({ severity: 'issue', sessionId: session!.id })
@@ -133,7 +133,7 @@ describe('migration to string ids', () => {
 
   it('creates the current schema directly on a fresh install', async () => {
     names.push('migrate-fresh')
-    const db = new RubberduckDb('migrate-fresh')
+    const db = new CodeDuckyDb('migrate-fresh')
     await db.open()
     expect(db.verno).toBe(7)
     expect(await db.repos.count()).toBe(0)
@@ -147,7 +147,7 @@ describe('migration to string ids', () => {
       { dirHandle: handle('b'), owner: 'o', name: 'r', folderName: 'b', baseBranch: 'main', checklistIds: [], lastOpenedAt: 2 },
     ])
     legacy.close()
-    const db = new RubberduckDb('migrate-clones')
+    const db = new CodeDuckyDb('migrate-clones')
     const repos = await db.repos.toArray()
     expect(repos.find((r) => r.folderName === 'b')!.id).toBe('gh:o/r')
     expect(repos.find((r) => r.folderName === 'a')!.id).not.toBe('gh:o/r')
@@ -188,7 +188,7 @@ describe('migration away from the in-app Claude pass', () => {
     await old.table('settings').put({ id: 'app', githubPat: 'ghp', anthropicKey: 'sk-ant', claudeModel: 'claude-opus-5-5' })
     old.close()
 
-    const db = new RubberduckDb('migrate-v5')
+    const db = new CodeDuckyDb('migrate-v5')
     await db.open()
     expect(db.verno).toBe(7)
     expect(await db.settings.get('app')).toEqual({ id: 'app', githubPat: 'ghp' })

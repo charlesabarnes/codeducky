@@ -1,4 +1,4 @@
-import type { RubberduckDb } from './db'
+import type { CodeDuckyDb } from './db'
 import { CODE_FONTS, DENSITIES, PALETTES, THEME_PREFERENCES, type Settings } from './schema'
 
 export type LoadedSettings = Required<Settings>
@@ -32,13 +32,13 @@ export function appearanceOf(stored: Partial<Record<AppearanceKey, unknown>>): A
   }
 }
 
-export async function loadSettings(db: RubberduckDb): Promise<LoadedSettings> {
+export async function loadSettings(db: CodeDuckyDb): Promise<LoadedSettings> {
   const stored = await db.settings.get('app')
   return stored ? { id: 'app', githubPat: stored.githubPat ?? '', ...appearanceOf(stored) } : defaultSettings
 }
 
 /** Saves the given fields and keeps the others. */
-export async function saveSettings(db: RubberduckDb, input: SettingsInput): Promise<void> {
+export async function saveSettings(db: CodeDuckyDb, input: SettingsInput): Promise<void> {
   await db.transaction('rw', db.settings, async () => {
     const current = await loadSettings(db)
     await db.settings.put({

@@ -19,7 +19,7 @@ interface ClaudeActionsProps {
   notes: Note[]
 }
 
-const HINT_KEY = 'rubberduck.claudeLinkHintSeen'
+const HINT_KEY = 'codeducky.claudeLinkHintSeen'
 
 /** "Open in Claude Code" (a deep link) and "Send to Claude" (the channel plugin), in the session header. */
 export function ClaudeActions({ session, repo, pr, notes }: ClaudeActionsProps) {
@@ -59,7 +59,7 @@ function OpenInClaude({ target }: { target: LinkTarget }) {
               <li>Needs Claude Code installed; its link handler registers after you send a first prompt in an interactive session.</li>
               <li>The clone is the one where you last ran <span className="mono">claude</span>; with none, it opens in your home folder.</li>
               <li>
-                The prompts call the Rubberduck MCP tools, so <Link to="/settings#connect-claude-code">connect Claude Code</Link> first.
+                The prompts call the Code Ducky MCP tools, so <Link to="/settings#connect-claude-code">connect Claude Code</Link> first.
               </li>
             </ul>
             <button type="button" className="link accent" onClick={dismiss}>
@@ -68,7 +68,7 @@ function OpenInClaude({ target }: { target: LinkTarget }) {
           </div>
         )}
         <a role="menuitem" className="claude-menu-item" href={claudeDeepLink(target.repo, linkPrompt('review', target))}>
-          <strong>Review with Rubberduck</strong>
+          <strong>Review with Code Ducky</strong>
           <span className="muted">Review the {target.pr ? 'pull request' : 'branch'} and add notes here</span>
         </a>
         <a role="menuitem" className="claude-menu-item" href={claudeDeepLink(target.repo, linkPrompt('fix', target))}>
@@ -169,7 +169,7 @@ function SendToClaude({ session, target, notes }: { session: Session; target: Li
           </p>
         ) : matches.length === 0 ? (
           <p className="muted">
-            No Claude Code session for <span className="mono">{target.repo}</span> is connected. Start one in its checkout with the Rubberduck
+            No Claude Code session for <span className="mono">{target.repo}</span> is connected. Start one in its checkout with the Code Ducky
             channel (<Link to="/settings#claude-channel">setup</Link>).
             {status !== 'live' && ' Connecting to the server…'}
           </p>

@@ -8,8 +8,8 @@ const leaf = (path: string) => matchRoutes(routes, path)?.at(-1)?.route.id ?? nu
 
 describe('routes', () => {
   it('opens pull requests from the canonical and the github.com-shaped paths', () => {
-    expect(leaf('/pr/charlesabarnes/rubberduck/12')).toBe('pr')
-    for (const path of ['/charlesabarnes/rubberduck/pull/12', '/charlesabarnes/rubberduck/pull/12/files', '/charlesabarnes/rubberduck/pull/12/commits', '/o/r/pull/3/commits/abc123']) {
+    expect(leaf('/pr/charlesabarnes/codeducky/12')).toBe('pr')
+    for (const path of ['/charlesabarnes/codeducky/pull/12', '/charlesabarnes/codeducky/pull/12/files', '/charlesabarnes/codeducky/pull/12/commits', '/o/r/pull/3/commits/abc123']) {
       expect(leaf(path), path).toBe('pr-mirror')
     }
   })
@@ -23,7 +23,7 @@ describe('routes', () => {
     expect(leaf('/repos/gh%3Aa%2Fb')).toBe('repo')
     expect(leaf('/repos/gh%3Aa%2Fb/history')).toBe('history')
     expect(leaf('/repos/x/pull/1')).toBe('pr-mirror')
-    expect(leaf('/charlesabarnes/rubberduck')).toBeNull()
+    expect(leaf('/charlesabarnes/codeducky')).toBeNull()
   })
 
   it('leaves pull request paths to the app in the service worker and the server', () => {

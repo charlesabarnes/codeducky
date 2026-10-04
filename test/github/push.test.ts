@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it } from 'vitest'
-import { RubberduckDb } from '../../src/db/db'
+import { CodeDuckyDb } from '../../src/db/db'
 import { addNote } from '../../src/db/notes'
 import type { Note, NoteSeverity } from '../../src/db/schema'
 import { createGitHubClient } from '../../src/github/client'
@@ -129,13 +129,13 @@ describe('review payload', () => {
 })
 
 describe('pushing a pending review', () => {
-  const opened: RubberduckDb[] = []
+  const opened: CodeDuckyDb[] = []
   afterEach(async () => {
     await Promise.all(opened.splice(0).map((db) => db.delete()))
   })
 
   it('finds the PR, creates the review and links the notes', async () => {
-    const db = new RubberduckDb('push')
+    const db = new CodeDuckyDb('push')
     opened.push(db)
     const inline = await addNote(db, {
       sessionId: 's7',

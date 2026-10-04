@@ -87,8 +87,8 @@ describe('pre-push gate', () => {
     expect(await (await gate('CharlesABarnes/Invoice-Service', 'clean')).json()).toMatchObject({ pass: true, reasons: [], session: 's2' })
     const noSession = (await (await gate(REPO, 'nope')).json()) as GateBody
     expect(noSession).toMatchObject({ pass: true, session: null, url: TEST_ORIGIN })
-    expect(noSession.reasons[0]).toContain('No Rubberduck session for')
-    expect(((await (await gate('x/y', 'main')).json()) as GateBody).reasons[0]).toContain('x/y is not in Rubberduck')
+    expect(noSession.reasons[0]).toContain('No Code Ducky session for')
+    expect(((await (await gate('x/y', 'main')).json()) as GateBody).reasons[0]).toContain('x/y is not in Code Ducky')
   })
 
   it('answers in plain text for the hook scripts', async () => {
@@ -126,7 +126,7 @@ describe('hook scripts', () => {
       expect(res.headers.get('content-type')).toContain('text/x-shellscript')
       const text = await res.text()
       expect(text.startsWith('#!/bin/sh\n')).toBe(true)
-      expect(text).toContain("RUBBERDUCK_DEFAULT_URL='https://duck.example'")
+      expect(text).toContain("CODEDUCKY_DEFAULT_URL='https://duck.example'")
       expect(text).toContain('curl -sS --max-time 2')
       expect(text).not.toContain('# @common')
     }
@@ -145,7 +145,7 @@ describe('hook scripts against a running server', () => {
   async function serve(changes: WireChange[]) {
     const made = await setup(changes)
     const server = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: made.app.fetch })
-    const dir = mkdtempSync(join(tmpdir(), 'rubberduck-hook-'))
+    const dir = mkdtempSync(join(tmpdir(), 'codeducky-hook-'))
     cleanups.push(() => {
       void server.stop(true)
       rmSync(dir, { recursive: true, force: true })
@@ -167,7 +167,7 @@ describe('hook scripts against a running server', () => {
         stdin: new TextEncoder().encode(stdin),
         stdout: 'pipe',
         stderr: 'pipe',
-        env: { PATH: bin, HOME: dir, GIT_CONFIG_GLOBAL: '/dev/null', RUBBERDUCK_TOKEN: made.token, ...env },
+        env: { PATH: bin, HOME: dir, GIT_CONFIG_GLOBAL: '/dev/null', CODEDUCKY_TOKEN: made.token, ...env },
       })
       const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
       return { code, out, err }
@@ -185,7 +185,7 @@ describe('hook scripts against a running server', () => {
     expect(failed.err).toContain('blocker: src/invoice.ts:12 Broken')
     expect(failed.err).toContain('/sessions/s1')
     expect((await run('pre-push.sh', refs('clean'), prePushArgs)).code).toBe(0)
-    const noToken = await run('pre-push.sh', refs('feature/tax'), prePushArgs, { RUBBERDUCK_TOKEN: '' })
+    const noToken = await run('pre-push.sh', refs('feature/tax'), prePushArgs, { CODEDUCKY_TOKEN: '' })
     expect(noToken.code).toBe(0)
     expect(noToken.err).toContain('no token')
   })

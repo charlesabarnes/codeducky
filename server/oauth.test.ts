@@ -105,9 +105,9 @@ describe('oauth metadata', () => {
   it('uses the forwarded host and protocol behind a proxy', async () => {
     const { app } = setup()
     const res = await app.request('http://127.0.0.1:8787/.well-known/oauth-protected-resource', {
-      headers: { 'X-Forwarded-Proto': 'https', 'X-Forwarded-Host': 'rubberduck.example.com' },
+      headers: { 'X-Forwarded-Proto': 'https', 'X-Forwarded-Host': 'codeducky.example.com' },
     })
-    expect(await res.json()).toMatchObject({ resource: 'https://rubberduck.example.com/mcp' })
+    expect(await res.json()).toMatchObject({ resource: 'https://codeducky.example.com/mcp' })
   })
 })
 
@@ -245,7 +245,7 @@ describe('oauth flow', () => {
       client_id: string
       client_secret: string
     }
-    expect(reg.client_secret).toStartWith('skc_')
+    expect(reg.client_secret).toStartWith('cdc_')
     const bad = await token(app, { grant_type: 'refresh_token', refresh_token: 'x', client_id: reg.client_id, client_secret: 'nope' })
     expect(bad).toMatchObject({ status: 401, body: { error: 'invalid_client' } })
     const good = await token(app, { grant_type: 'refresh_token', refresh_token: 'x', client_id: reg.client_id, client_secret: reg.client_secret })
@@ -309,10 +309,10 @@ describe('redirect uri validation', () => {
   })
 
   it('accepts only this server as the resource', () => {
-    const origin = 'https://rubberduck.example.com'
+    const origin = 'https://codeducky.example.com'
     expect(canonicalResource(undefined, origin)).toBe(`${origin}/mcp`)
     expect(canonicalResource(`${origin}/mcp/`, origin)).toBe(`${origin}/mcp`)
-    expect(canonicalResource('HTTPS://RUBBERDUCK.example.com/mcp', origin)).toBe(`${origin}/mcp`)
+    expect(canonicalResource('HTTPS://CODEDUCKY.example.com/mcp', origin)).toBe(`${origin}/mcp`)
     expect(canonicalResource(origin, origin)).toBe(`${origin}/mcp`)
     expect(canonicalResource('https://other.example.com/mcp', origin)).toBeNull()
   })

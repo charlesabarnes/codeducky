@@ -29,12 +29,12 @@ async function until<T>(read: () => T | undefined | null | false, what: string, 
   }
 }
 
-/** The plugin as Claude Code runs it: a subprocess on stdio, pointed at a real Rubberduck server over HTTP. */
+/** The plugin as Claude Code runs it: a subprocess on stdio, pointed at a real Code Ducky server over HTTP. */
 describe('channel plugin against a running server', () => {
   const ctx = makeApp({ channel: createChannelRegistry({ heartbeatMs: 1000 }) })
   const http = Bun.serve({ port: 0, fetch: ctx.app.fetch, idleTimeout: 30 })
   const base = `http://localhost:${http.port}`
-  const checkout = mkdtempSync(join(tmpdir(), 'rubberduck-channel-repo-'))
+  const checkout = mkdtempSync(join(tmpdir(), 'codeducky-channel-repo-'))
   let browser = ''
   let client: Client
   const channelMessages: z.infer<typeof ChannelNotification>['params'][] = []
@@ -54,7 +54,7 @@ describe('channel plugin against a running server', () => {
       command: process.execPath,
       args: [resolve(import.meta.dir, '../plugin/server.ts')],
       cwd: checkout,
-      env: { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '', RUBBERDUCK_URL: base, RUBBERDUCK_TOKEN: token },
+      env: { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '', CODEDUCKY_URL: base, CODEDUCKY_TOKEN: token },
       stderr: 'pipe',
     })
     transport.stderr?.on('data', (chunk) => (stderr += String(chunk)))
@@ -76,7 +76,7 @@ describe('channel plugin against a running server', () => {
 
     const session = await until(() => ctx.channel.state().sessions.find((s) => s.connected), `registration (stderr: ${stderr})`)
     expect(session).toMatchObject({ repo: 'acme/invoice-service', branch: 'feature/tax', tokenName: 'Claude channel', pluginVersion: '0.1.0' })
-    expect(session.label).toMatch(/^rubberduck-channel-repo-\w+ on /)
+    expect(session.label).toMatch(/^codeducky-channel-repo-\w+ on /)
 
     const sent = await request(
       ctx.app,

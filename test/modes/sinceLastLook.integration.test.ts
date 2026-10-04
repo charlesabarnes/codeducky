@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { RubberduckDb } from '../../src/db/db'
+import { CodeDuckyDb } from '../../src/db/db'
 import { loadLastLooks, markViewed, recordReviewHead } from '../../src/db/fileViews'
 import { addNote } from '../../src/db/notes'
 import { MAX_SNAPSHOT_FILE_BYTES, putSnapshot, readSnapshot, snapshotOids } from '../../src/db/reviewSnapshots'
@@ -27,7 +27,7 @@ const lines = (...items: string[]) => items.map((item) => `${item}\n`).join('')
 describe('since last look and commit-by-commit on a real repository', () => {
   let repo = ''
   const service = createGitService()
-  const db = new RubberduckDb('since-integration')
+  const db = new CodeDuckyDb('since-integration')
   let baseSha = ''
 
   const write = (path: string, content: string) => writeFileSync(join(repo, path), content)
@@ -61,7 +61,7 @@ describe('since last look and commit-by-commit on a real repository', () => {
   }
 
   beforeAll(async () => {
-    repo = mkdtempSync(join(tmpdir(), 'rubberduck-since-'))
+    repo = mkdtempSync(join(tmpdir(), 'codeducky-since-'))
     git(repo, 'init', '--quiet', '-b', 'main')
     git(repo, 'config', 'user.email', 'test@example.com')
     git(repo, 'config', 'user.name', 'Test')

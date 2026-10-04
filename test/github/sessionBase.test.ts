@@ -1,10 +1,10 @@
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RubberduckDb } from '../../src/db/db'
+import { CodeDuckyDb } from '../../src/db/db'
 import { startOrResumeSession } from '../../src/db/sessions'
 import { GitHubError } from '../../src/github/errors'
 
-const opened: RubberduckDb[] = []
+const opened: CodeDuckyDb[] = []
 afterEach(async () => {
   await Promise.all(opened.splice(0).map((db) => db.delete()))
 })
@@ -12,7 +12,7 @@ afterEach(async () => {
 const start = { repoId: 'r1', branch: 'feature', headSha: 'h1', baseSha: 'local-mb' }
 
 async function githubSession() {
-  const db = new RubberduckDb(`github-base-${opened.length}`)
+  const db = new CodeDuckyDb(`github-base-${opened.length}`)
   opened.push(db)
   const id = await startOrResumeSession(db, start)
   await db.sessions.update(id, {

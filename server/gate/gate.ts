@@ -11,7 +11,7 @@ export interface GateResult {
   counts: { blockers: number; issues: number; uncheckedRequired: number }
   url: string
   session: string | null
-  /** The branch's pull request in Rubberduck, when one is known. */
+  /** The branch's pull request in Code Ducky, when one is known. */
   prUrl?: string
 }
 
@@ -35,7 +35,7 @@ export function evaluateGate(data: DataSnapshot, repoQuery: string, branch: stri
   const { repos, session } = findBranchSession(data, repoQuery, branch)
   const counts = { blockers: 0, issues: 0, uncheckedRequired: 0 }
   if (!session) {
-    const why = repos.length ? `No Rubberduck session for ${repoQuery}@${branch}` : `${repoQuery} is not in Rubberduck`
+    const why = repos.length ? `No Code Ducky session for ${repoQuery}@${branch}` : `${repoQuery} is not in Code Ducky`
     return { pass: true, reasons: [`${why}; nothing to check.`], counts, url: origin, session: null }
   }
 

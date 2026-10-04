@@ -22,7 +22,7 @@ function resolvable(specifier: string): boolean {
 if (!resolvable('@modelcontextprotocol/sdk/server/index.js')) {
   const result = spawnSync(process.execPath, ['install', '--no-summary', '--production'], { cwd: root, stdio: ['ignore', 2, 2] })
   if (result.status !== 0) {
-    console.error('rubberduck channel: bun install failed in', root)
+    console.error('codeducky channel: bun install failed in', root)
     process.exit(1)
   }
 }

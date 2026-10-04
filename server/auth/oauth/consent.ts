@@ -23,7 +23,7 @@ button.primary{background:var(--accent);color:var(--accent-fg)}button.secondary{
 
 function page(title: string, body: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escapeHtml(title)} · Rubberduck</title><style>${STYLE}</style></head><body><main><p class="brand">Rubberduck</p>${body}</main></body></html>`
+<title>${escapeHtml(title)} · Code Ducky</title><style>${STYLE}</style></head><body><main><p class="brand">Code Ducky</p>${body}</main></body></html>`
 }
 
 export interface ConsentView {
@@ -40,7 +40,7 @@ export function consentPage({ clientName, redirectUri, params, error }: ConsentV
     .join('')
   return page(
     'Authorize',
-    `<h1>Allow ${escapeHtml(clientName)} to use Rubberduck?</h1>
+    `<h1>Allow ${escapeHtml(clientName)} to use Code Ducky?</h1>
 <p class="muted">It will be able to read and change your review notes, sessions and checklists over MCP. You can revoke it in Settings.</p>
 <p>After you approve, you are sent to:</p>
 <p class="uri">${escapeHtml(redirectUri)}</p>

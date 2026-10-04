@@ -43,7 +43,7 @@ async function setup(changes: WireChange[] = SEED) {
   return { ...made, token, call }
 }
 
-const rubberduckPr = `${TEST_ORIGIN}/pr/charlesabarnes/invoice-service/42`
+const codeDuckyPr = `${TEST_ORIGIN}/pr/charlesabarnes/invoice-service/42`
 
 describe('pull request sessions over MCP', () => {
   it('list_sessions shows the source, PR number and links', async () => {
@@ -54,7 +54,7 @@ describe('pull request sessions over MCP', () => {
       source: 'github-pr',
       current: true,
       url: `${TEST_ORIGIN}/sessions/pr`,
-      pr: { number: 42, title: 'Retry webhooks', url: PR.url, rubberduckUrl: rubberduckPr, headRef: 'feature/retry' },
+      pr: { number: 42, title: 'Retry webhooks', url: PR.url, codeDuckyUrl: codeDuckyPr, headRef: 'feature/retry' },
     })
     expect(byId.get('pr-old')).toMatchObject({ current: false, pr: { review: { state: 'COMMENTED' } } })
     // The local session of the same branch stays current for branch lookups.
@@ -65,14 +65,14 @@ describe('pull request sessions over MCP', () => {
     const { call } = await setup()
     const context = await call<Record<string, unknown>>('get_review_context', { repo: REPO, pr: 42 })
     expect(context.session).toMatchObject({ id: 'pr', source: 'github-pr', headSha: 'prhead', url: `${TEST_ORIGIN}/sessions/pr` })
-    expect(context.pullRequest).toMatchObject({ number: 42, rubberduckUrl: rubberduckPr, author: 'octo' })
+    expect(context.pullRequest).toMatchObject({ number: 42, codeDuckyUrl: codeDuckyPr, author: 'octo' })
     expect(context.howToReadDiff).toContain('gh pr diff 42 --repo charlesabarnes/invoice-service')
     expect((context.openNotes as { id: string }[]).map((n) => n.id)).toEqual(['n-pr'])
 
     const local = await call<Record<string, unknown>>('get_review_context', { repo: REPO, branch: 'feature/retry' })
     expect(local.session).toMatchObject({ id: 'local', source: 'local' })
     expect(local.howToReadDiff).toBeUndefined()
-    expect((await call('get_review_context', { repo: REPO, pr: 7 })).error).toContain('No Rubberduck session for charlesabarnes/invoice-service#7')
+    expect((await call('get_review_context', { repo: REPO, pr: 7 })).error).toContain('No Code Ducky session for charlesabarnes/invoice-service#7')
   })
 
   it('add_note targets a PR session by repo and pr', async () => {
@@ -94,7 +94,7 @@ describe('pull request sessions over MCP', () => {
         url: PR.url,
         updatedAt: '2026-10-03T10:00:00Z',
         section: 'requested',
-        rubberduckUrl: rubberduckPr,
+        codeDuckyUrl: codeDuckyPr,
         session: 'pr',
         sessionStatus: 'active',
       },
@@ -113,7 +113,7 @@ describe('pull request sessions over MCP', () => {
     const res = await made.app.request(`${TEST_ORIGIN}/api/gate?repo=${encodeURIComponent(REPO)}&branch=feature%2Fretry&format=text`, {
       headers: { Authorization: `Bearer ${made.token}` },
     })
-    expect(await res.text()).toBe(`FAIL\n- issue: src/invoice.ts:12 Body of n1\nurl ${TEST_ORIGIN}/sessions/local\npr ${rubberduckPr}\n`)
+    expect(await res.text()).toBe(`FAIL\n- issue: src/invoice.ts:12 Body of n1\nurl ${TEST_ORIGIN}/sessions/local\npr ${codeDuckyPr}\n`)
   })
 })
 

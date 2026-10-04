@@ -57,7 +57,7 @@ export function ChecklistsPage() {
       const count = await importChecklistFile(scope)
       return count ? `Imported ${count} ${count === 1 ? 'checklist' : 'checklists'} into ${scopeName(scope)}.` : null
     })
-  const exportAll = (kind: FileKind) => run(async () => ((await exportChecklists(checklists, kind, 'rubberduck-checklists')) ? 'Exported.' : null))
+  const exportAll = (kind: FileKind) => run(async () => ((await exportChecklists(checklists, kind, 'codeducky-checklists')) ? 'Exported.' : null))
 
   const groups: { scope: ChecklistScope; lists: Checklist[] }[] = [
     { scope: 'global', lists: checklists.filter((list) => list.scope === 'global') },

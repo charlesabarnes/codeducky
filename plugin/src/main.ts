@@ -7,7 +7,7 @@ import { createConnection, type Connection, type ServerEvent } from './connectio
 
 const BRANCH_POLL_MS = 30_000
 
-const log = (message: string) => console.error(`rubberduck channel: ${message}`)
+const log = (message: string) => console.error(`codeducky channel: ${message}`)
 
 // Claude Code starts plugin servers in the session's directory; CLAUDE_PROJECT_DIR wins when it is set.
 const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd()

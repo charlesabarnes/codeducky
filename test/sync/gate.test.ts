@@ -8,13 +8,13 @@ describe('pre-push gate setup commands', () => {
     expect(installPrePushCommand('https://duck.example')).toBe(
       'curl -fsSL https://duck.example/gate/pre-push.sh -o .git/hooks/pre-push && chmod +x .git/hooks/pre-push',
     )
-    expect(keychainCommand()).toBe('security add-generic-password -U -s rubberduck -a "$USER" -w')
+    expect(keychainCommand()).toBe('security add-generic-password -U -s codeducky -a "$USER" -w')
     expect(installClaudeHookCommand('https://duck.example')).toContain('https://duck.example/gate/claude-code-hook.sh')
   })
 
   it('gives a PreToolUse Bash hook for Claude Code settings', () => {
     expect(JSON.parse(claudeHookSettings())).toEqual({
-      hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: '~/.claude/hooks/rubberduck-gate.sh', timeout: 10 }] }] },
+      hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: '~/.claude/hooks/codeducky-gate.sh', timeout: 10 }] }] },
     })
   })
 })

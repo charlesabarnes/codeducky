@@ -1,17 +1,17 @@
 import type { PrSnapshot } from '../github/prDiff'
 import { carryOverNotes } from '../review/carryOver'
 import { repoIdFor } from '../sync/ids'
-import type { RubberduckDb } from './db'
+import type { CodeDuckyDb } from './db'
 import type { Session, SessionPullRequest } from './schema'
 
 const isPrFor = (number: number) => (session: Session) => session.source === 'github-pr' && session.pr?.number === number
 
 /** Sessions of one pull request, oldest first. */
-export async function prSessions(db: RubberduckDb, repoId: string, number: number): Promise<Session[]> {
+export async function prSessions(db: CodeDuckyDb, repoId: string, number: number): Promise<Session[]> {
   return db.sessions.where({ repoId }).filter(isPrFor(number)).sortBy('startedAt')
 }
 
-export async function activePrSession(db: RubberduckDb, owner: string, name: string, number: number): Promise<Session | undefined> {
+export async function activePrSession(db: CodeDuckyDb, owner: string, name: string, number: number): Promise<Session | undefined> {
   const repoId = repoIdFor(owner, name)
   if (!repoId) return undefined
   return (await prSessions(db, repoId, number)).filter((session) => session.status === 'active').at(-1)
@@ -32,7 +32,7 @@ const prFields = ({ ref, pull }: PrSnapshot): SessionPullRequest => ({
  * current head) or starts one, carrying open notes over from the last session of the same PR.
  * The repo is `gh:owner/name`, created without a local folder when this device has none.
  */
-export async function openPrSession(db: RubberduckDb, snapshot: PrSnapshot, now = Date.now()): Promise<string> {
+export async function openPrSession(db: CodeDuckyDb, snapshot: PrSnapshot, now = Date.now()): Promise<string> {
   const { ref, pull, mergeBaseSha } = snapshot
   const repoId = repoIdFor(ref.owner, ref.name)
   if (!repoId) throw new Error('A pull request needs an owner and a repository name.')

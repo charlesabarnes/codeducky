@@ -22,11 +22,11 @@ import { reviewContext } from '../review/context'
 import { registerPrompts } from './prompts'
 import { checklistView, compareNotes, iso, noteView, prView } from './views'
 
-export const SERVER_INSTRUCTIONS = `Rubberduck holds the owner's self-review of their git branches: review sessions per repo and branch, line notes, and checklists.
+export const SERVER_INSTRUCTIONS = `Code Ducky holds the owner's self-review of their git branches: review sessions per repo and branch, line notes, and checklists.
 To work on the checkout you are in, use repo "owner/name" (from the git remote) and the current branch; get_review_context returns the repo's review instructions, checklists, changed files, open notes and recurring past findings in one call.
 Tools that take a session also accept repo + branch instead. Notes you add arrive as suggestions the owner accepts or dismisses; resolve_note closes a note with your reply.
 The review prompt reviews a branch and adds notes; the fix prompt fixes open notes and resolves them.
-Pull requests reviewed in Rubberduck are sessions too (source "github-pr"): select one with repo + pr. list_review_requests returns the owner's GitHub inbox as last synced from Rubberduck.`
+Pull requests reviewed in Code Ducky are sessions too (source "github-pr"): select one with repo + pr. list_review_requests returns the owner's GitHub inbox as last synced from Code Ducky.`
 
 const SEVERITIES = ['nit', 'suggestion', 'issue', 'blocker'] as const
 const STATUSES = ['open', 'resolved', 'suggested', 'dismissed'] as const
@@ -82,7 +82,7 @@ function resolveSession(data: DataSnapshot, target: SessionTarget): SessionRecor
   if (target.repo && target.pr !== undefined) {
     const repoIds = new Set(findRepos(data, target.repo).map((repo) => repo.id))
     const session = currentPrSession(data.sessions.filter((s) => repoIds.has(s.repoId)), target.pr)
-    if (!session) throw new ToolError(`No Rubberduck session for ${target.repo}#${target.pr}; the owner has to open the pull request in Rubberduck first.`)
+    if (!session) throw new ToolError(`No Code Ducky session for ${target.repo}#${target.pr}; the owner has to open the pull request in Code Ducky first.`)
     return session
   }
   if (!target.repo || !target.branch) throw new ToolError('Give a session id, or repo with branch or pr.')
@@ -91,7 +91,7 @@ function resolveSession(data: DataSnapshot, target: SessionTarget): SessionRecor
   if (!session) {
     const branches = [...new Set(data.sessions.filter((s) => repoIds.has(s.repoId)).map((s) => s.branch))].sort()
     throw new ToolError(
-      `No Rubberduck session for ${target.repo}@${target.branch}; the owner has to open it in Rubberduck first.` +
+      `No Code Ducky session for ${target.repo}@${target.branch}; the owner has to open it in Code Ducky first.` +
         (branches.length ? ` Branches with sessions: ${branches.join(', ')}.` : ''),
     )
   }
@@ -111,7 +111,7 @@ const pathMatches = (notePath: string, filter: string) => {
 
 export interface ToolContext {
   db: Database
-  /** Rubberduck's public origin, for links in results. */
+  /** Code Ducky's public origin, for links in results. */
   origin?: string
   /** Who is calling, recorded on resolutions as `mcp:<actor>`: the token or OAuth client name. */
   actor: string
@@ -119,7 +119,7 @@ export interface ToolContext {
 }
 
 export function createMcpServer({ db, actor, origin = '', now = Date.now }: ToolContext): McpServer {
-  const server = new McpServer({ name: 'rubberduck', version: '1.0.0' }, { instructions: SERVER_INSTRUCTIONS })
+  const server = new McpServer({ name: 'codeducky', version: '1.0.0' }, { instructions: SERVER_INSTRUCTIONS })
   const read = { readOnlyHint: true, openWorldHint: false }
   registerPrompts(server, () => loadData(db))
 
@@ -129,7 +129,7 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
       title: 'Get review context',
       description:
         'Everything to read before reviewing or fixing a branch: the repo\'s review instructions (follow them), the checklists that ' +
-        'apply, the changed files Rubberduck last scanned (path, status, +/-), open notes and pending suggestions on the branch, and ' +
+        'apply, the changed files Code Ducky last scanned (path, status, +/-), open notes and pending suggestions on the branch, and ' +
         'recurring findings from past resolved notes in this repo.',
       inputSchema: sessionTarget,
       annotations: read,
@@ -144,7 +144,7 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
     'list_repos',
     {
       title: 'List repos',
-      description: 'Lists the repositories reviewed in Rubberduck, with their branches that have sessions and open note counts.',
+      description: 'Lists the repositories reviewed in Code Ducky, with their branches that have sessions and open note counts.',
       inputSchema: {},
       annotations: read,
     },
@@ -171,8 +171,8 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
       title: 'List review sessions',
       description:
         'Lists review sessions, newest first. Filter by repo ("owner/name") and branch to find the session for a checkout; ' +
-        'the one with current: true is what Rubberduck shows for that branch. source is "local" for a checkout and "github-pr" for a ' +
-        'pull request review, which also carries pr (number, title, GitHub and Rubberduck URLs).',
+        'the one with current: true is what Code Ducky shows for that branch. source is "local" for a checkout and "github-pr" for a ' +
+        'pull request review, which also carries pr (number, title, GitHub and Code Ducky URLs).',
       inputSchema: {
         repo: z.string().optional().describe('Repository as "owner/name", or a repo id.'),
         branch: z.string().optional().describe('Exact branch name.'),
@@ -293,7 +293,7 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
     {
       title: 'Resolve a note',
       description:
-        'Marks a note resolved with a reply explaining what was done (e.g. the fix and where). The reply is shown on the note in Rubberduck.',
+        'Marks a note resolved with a reply explaining what was done (e.g. the fix and where). The reply is shown on the note in Code Ducky.',
       inputSchema: {
         id: z.string().describe('Note id.'),
         reply: z.string().min(1).max(20_000).describe('Markdown reply, e.g. "Fixed in a1b2c3: added a null check."'),
@@ -321,7 +321,7 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
     {
       title: 'Add a note',
       description:
-        'Adds a review note on a line. It arrives in Rubberduck as a suggestion the owner accepts or dismisses. ' +
+        'Adds a review note on a line. It arrives in Code Ducky as a suggestion the owner accepts or dismisses. ' +
         'Pass lineText (and a few lines of before/after context) so the note stays anchored when the file changes.',
       inputSchema: {
         ...sessionTarget,
@@ -365,9 +365,9 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
     {
       title: 'List review requests',
       description:
-        'The owner\'s GitHub pull request inbox as last synced from Rubberduck: PRs where their review is requested, their own open PRs, ' +
-        'and PRs they reviewed recently. Each item has repo, number, title, author, url, updatedAt and a Rubberduck URL. ' +
-        'Rubberduck refreshes it whenever the owner opens the Inbox page; fetchedAt says how old it is.',
+        'The owner\'s GitHub pull request inbox as last synced from Code Ducky: PRs where their review is requested, their own open PRs, ' +
+        'and PRs they reviewed recently. Each item has repo, number, title, author, url, updatedAt and a Code Ducky URL. ' +
+        'Code Ducky refreshes it whenever the owner opens the Inbox page; fetchedAt says how old it is.',
       inputSchema: {
         section: z.enum(['requested', 'mine', 'reviewed', 'all']).default('requested').describe('Which part of the inbox.'),
       },
@@ -376,7 +376,7 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
     guarded(({ section }) => {
       const data = loadData(db)
       const inbox = data.inbox()
-      if (!inbox) return json({ fetchedAt: null, items: [], note: 'No inbox has been synced yet. Ask the owner to open the Inbox in Rubberduck.' })
+      if (!inbox) return json({ fetchedAt: null, items: [], note: 'No inbox has been synced yet. Ask the owner to open the Inbox in Code Ducky.' })
       const items = inbox.items.filter((item) => section === 'all' || item.section === section)
       return json({
         fetchedAt: iso(inbox.fetchedAt),
@@ -392,7 +392,7 @@ export function createMcpServer({ db, actor, origin = '', now = Date.now }: Tool
           )
           return {
             ...item,
-            rubberduckUrl: prUrl(origin, { owner, name, number: item.number }),
+            codeDuckyUrl: prUrl(origin, { owner, name, number: item.number }),
             ...(session ? { session: session.id, sessionStatus: session.status } : {}),
           }
         }),

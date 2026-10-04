@@ -1,6 +1,6 @@
 #!/bin/sh
-# Rubberduck review gate for Claude Code: a PreToolUse hook on Bash that acts on "git push".
-# Denies the command (hookSpecificOutput.permissionDecision "deny") while the branch's Rubberduck
+# Code Ducky review gate for Claude Code: a PreToolUse hook on Bash that acts on "git push".
+# Denies the command (hookSpecificOutput.permissionDecision "deny") while the branch's Code Ducky
 # session has open blocker or issue notes, or unticked items on a required checklist.
 # Everything else, and every failure to reach the server, is allowed.
 
@@ -73,15 +73,15 @@ if [ -z "$remote" ]; then
   remote=$(git config --get "branch.$branch.pushRemote" 2>/dev/null || git config --get remote.pushDefault 2>/dev/null || git config --get "branch.$branch.remote" 2>/dev/null || echo origin)
 fi
 remote_url=$(git remote get-url --push "$remote" 2>/dev/null || printf '%s' "$remote")
-repo=$(rubberduck_repo_from_url "$remote_url") || exit 0
+repo=$(codeducky_repo_from_url "$remote_url") || exit 0
 
-answer=$(rubberduck_check "$repo" "$branch") || exit 0
+answer=$(codeducky_check "$repo" "$branch") || exit 0
 [ "$(printf '%s\n' "$answer" | head -n 1)" = FAIL ] || exit 0
 
 link=$(printf '%s\n' "$answer" | sed -n 's/^url //p')
 pr_link=$(printf '%s\n' "$answer" | sed -n 's/^pr //p')
 reason=$(
-  printf 'Rubberduck review gate: push of %s@%s is blocked.\n' "$repo" "$branch"
+  printf 'Code Ducky review gate: push of %s@%s is blocked.\n' "$repo" "$branch"
   printf '%s\n' "$answer" | sed -n 's/^- /- /p'
   printf 'Review: %s\n' "$link"
   [ -z "$pr_link" ] || printf 'Pull request: %s\n' "$pr_link"

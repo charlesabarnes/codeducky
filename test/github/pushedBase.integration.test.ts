@@ -66,7 +66,7 @@ describe('GitHub base for a HEAD that is not pushed', () => {
   const shas: Record<string, string> = {}
 
   beforeAll(() => {
-    work = mkdtempSync(join(tmpdir(), 'rubberduck-pushed-'))
+    work = mkdtempSync(join(tmpdir(), 'codeducky-pushed-'))
     bare = join(work, 'github.git')
     git(work, 'init', '--quiet', '--bare', '-b', 'main', bare)
     const other = clone(work, bare, 'other')
