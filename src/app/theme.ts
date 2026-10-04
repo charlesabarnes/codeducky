@@ -12,6 +12,24 @@ const THEME_COLORS: Record<Theme, string> = { dark: '#0f0d0a', light: '#f7f5ef' 
 let preference: ThemePreference = DEFAULT_THEME
 let chosenThisSession = false
 
+/** Storage can be blocked or full; the cache is only a first-paint hint, so carry on without it. */
+function readCache(): string | null {
+  try {
+    return localStorage.getItem(CACHE_KEY)
+  } catch (error) {
+    console.warn('Could not read the cached theme', error)
+    return null
+  }
+}
+
+function writeCache(value: ThemePreference) {
+  try {
+    localStorage.setItem(CACHE_KEY, value)
+  } catch (error) {
+    console.warn('Could not cache the theme', error)
+  }
+}
+
 export function resolveTheme(pref: ThemePreference, prefersLight: boolean): Theme {
   if (pref === 'system') return prefersLight ? 'light' : 'dark'
   return pref
@@ -26,13 +44,13 @@ function render() {
 export function applyTheme(next: ThemePreference) {
   chosenThisSession = true
   preference = next
-  localStorage.setItem(CACHE_KEY, next)
+  writeCache(next)
   render()
 }
 
 /** Applies the cached theme now, then the stored one, and follows the OS while the preference is system. */
 export function startTheme() {
-  const cached = localStorage.getItem(CACHE_KEY)
+  const cached = readCache()
   if (cached === 'dark' || cached === 'light' || cached === 'system') preference = cached
   render()
   window.matchMedia(LIGHT_QUERY).addEventListener('change', () => preference === 'system' && render())
