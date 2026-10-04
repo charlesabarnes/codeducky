@@ -67,16 +67,37 @@ export function createFlowStore(db: Database, now: () => number = Date.now) {
 
   const count = () => db.query<{ n: number }, []>('SELECT COUNT(*) AS n FROM auth_flows').get()!.n
 
+  /** Drops the oldest flow that has not reached consent; a signed-in user's pending consent is kept. */
+  const evictOldest = (): boolean => {
+    const row = db
+      .query<{ id_hash: string }, []>(
+        `DELETE FROM auth_flows WHERE id_hash =
+           (SELECT id_hash FROM auth_flows WHERE consent_hash IS NULL ORDER BY created_at, rowid LIMIT 1)
+         RETURNING id_hash`,
+      )
+      .get()
+    if (!row) return false
+    for (const [ip, started] of byIp) {
+      const index = started.findIndex((flow) => flow.idHash === row.id_hash)
+      if (index < 0) continue
+      started.splice(index, 1)
+      if (!started.length) byIp.delete(ip)
+      break
+    }
+    return true
+  }
+
   return {
     /**
-     * Past the per-address cap the address's oldest flow is dropped, so a client can always retry.
-     * Throws FlowLimitError when every slot is in use.
+     * Past the per-address cap the address's oldest flow is dropped, so a client can always retry;
+     * past the total cap, the oldest flow overall. Throws FlowLimitError only when every slot holds
+     * a pending consent.
      */
     start(options: { purpose: 'pwa'; pwaChallenge: string } | { purpose: 'oauth'; oauthRequest: string }, ip: string): StartedFlow {
       prune()
       const started = byIp.get(ip) ?? []
       while (started.length >= MAX_FLOWS_PER_IP) db.query('DELETE FROM auth_flows WHERE id_hash = ?').run(started.shift()!.idHash)
-      if (count() >= MAX_FLOWS) throw new FlowLimitError()
+      while (count() >= MAX_FLOWS) if (!evictOldest()) throw new FlowLimitError()
       const flow = { flowId: randomSecret(), state: randomSecret(), githubVerifier: randomSecret() }
       const idHash = hashToken(flow.flowId)
       db.query(

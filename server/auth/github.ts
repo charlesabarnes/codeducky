@@ -122,7 +122,7 @@ export function githubProvider({
       try {
         return await user(token)
       } finally {
-        await revoke(token)
+        await revoke(token).catch(() => undefined)
       }
     },
   }

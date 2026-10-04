@@ -272,15 +272,26 @@ describe('stored flows', () => {
     expect((await finish(app, other)).get('handoff')).toBeTruthy()
   })
 
-  it('refuses new flows once every slot is taken, and prunes expired ones', async () => {
+  it('drops the oldest flow once every slot is taken, keeps pending consents, and prunes expired ones', async () => {
     let now = 1_000_000
     const { app, db } = setup({ now: () => now, limits: unlimited })
+    const alice = createUserSession(db, 'alice')
     const insert = db.query(
-      "INSERT INTO auth_flows (id_hash, state_hash, purpose, github_verifier, created_at, expires_at) VALUES (?, 's', 'pwa', 'v', ?, ?)",
+      `INSERT INTO auth_flows (id_hash, state_hash, purpose, github_verifier, user_id, consent_hash, created_at, expires_at)
+       VALUES (?, 's', 'oauth', 'v', ?, ?, ?, ?)`,
     )
-    db.transaction(() => {
-      for (let i = 0; i < MAX_FLOWS; i++) insert.run(`filler-${i}`, now, now + 60_000)
-    })()
+    const fill = (consent: boolean) =>
+      db.transaction(() => {
+        for (let i = 0; i < MAX_FLOWS; i++) insert.run(`filler-${i}`, consent ? alice.user.id : null, consent ? 'ticket' : null, now + i, now + 60_000)
+      })()
+
+    fill(false)
+    expect((await startFrom(app, '10.0.0.1')).res.status).toBe(302)
+    expect(flowCount(db)).toBe(MAX_FLOWS)
+    expect(db.query("SELECT 1 FROM auth_flows WHERE id_hash = 'filler-0'").get()).toBeNull()
+
+    db.query('DELETE FROM auth_flows').run()
+    fill(true)
     const refused = await startFrom(app, '10.0.0.1')
     expect(refused.res.status).toBe(429)
     expect(Number(refused.res.headers.get('Retry-After'))).toBeGreaterThan(0)
