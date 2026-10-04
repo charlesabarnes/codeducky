@@ -17,6 +17,8 @@ export interface RepoSummary {
   defaultBranch: string
   private: boolean
   htmlUrl: string
+  /** Whether the token's user can push, or null when GitHub does not say (an unauthenticated view). */
+  canPush: boolean | null
 }
 
 export type ComparedFileStatus = 'added' | 'removed' | 'modified' | 'renamed' | 'copied' | 'changed' | 'unchanged'
@@ -84,6 +86,8 @@ export interface PullDetail extends PullRequest {
   baseSha: string
   /** "owner/name" of the head repository; null when the fork is gone. */
   headRepo: string | null
+  /** The fork's owner lets maintainers of the base repository push to the head branch. */
+  maintainerCanModify: boolean
   labels: PullLabel[]
   requestedReviewers: string[]
   requestedTeams: string[]
@@ -185,4 +189,23 @@ export interface CheckAnnotation {
   title: string | null
   message: string
   rawDetails: string | null
+}
+
+/** A file on a branch, as the contents API returns it. */
+export interface BranchFile {
+  sha: string
+  bytes: Uint8Array
+}
+
+export interface PutFileInput {
+  branch: string
+  message: string
+  content: Uint8Array
+  /** The blob being replaced; GitHub refuses the write when the branch has another one. */
+  sha: string
+}
+
+export interface PutFileResult {
+  commitSha: string
+  blobSha: string
 }

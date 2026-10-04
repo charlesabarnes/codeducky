@@ -2,6 +2,7 @@ import { errorFromResponse, GitHubError, isGitHubError } from './errors'
 import type { BranchCommit } from '../git/types'
 import type {
   AnnotationLevel,
+  BranchFile,
   CheckAnnotation,
   CheckConclusion,
   CheckRun,
@@ -14,6 +15,8 @@ import type {
   PullDetail,
   PullFile,
   PullReview,
+  PutFileInput,
+  PutFileResult,
   ReviewEvent,
   ReviewInput,
   PullRequest,
@@ -147,6 +150,13 @@ function nextLink(headers: Headers): string | null {
   return null
 }
 
+export function encodeBase64(bytes: Uint8Array): string {
+  const CHUNK = 0x8000
+  let binary = ''
+  for (let i = 0; i < bytes.byteLength; i += CHUNK) binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
+  return btoa(binary)
+}
+
 export function decodeBase64(content: string): Uint8Array {
   const binary = atob(content.replace(/\s/g, ''))
   const bytes = new Uint8Array(binary.length)
@@ -175,6 +185,7 @@ interface RawPullDetail extends RawPull {
   merged?: boolean
   user: RawUser | null
   head: { sha: string; ref: string; repo?: { full_name: string } | null }
+  maintainer_can_modify?: boolean
   base: { sha: string; ref: string }
   labels?: { name: string; color?: string }[]
   requested_reviewers?: RawUser[]
@@ -193,6 +204,7 @@ const toPullDetail = (pull: RawPullDetail): PullDetail => ({
   author: pull.user?.login ?? 'ghost',
   baseSha: pull.base.sha,
   headRepo: pull.head.repo?.full_name ?? null,
+  maintainerCanModify: Boolean(pull.maintainer_can_modify),
   labels: (pull.labels ?? []).map((label) => ({ name: label.name, color: label.color ?? null })),
   requestedReviewers: (pull.requested_reviewers ?? []).map((user) => user.login),
   requestedTeams: (pull.requested_teams ?? []).map((team) => team.slug),
@@ -337,6 +349,12 @@ export function createGitHubClient({ token, fetch: fetchImpl = globalThis.fetch,
     return items
   }
 
+  async function blob(repo: RepoRef, sha: string): Promise<Uint8Array> {
+    const { data } = await request<{ content: string; encoding: string }>(`${repoPath(repo)}/git/blobs/${sha}`)
+    if (data.encoding === 'base64') return decodeBase64(data.content)
+    return new TextEncoder().encode(data.content)
+  }
+
   /** Creates a review; with an `event` it is submitted in the same call, without one it stays pending. */
   async function createReview(repo: RepoRef, number: number, input: ReviewInput): Promise<Review> {
     const body: Record<string, unknown> = {
@@ -365,10 +383,39 @@ export function createGitHubClient({ token, fetch: fetchImpl = globalThis.fetch,
     },
 
     async repo(repo: RepoRef): Promise<RepoSummary> {
-      const { data } = await request<{ full_name: string; default_branch: string; private: boolean; html_url: string }>(
-        repoPath(repo),
+      const { data } = await request<{
+        full_name: string
+        default_branch: string
+        private: boolean
+        html_url: string
+        permissions?: { push?: boolean }
+      }>(repoPath(repo))
+      return {
+        fullName: data.full_name,
+        defaultBranch: data.default_branch,
+        private: data.private,
+        htmlUrl: data.html_url,
+        canPush: data.permissions?.push ?? null,
+      }
+    },
+
+    /** A file as it is on a branch now. Files over 1 MB come without content, so those are read as blobs. */
+    async fileAt(repo: RepoRef, path: string, branch: string): Promise<BranchFile> {
+      const { data } = await request<{ sha: string; content?: string; encoding?: string }>(
+        `${repoPath(repo)}/contents/${encodePath(path)}`,
+        { query: { ref: branch } },
       )
-      return { fullName: data.full_name, defaultBranch: data.default_branch, private: data.private, htmlUrl: data.html_url }
+      const bytes = data.encoding === 'base64' && data.content !== undefined ? decodeBase64(data.content) : await blob(repo, data.sha)
+      return { sha: data.sha, bytes }
+    },
+
+    /** Commits one file to a branch through the contents API. */
+    async putFile(repo: RepoRef, path: string, input: PutFileInput): Promise<PutFileResult> {
+      const { data } = await request<{ content: { sha: string }; commit: { sha: string } }>(
+        `${repoPath(repo)}/contents/${encodePath(path)}`,
+        { method: 'PUT', body: { message: input.message, content: encodeBase64(input.content), sha: input.sha, branch: input.branch } },
+      )
+      return { commitSha: data.commit.sha, blobSha: data.content.sha }
     },
 
     /** The commit a branch points at, or null when GitHub has no such branch. */
@@ -410,11 +457,7 @@ export function createGitHubClient({ token, fetch: fetchImpl = globalThis.fetch,
       return { sha: data.sha, truncated: data.truncated, entries: data.tree }
     },
 
-    async blob(repo: RepoRef, sha: string): Promise<Uint8Array> {
-      const { data } = await request<{ content: string; encoding: string }>(`${repoPath(repo)}/git/blobs/${sha}`)
-      if (data.encoding === 'base64') return decodeBase64(data.content)
-      return new TextEncoder().encode(data.content)
-    },
+    blob,
 
     async openPullForBranch(repo: RepoRef, branch: string): Promise<PullRequest | null> {
       const { data } = await request<RawPull[]>(`${repoPath(repo)}/pulls`, {
