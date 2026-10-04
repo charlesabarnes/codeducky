@@ -51,10 +51,10 @@ describe('quota: rows', () => {
     expect(readRecord(db, alice.user.id, 'fileViews', idOf('a'))?.data).toMatchObject({ contentHash: 'newer' })
   })
 
-  it('always deletes stored records, and stores tombstones for new ids only while there is room', async () => {
+  it('always deletes stored records, and refuses tombstones for new ids past the row limit', async () => {
     const { push, usage, db, alice } = setup({ records: 2, bytes: DEFAULT_QUOTAS.bytes })
     await push([view('a', 1)])
-    expect(await push([tombstone('a', 2), tombstone('b', 2), tombstone('c', 2)])).toEqual([])
+    expect(await push([tombstone('a', 2), tombstone('b', 2), tombstone('c', 2)])).toEqual([refused('c')])
     expect(usage().usage).toEqual({ records: 2, bytes: 0 })
     expect(readRecord(db, alice.user.id, 'fileViews', idOf('b'))?.deleted).toBe(true)
     expect(readRecord(db, alice.user.id, 'fileViews', idOf('c'))).toBeNull()

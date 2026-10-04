@@ -163,6 +163,7 @@ export class SyncController {
     this.stop()
     this.rerun = false
     await this.inFlight?.catch(() => undefined)
+    this.throttledUntil = 0
     const auth = this.auth
     this.auth = null
     await this.db.syncMeta.bulkDelete([META_AUTH, META_CURSOR, META_LAST_SYNCED_AT])

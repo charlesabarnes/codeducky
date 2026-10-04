@@ -12,7 +12,7 @@ import {
   type WireChange,
 } from '../../shared/sync'
 import type { ChecklistRecord, DataSnapshot, InboxRecord, NoteRecord, RepoRecord, SessionRecord } from '../mcp/records'
-import { checkQuota, hasRoomFor } from './quota'
+import { checkQuota } from './quota'
 
 /**
  * The only module that reads or writes the records table. Every function takes the user whose
@@ -64,16 +64,15 @@ function current(db: Database, userId: string, kind: SyncKind, id: string) {
 
 /**
  * Stores the change if it wins against the stored version; returns whether it was applied. A live write
- * that grows the user's usage past their quota throws QuotaError. Deleting a stored record always
- * applies; a tombstone for an id never stored is dropped once the user is at their row limit.
+ * that grows the user's usage past their quota throws QuotaError, as does a tombstone for an id never
+ * stored once the user is at their row limit. Deleting a stored record always applies.
  */
 export function applyChange(db: Database, userId: string, change: WireChange): boolean {
   const existing = current(db, userId, change.kind, change.id)
   if (existing && !wins(change, { changedAt: existing.changed_at, deleted: existing.deleted === 1 })) return false
-  if (change.deleted && !existing && !hasRoomFor(db, userId, 1)) return false
   const data = change.deleted ? null : JSON.stringify(change.data ?? {})
   const bytes = (data === null ? 0 : Buffer.byteLength(data)) - (existing?.bytes ?? 0)
-  if (!change.deleted) checkQuota(db, userId, existing ? 0 : 1, bytes)
+  checkQuota(db, userId, existing ? 0 : 1, bytes)
   db.query(
     `INSERT INTO records (user_id, kind, id, changed_at, deleted, rev, data) VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (user_id, kind, id) DO UPDATE SET changed_at = excluded.changed_at, deleted = excluded.deleted,
