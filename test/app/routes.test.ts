@@ -22,6 +22,7 @@ describe('routes', () => {
     expect(leaf('/sessions/abc')).toBe('session')
     expect(leaf('/repos/gh%3Aa%2Fb')).toBe('repo')
     expect(leaf('/repos/gh%3Aa%2Fb/history')).toBe('history')
+    expect(leaf('/signin/callback')).toBe('signin-callback')
     expect(leaf('/repos/x/pull/1')).toBe('pr-mirror')
     expect(leaf('/charlesabarnes/codeducky')).toBeNull()
   })

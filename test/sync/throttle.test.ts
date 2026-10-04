@@ -31,7 +31,8 @@ describe('sync on 429', () => {
     const db = new CodeDuckyDb('throttle')
     await setMeta(db, META_AUTH, { token: 't', tokenId: 'id', name: 'Browser' })
     let calls = 0
-    const fetch = (async () => {
+    const fetch = (async (input: RequestInfo | URL) => {
+      if (String(input).endsWith('/api/auth/session')) return new Response(JSON.stringify({}), { status: 503 })
       calls++
       if (calls === 1) return new Response(JSON.stringify({ error: 'rate_limited' }), { status: 429, headers: { 'Retry-After': '1' } })
       return new Response(JSON.stringify({ changes: [], newCursor: 0, more: false, rejected: [] }))
