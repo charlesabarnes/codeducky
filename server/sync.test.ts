@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { pairId, SYNC_PAGE_SIZE, type SyncResponse, type WireChange } from '../shared/sync'
 import { readRecord, writeRecord } from './records/store'
-import { createUserSession, login, makeApp, request } from './testing'
-import { ADMIN_USER_ID } from './users/store'
+import { createUserSession, login, makeApp, OWNER, request, userIdFor } from './testing'
 
 const cleanups: (() => void)[] = []
 afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
@@ -53,17 +52,17 @@ describe('sync', () => {
     const { push, db } = await setup()
     await push([repo(20, 'newer')])
     await push([repo(10, 'older')])
-    expect(readRecord(db, ADMIN_USER_ID, 'repos', repo(0).id)?.data).toMatchObject({ name: 'newer' })
+    expect(readRecord(db, userIdFor(db, OWNER), 'repos', repo(0).id)?.data).toMatchObject({ name: 'newer' })
 
     await push([{ kind: 'repos', id: repo(0).id, changedAt: 20, deleted: true }])
-    const stored = readRecord(db, ADMIN_USER_ID, 'repos', repo(0).id)!
+    const stored = readRecord(db, userIdFor(db, OWNER), 'repos', repo(0).id)!
     expect(stored.deleted).toBe(true)
     expect(stored.data).toBeUndefined()
 
     await push([repo(19, 'stale edit')])
-    expect(readRecord(db, ADMIN_USER_ID, 'repos', repo(0).id)?.deleted).toBe(true)
+    expect(readRecord(db, userIdFor(db, OWNER), 'repos', repo(0).id)?.deleted).toBe(true)
     await push([repo(21, 'revived')])
-    expect(readRecord(db, ADMIN_USER_ID, 'repos', repo(0).id)).toMatchObject({ deleted: false, data: { name: 'revived' } })
+    expect(readRecord(db, userIdFor(db, OWNER), 'repos', repo(0).id)).toMatchObject({ deleted: false, data: { name: 'revived' } })
   })
 
   it('rejects invalid records one by one and applies the rest', async () => {
@@ -104,7 +103,7 @@ describe('sync', () => {
   it('lets server-side writes win and appear in the feed', async () => {
     const { push, db } = await setup()
     await push([repo(Date.now() + 60_000)])
-    const written = writeRecord(db, ADMIN_USER_ID, 'repos', repo(0).id, { ...repo(0).data, name: 'from server' })
+    const written = writeRecord(db, userIdFor(db, OWNER), 'repos', repo(0).id, { ...repo(0).data, name: 'from server' })
     expect(written.changedAt).toBeGreaterThan(Date.now())
     const reply = await push([], 1)
     expect(reply.changes.map((c) => c.data?.name)).toEqual(['from server'])
@@ -135,7 +134,7 @@ describe('sync', () => {
   it('counts each user\'s rows and live bytes as records grow, shrink and are deleted', async () => {
     const { db, push } = await setup()
     const usage = () =>
-      db.query<{ record_count: number; data_bytes: number }, [string]>('SELECT record_count, data_bytes FROM users WHERE id = ?').get(ADMIN_USER_ID)!
+      db.query<{ record_count: number; data_bytes: number }, [string]>('SELECT record_count, data_bytes FROM users WHERE id = ?').get(userIdFor(db, OWNER))!
     const bytes = (change: WireChange) => Buffer.byteLength(JSON.stringify(change.data))
 
     await push([repo(10, 'short')])

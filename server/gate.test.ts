@@ -5,8 +5,7 @@ import { join } from 'node:path'
 import type { SyncResponse, WireChange } from '../shared/sync'
 import { checklist, note, repo, REPO, session, ticked } from './fixtures'
 import { renderScript } from './gate/scripts'
-import { login, makeApp, request, TEST_ORIGIN } from './testing'
-import { ADMIN_USER_ID } from './users/store'
+import { login, makeApp, OWNER, request, TEST_ORIGIN, userIdFor } from './testing'
 
 const cleanups: (() => void)[] = []
 afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
@@ -17,7 +16,7 @@ async function setup(changes: WireChange[]) {
   const device = await login(made.app)
   const pushed = (await (await request(made.app, 'POST', '/api/sync', { cursor: 0, changes }, device)).json()) as SyncResponse
   expect(pushed.rejected).toEqual([])
-  const { token } = made.tokens.issue({ userId: ADMIN_USER_ID, name: 'Pre-push gate', kind: 'api' })
+  const { token } = made.tokens.issue({ userId: userIdFor(made.db, OWNER), name: 'Pre-push gate', kind: 'api' })
   const gate = async (repoName: string, branch: string, extra = '') => {
     const res = await made.app.request(
       `${TEST_ORIGIN}/api/gate?repo=${encodeURIComponent(repoName)}&branch=${encodeURIComponent(branch)}${extra}`,

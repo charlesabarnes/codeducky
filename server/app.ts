@@ -5,11 +5,13 @@ import { parseSyncRequest } from '../shared/sync'
 import { requireToken, type AuthEnv } from './auth/middleware'
 import { oauthRoutes } from './auth/oauth/routes'
 import { createOAuthStore } from './auth/oauth/store'
+import type { IdentityProvider } from './auth/github'
 import { createFailureLimiter, type FailureLimiter } from './auth/passphrase'
 import { authRoutes } from './auth/routes'
 import { createTokenStore } from './auth/tokens'
 import { createChannelRegistry, type ChannelRegistry } from './channel/registry'
 import { channelRoutes } from './channel/routes'
+import type { Quotas, SignupPolicy } from './config'
 import { gateApi, gateScripts } from './gate/routes'
 import { logErrors, requestLog, stdoutSink, type LogSink } from './log'
 import { mcpRoutes } from './mcp/route'
@@ -19,11 +21,16 @@ import { ensureAdmin } from './users/store'
 
 export interface AppDeps {
   db: Database
-  passphrase: string
+  /** GitHub, or the fake provider in development and tests. */
+  provider: IdentityProvider
+  /** Unset disables admin sign-in. */
+  adminPassphrase?: string
+  signups?: SignupPolicy
+  quotas?: Quotas
   webDist?: string
   now?: () => number
   log?: LogSink
-  /** Counts failed passphrase attempts from both the PWA sign-in and the OAuth consent page. */
+  /** Counts failed admin passphrase attempts from both admin sign-in and the OAuth consent page. */
   limiter?: FailureLimiter
   registrationLimiter?: FailureLimiter
   /** The public origin, when the proxy in front does not forward the host (CODEDUCKY_PUBLIC_URL). */
@@ -36,7 +43,10 @@ const MAX_SYNC_BODY = 16 * 1024 * 1024
 
 export function createApp({
   db,
-  passphrase,
+  provider,
+  adminPassphrase,
+  signups,
+  quotas,
   webDist,
   now,
   log = stdoutSink,
@@ -56,7 +66,7 @@ export function createApp({
   api.use('*', requestLog(log))
   api.onError(logErrors(log))
   api.get('/health', (c) => c.json({ ok: true }))
-  api.route('/auth', authRoutes({ tokens, oauth, passphrase, limiter }))
+  api.route('/auth', authRoutes({ db, tokens, oauth, provider, adminPassphrase, limiter, signups, quotas, publicUrl, log, now }))
 
   api.post(
     '/sync',
@@ -77,7 +87,7 @@ export function createApp({
   const server = new Hono()
   for (const path of ['/mcp', '/oauth/*', '/.well-known/*', '/gate/*']) server.use(path, requestLog(log))
   server.onError(logErrors(log))
-  server.route('/', oauthRoutes({ store: oauth, passphrase, limiter, registrationLimiter, publicUrl }))
+  server.route('/', oauthRoutes({ store: oauth, adminPassphrase, limiter, registrationLimiter, publicUrl }))
   server.route('/', mcpRoutes({ db, tokens, publicUrl }))
   server.route('/', gateScripts(publicUrl))
 

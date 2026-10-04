@@ -1,59 +1,63 @@
+import type { Database } from 'bun:sqlite'
 import { Hono } from 'hono'
-import { clientIp, requireToken, type AuthEnv } from './middleware'
-import { createFailureLimiter, passphraseMatches, type FailureLimiter } from './passphrase'
+import { DEFAULT_QUOTAS, DEFAULT_SIGNUPS, type Quotas, type SignupPolicy } from '../config'
+import { silentSink, type LogSink } from '../log'
+import { getUsage, getUser } from '../users/store'
+import { createFlowStore } from './flows'
+import type { IdentityProvider } from './github'
+import { requireToken, type AuthEnv } from './middleware'
 import type { OAuthStore } from './oauth/store'
-import type { TokenStore } from './tokens'
-import { ADMIN_USER_ID } from '../users/store'
+import { createFailureLimiter, type FailureLimiter } from './passphrase'
+import { profile, signInRoutes } from './signin'
+import { tokenName, type TokenStore } from './tokens'
 
 export interface AuthRoutesOptions {
+  db: Database
   tokens: TokenStore
   oauth?: OAuthStore
-  passphrase: string
+  provider: IdentityProvider
+  adminPassphrase?: string
   limiter?: FailureLimiter
-}
-
-const MAX_NAME = 100
-
-function tokenName(value: unknown, fallback: string): string | null {
-  if (value === undefined || value === null || value === '') return fallback
-  if (typeof value !== 'string') return null
-  const name = value.trim()
-  return name && name.length <= MAX_NAME ? name : null
+  signups?: SignupPolicy
+  quotas?: Quotas
+  publicUrl?: string
+  log?: LogSink
+  now?: () => number
 }
 
 export function authRoutes({
+  db,
   tokens,
   oauth,
-  passphrase,
+  provider,
+  adminPassphrase,
   limiter = createFailureLimiter({ perClient: 10, global: 100, windowMs: 15 * 60_000 }),
+  signups = DEFAULT_SIGNUPS,
+  quotas = DEFAULT_QUOTAS,
+  publicUrl,
+  log = silentSink,
+  now = Date.now,
 }: AuthRoutesOptions) {
   const routes = new Hono<AuthEnv>()
+  const flows = createFlowStore(db, now)
 
-  /** The passphrase signs in to the built-in admin account until GitHub sign-in replaces it. */
-  routes.post('/login', async (c) => {
-    const ip = clientIp(c)
-    const retryAfter = limiter.retryAfter(ip)
-    if (retryAfter !== null) {
-      c.header('Retry-After', String(retryAfter))
-      return c.json({ error: 'too_many_attempts' }, 429)
-    }
-    const body = (await c.req.json().catch(() => null)) as { passphrase?: unknown; name?: unknown } | null
-    if (!passphraseMatches(body?.passphrase, passphrase)) {
-      limiter.fail(ip)
-      return c.json({ error: 'invalid_passphrase' }, 401)
-    }
-    limiter.succeed(ip)
-    const name = tokenName(body?.name, 'Browser')
-    if (name === null) return c.json({ error: 'invalid_name' }, 400)
-    const { token, info } = tokens.issue({ userId: ADMIN_USER_ID, name, kind: 'session' })
-    return c.json({ token, tokenId: info.id, user: info.user })
-  })
+  routes.route('/', signInRoutes({ db, tokens, flows, provider, adminPassphrase, limiter, signups, publicUrl, log, now }))
 
   routes.use('*', requireToken(tokens))
 
+  /** The PWA calls this on load and focus: it refreshes the profile, and a 401 means signed out or disabled. */
   routes.get('/session', (c) => {
-    const { id, name, kind, user } = c.get('principal')
-    return c.json({ tokenId: id, name, kind, user })
+    const { id, name, kind, userId } = c.get('principal')
+    const user = getUser(db, userId)!
+    const usage = getUsage(db, userId)!
+    return c.json({
+      tokenId: id,
+      name,
+      kind,
+      user: profile(user),
+      usage: { records: usage.records, bytes: usage.bytes },
+      quota: { records: usage.quotaRecords ?? quotas.records, bytes: usage.quotaBytes ?? quotas.bytes },
+    })
   })
 
   routes.post('/logout', (c) => {
@@ -91,11 +95,14 @@ export function authRoutes({
     return c.json({ tokens: [...own, ...grants].sort((a, b) => b.createdAt - a.createdAt) })
   })
 
+  /** The admin account holds no review data, so it gets no API tokens. */
   sessionOnly.post('/', async (c) => {
+    const principal = c.get('principal')
+    if (principal.user.role === 'admin') return c.json({ error: 'forbidden' }, 403)
     const body = (await c.req.json().catch(() => null)) as { name?: unknown } | null
     const name = tokenName(body?.name, '')
     if (!name) return c.json({ error: 'invalid_name' }, 400)
-    const { token, info } = tokens.issue({ userId: c.get('principal').userId, name, kind: 'api' })
+    const { token, info } = tokens.issue({ userId: principal.userId, name, kind: 'api' })
     return c.json({ token, info })
   })
 

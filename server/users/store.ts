@@ -86,3 +86,26 @@ export function ensureAdmin(db: Database, now = Date.now()): void {
     now,
   )
 }
+
+/** GitHub accounts, optionally only those created after `since`; the admin is not counted. */
+export function countUsers(db: Database, since = -1): number {
+  return db.query<{ n: number }, [number]>(`SELECT COUNT(*) AS n FROM users WHERE role = 'user' AND created_at > ?`).get(since)!.n
+}
+
+export interface Usage {
+  records: number
+  bytes: number
+  /** Per-user overrides; null means the configured default. */
+  quotaRecords: number | null
+  quotaBytes: number | null
+}
+
+export function getUsage(db: Database, id: string): Usage | null {
+  return (
+    db
+      .query<Usage, [string]>(
+        'SELECT record_count AS records, data_bytes AS bytes, quota_records AS quotaRecords, quota_bytes AS quotaBytes FROM users WHERE id = ?',
+      )
+      .get(id) ?? null
+  )
+}

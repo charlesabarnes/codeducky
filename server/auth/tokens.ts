@@ -74,6 +74,16 @@ const toInfo = (row: Row): TokenInfo => ({
   grantId: row.grant_id,
 })
 
+const MAX_NAME = 100
+
+/** A token or device name from a request body, or `fallback` when none was given; null when invalid. */
+export function tokenName(value: unknown, fallback: string): string | null {
+  if (value === undefined || value === null || value === '') return fallback
+  if (typeof value !== 'string') return null
+  const name = value.trim()
+  return name && name.length <= MAX_NAME ? name : null
+}
+
 export function createTokenStore(db: Database, now: () => number = Date.now) {
   return {
     /** Returns the raw token once; only its hash is kept. */
