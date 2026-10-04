@@ -1,10 +1,10 @@
-import { createHash } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { cors } from 'hono/cors'
 import { mcpResource, PROTECTED_RESOURCE_PATH, publicOrigin, MCP_PATH } from '../../origin'
 import { ADMIN_USER_ID } from '../../users/store'
 import { clientIp } from '../middleware'
 import { createFailureLimiter, passphraseMatches, type FailureLimiter } from '../passphrase'
+import { CHALLENGE, pkceChallenge, VERIFIER } from '../pkce'
 import { consentPage, errorPage, PAGE_HEADERS } from './consent'
 import { ClientLimitError, type ClientAuthMethod, type GrantType, type OAuthClient, type OAuthStore } from './store'
 
@@ -49,9 +49,6 @@ export function canonicalResource(value: string | undefined, origin: string): st
   }
 }
 
-export const pkceChallenge = (verifier: string) => createHash('sha256').update(verifier).digest('base64url')
-const VERIFIER = /^[A-Za-z0-9\-._~]{43,128}$/
-const CHALLENGE = /^[A-Za-z0-9\-_]{43}$/
 
 type Params = Record<string, string>
 
@@ -79,7 +76,8 @@ type AuthorizeCheck =
 
 export interface OAuthRoutesOptions {
   store: OAuthStore
-  passphrase: string
+  /** Until consent moves to GitHub sign-in, approving needs the admin passphrase; unset refuses every approval. */
+  adminPassphrase?: string
   limiter: FailureLimiter
   registrationLimiter?: FailureLimiter
   publicUrl?: string
@@ -87,7 +85,7 @@ export interface OAuthRoutesOptions {
 
 export function oauthRoutes({
   store,
-  passphrase,
+  adminPassphrase,
   limiter,
   registrationLimiter = createFailureLimiter({ perClient: 20, global: 200, windowMs: 60 * 60_000 }),
   publicUrl,
@@ -256,7 +254,7 @@ export function oauthRoutes({
       c.header('Retry-After', String(retryAfter))
       return htmlPage(c, consentPage({ ...view, error: 'Too many attempts. Wait a few minutes and try again.' }), 429)
     }
-    if (!passphraseMatches(params.passphrase, passphrase)) {
+    if (!adminPassphrase || !passphraseMatches(params.passphrase, adminPassphrase)) {
       limiter.fail(ip)
       return htmlPage(c, consentPage({ ...view, error: 'Wrong passphrase.' }), 401)
     }

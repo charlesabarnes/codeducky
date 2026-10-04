@@ -37,3 +37,10 @@ export function requireToken(tokens: TokenStore, kinds?: readonly TokenKind[]): 
     return next()
   }
 }
+
+/** After requireToken: only the admin's own PWA session, never a token minted for a tool. */
+export const requireAdmin: MiddlewareHandler<AuthEnv> = async (c, next) => {
+  const { kind, user } = c.get('principal')
+  if (kind !== 'session' || user.role !== 'admin') return c.json({ error: 'forbidden' }, 403)
+  return next()
+}

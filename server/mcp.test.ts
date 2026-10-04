@@ -3,14 +3,13 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import type { Database } from 'bun:sqlite'
 import { pairId, type SyncKind, type SyncResponse, type WireChange } from '../shared/sync'
 import { readRecord as readUserRecord } from './records/store'
-import { login, makeApp, mcpClient, request, TEST_ORIGIN } from './testing'
+import { login, makeApp, mcpClient, OWNER, request, TEST_ORIGIN, userIdFor } from './testing'
 import { ADMIN_USER_ID } from './users/store'
 
 const cleanups: (() => void)[] = []
 afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
 
-/** The passphrase sign-in acts as the built-in admin user. */
-const readRecord = (db: Database, kind: SyncKind, id: string) => readUserRecord(db, ADMIN_USER_ID, kind, id)
+const readRecord = (db: Database, kind: SyncKind, id: string) => readUserRecord(db, userIdFor(db, OWNER), kind, id)
 
 const REPO = 'gh:charlesabarnes/invoice-service'
 const anchor = (line: number, text: string) => ({ line, side: 'new', text, before: ['a', 'b'], after: ['c'] })

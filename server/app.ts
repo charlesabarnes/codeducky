@@ -5,12 +5,14 @@ import { parseSyncRequest } from '../shared/sync'
 import { requireToken, type AuthEnv } from './auth/middleware'
 import { oauthRoutes } from './auth/oauth/routes'
 import { createOAuthStore } from './auth/oauth/store'
+import type { IdentityProvider } from './auth/github'
 import { createFailureLimiter, type FailureLimiter } from './auth/passphrase'
 import { authRoutes } from './auth/routes'
 import { createTokenStore } from './auth/tokens'
 import { requireClientBuild } from './clientVersion'
 import { createChannelRegistry, type ChannelRegistry } from './channel/registry'
 import { channelRoutes } from './channel/routes'
+import type { SignupPolicy } from './config'
 import { gateApi, gateScripts } from './gate/routes'
 import { createRateLimiters, perUser, rateLimit, type RateLimits } from './limits'
 import { logErrors, requestLog, stdoutSink, type LogSink } from './log'
@@ -22,11 +24,15 @@ import { ensureAdmin } from './users/store'
 
 export interface AppDeps {
   db: Database
-  passphrase: string
+  /** GitHub, or the fake provider in development and tests. */
+  provider: IdentityProvider
+  /** Unset disables admin sign-in. */
+  adminPassphrase?: string
+  signups?: SignupPolicy
   webDist?: string
   now?: () => number
   log?: LogSink
-  /** Counts failed passphrase attempts from both the PWA sign-in and the OAuth consent page. */
+  /** Counts failed admin passphrase attempts from both admin sign-in and the OAuth consent page. */
   limiter?: FailureLimiter
   registrationLimiter?: FailureLimiter
   /** The public origin, when the proxy in front does not forward the host (CODEDUCKY_PUBLIC_URL). */
@@ -48,7 +54,9 @@ const tooLarge = (maxSize: number) => bodyLimit({ maxSize, onError: (c) => c.jso
 
 export function createApp({
   db,
-  passphrase,
+  provider,
+  adminPassphrase,
+  signups,
   webDist,
   now,
   log = stdoutSink,
@@ -76,7 +84,7 @@ export function createApp({
   const apiBody = tooLarge(MAX_API_BODY)
   api.use('*', (c, next) => (c.req.path === '/api/sync' ? next() : apiBody(c, next)))
   api.get('/health', (c) => c.json({ ok: true }))
-  api.route('/auth', authRoutes({ tokens, oauth, passphrase, limiter }))
+  api.route('/auth', authRoutes({ db, tokens, oauth, provider, adminPassphrase, limiter, limiters, signups, publicUrl, log, now }))
 
   api.post(
     '/sync',
@@ -99,7 +107,7 @@ export function createApp({
   for (const path of ['/mcp', '/oauth/*', '/.well-known/*', '/gate/*']) server.use(path, requestLog(log))
   server.onError(logErrors(log))
   server.use('/oauth/*', tooLarge(MAX_OAUTH_BODY))
-  server.route('/', oauthRoutes({ store: oauth, passphrase, limiter, registrationLimiter, publicUrl }))
+  server.route('/', oauthRoutes({ store: oauth, adminPassphrase, limiter, registrationLimiter, publicUrl }))
   server.route('/', mcpRoutes({ db, tokens, publicUrl, limiter: limiters.mcp }))
   server.route('/', gateScripts(publicUrl))
 

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'bun:test'
+import { ADMIN_SESSION_TTL_MS } from './auth/signin'
 import { createFailureLimiter } from './auth/passphrase'
-import { createUserSession, login, makeApp, PASSPHRASE, request } from './testing'
+import { DEFAULT_QUOTAS } from './records/quota'
+import { ADMIN_PASSPHRASE, adminLogin, createUserSession, login, makeApp, request, signInAs } from './testing'
 import { ADMIN_USER_ID } from './users/store'
 
 const cleanups: (() => void)[] = []
@@ -11,64 +13,110 @@ const setup = (...args: Parameters<typeof makeApp>) => {
 }
 afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
 
+const ADMIN_PROFILE = { id: ADMIN_USER_ID, login: 'admin', name: null, avatarUrl: null, role: 'admin' }
+
 describe('auth', () => {
-  it('signs in with the passphrase and stores only a hash of the token', async () => {
+  it('signs in with GitHub and stores only a hash of the token', async () => {
     const { app, db } = setup()
-    const res = await request(app, 'POST', '/api/auth/login', { passphrase: PASSPHRASE, name: 'Laptop' })
-    expect(res.status).toBe(200)
-    const { token, tokenId } = (await res.json()) as { token: string; tokenId: string }
+    const { token, tokenId, user } = await signInAs(app, 'alice', 'Laptop')
     expect(token).toStartWith('cdb_')
+    expect(user).toMatchObject({ login: 'alice', name: null, avatarUrl: null, role: 'user' })
     const row = db.query<{ token_hash: string; name: string; kind: string }, [string]>('SELECT * FROM tokens WHERE id = ?').get(tokenId)!
     expect(row).toMatchObject({ name: 'Laptop', kind: 'session' })
     expect(row.token_hash).not.toContain(token)
     expect(row.token_hash).toHaveLength(64)
 
     const session = await request(app, 'GET', '/api/auth/session', undefined, token)
-    expect(await session.json()).toEqual({ tokenId, name: 'Laptop', kind: 'session', user: { id: ADMIN_USER_ID, login: 'admin', role: 'admin' } })
+    expect(await session.json()).toEqual({
+      tokenId,
+      name: 'Laptop',
+      kind: 'session',
+      user,
+      usage: { records: 0, bytes: 0 },
+      quota: DEFAULT_QUOTAS,
+    })
   })
 
-  it('refuses a wrong passphrase and requests without a valid token', async () => {
+  it('reports usage and per-user quota overrides in the session', async () => {
+    const { app, db } = setup({ quotas: { records: 7, bytes: 700 } })
+    const { token, user } = await signInAs(app, 'alice')
+    db.query('UPDATE users SET record_count = 3, data_bytes = 120, quota_bytes = 9000 WHERE id = ?').run(user.id)
+    const session = (await (await request(app, 'GET', '/api/auth/session', undefined, token)).json()) as Record<string, unknown>
+    expect(session).toMatchObject({ usage: { records: 3, bytes: 120 }, quota: { records: 7, bytes: 9000 } })
+  })
+
+  it('refuses a wrong admin passphrase and requests without a valid token', async () => {
     const { app } = setup()
-    expect((await request(app, 'POST', '/api/auth/login', { passphrase: 'nope' })).status).toBe(401)
-    expect((await request(app, 'POST', '/api/auth/login', {})).status).toBe(401)
+    expect((await request(app, 'POST', '/api/auth/admin/login', { passphrase: 'nope' })).status).toBe(401)
+    expect((await request(app, 'POST', '/api/auth/admin/login', {})).status).toBe(401)
     expect((await request(app, 'GET', '/api/auth/session')).status).toBe(401)
     expect((await request(app, 'GET', '/api/auth/session', undefined, 'cdb_forged')).status).toBe(401)
     expect((await request(app, 'POST', '/api/sync', { cursor: 0, changes: [] })).status).toBe(401)
   })
 
-  it('rate-limits failed sign-ins per client, and lets the window expire', async () => {
+  it('no longer accepts the passphrase at /login', async () => {
+    const { app } = setup()
+    expect((await request(app, 'POST', '/api/auth/login', { passphrase: ADMIN_PASSPHRASE })).status).toBe(401)
+  })
+
+  it('signs the admin in for 12 hours, with the same reply as the GitHub exchange', async () => {
+    let now = 1_000_000
+    const { app, tokens } = setup({ now: () => now })
+    const res = await request(app, 'POST', '/api/auth/admin/login', { passphrase: ADMIN_PASSPHRASE, name: 'Admin laptop' })
+    expect(res.headers.get('Cache-Control')).toBe('no-store')
+    const body = (await res.json()) as { token: string; tokenId: string; user: unknown }
+    expect(body.user).toEqual(ADMIN_PROFILE)
+    expect(tokens.verify(body.token)).toMatchObject({ id: body.tokenId, name: 'Admin laptop', kind: 'session', expiresAt: now + ADMIN_SESSION_TTL_MS })
+    now += ADMIN_SESSION_TTL_MS
+    expect((await request(app, 'GET', '/api/auth/session', undefined, body.token)).status).toBe(401)
+  })
+
+  it('refuses to mint API tokens for the admin', async () => {
+    const { app } = setup()
+    const { token } = await adminLogin(app)
+    expect((await request(app, 'POST', '/api/auth/tokens', { name: 'CLI' }, token)).status).toBe(403)
+    expect((await request(app, 'GET', '/api/auth/tokens', undefined, token)).status).toBe(200)
+  })
+
+  it('turns admin sign-in off when no admin passphrase is set', async () => {
+    const { app } = setup({ adminPassphrase: undefined })
+    expect((await request(app, 'POST', '/api/auth/admin/login', { passphrase: '' })).status).toBe(404)
+    expect((await request(app, 'POST', '/api/auth/admin/login', { passphrase: ADMIN_PASSPHRASE })).status).toBe(404)
+  })
+
+  it('rate-limits failed admin sign-ins per client, and lets the window expire', async () => {
     let now = 1_000_000
     const limiter = createFailureLimiter({ perClient: 3, global: 50, windowMs: 60_000, now: () => now })
     const { app } = setup({ limiter })
     const attempt = (passphrase: string, ip = '10.0.0.1') =>
-      app.request('/api/auth/login', {
+      app.request('/api/auth/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': ip },
         body: JSON.stringify({ passphrase }),
       })
     for (let i = 0; i < 3; i++) expect((await attempt('wrong')).status).toBe(401)
-    const blocked = await attempt(PASSPHRASE)
+    const blocked = await attempt(ADMIN_PASSPHRASE)
     expect(blocked.status).toBe(429)
     expect(Number(blocked.headers.get('Retry-After'))).toBeGreaterThan(0)
-    expect((await attempt(PASSPHRASE, '10.0.0.2')).status).toBe(200)
+    expect((await attempt(ADMIN_PASSPHRASE, '10.0.0.2')).status).toBe(200)
     now += 60_001
-    expect((await attempt(PASSPHRASE)).status).toBe(200)
+    expect((await attempt(ADMIN_PASSPHRASE)).status).toBe(200)
   })
 
   it('applies a global limit across client addresses', async () => {
     const limiter = createFailureLimiter({ perClient: 100, global: 4, windowMs: 60_000 })
     const { app } = setup({ limiter })
     for (let i = 0; i < 4; i++) {
-      await app.request('/api/auth/login', {
+      await app.request('/api/auth/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': `10.0.1.${i}` },
         body: JSON.stringify({ passphrase: 'wrong' }),
       })
     }
-    const res = await app.request('/api/auth/login', {
+    const res = await app.request('/api/auth/admin/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '10.0.2.1' },
-      body: JSON.stringify({ passphrase: PASSPHRASE }),
+      body: JSON.stringify({ passphrase: ADMIN_PASSPHRASE }),
     })
     expect(res.status).toBe(429)
   })
@@ -114,12 +162,6 @@ describe('auth', () => {
     expect(tokens.list(ADMIN_USER_ID)).toHaveLength(0)
   })
 
-  it('returns the admin account from the passphrase sign-in', async () => {
-    const { app } = setup()
-    const res = await request(app, 'POST', '/api/auth/login', { passphrase: PASSPHRASE })
-    expect(((await res.json()) as { user: unknown }).user).toEqual({ id: ADMIN_USER_ID, login: 'admin', role: 'admin' })
-  })
-
   it('lists, mints and revokes only the signed-in user\'s tokens and grants', async () => {
     const { app, db, oauth } = setup()
     const alice = createUserSession(db, 'alice', 'Alice laptop')
@@ -157,7 +199,7 @@ describe('auth', () => {
     const { app, db } = setup()
     const alice = createUserSession(db, 'alice')
     const session = await request(app, 'GET', '/api/auth/session', undefined, alice.token)
-    expect(((await session.json()) as { user: unknown }).user).toEqual({ id: alice.user.id, login: 'alice', role: 'user' })
+    expect(((await session.json()) as { user: unknown }).user).toEqual({ id: alice.user.id, login: 'alice', name: null, avatarUrl: null, role: 'user' })
 
     db.query("UPDATE users SET status = 'disabled' WHERE id = ?").run(alice.user.id)
     expect((await request(app, 'GET', '/api/auth/session', undefined, alice.token)).status).toBe(401)
