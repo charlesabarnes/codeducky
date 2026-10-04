@@ -14,44 +14,67 @@ export interface ScanState {
   rescan: () => void
 }
 
-const NO_MOVES: MovedIndex = {}
+interface Scanned {
+  source: DiffSource
+  files: FileChange[] | null
+  stats: Record<string, FileStats>
+  moved: MovedIndex
+  renamesLimited: boolean
+  error: string | null
+  done: boolean
+}
 
-/** Lists the source's files, then analyses them (line counts, moved blocks); runs again on rescan or a new source. */
-export function useSessionScan(source: DiffSource): ScanState {
-  const [files, setFiles] = useState<FileChange[] | null>(null)
-  const [stats, setStats] = useState<Record<string, FileStats>>({})
-  const [moved, setMoved] = useState<MovedIndex>(NO_MOVES)
-  const [renamesLimited, setRenamesLimited] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [scanning, setScanning] = useState(true)
+const NO_MOVES: MovedIndex = {}
+const NO_STATS: Record<string, FileStats> = {}
+
+/**
+ * Lists the source's files, then analyses them (line counts, moved blocks); runs again on rescan or a new source.
+ * Results always belong to the current source: after a switch nothing shows until the new source has listed.
+ * A null source scans nothing.
+ */
+export function useSessionScan(source: DiffSource | null): ScanState {
+  const [scanned, setScanned] = useState<Scanned | null>(null)
   const [generation, setGeneration] = useState(0)
 
   useEffect(() => {
+    if (!source) return
     let cancelled = false
+    const update = (patch: Partial<Scanned>) =>
+      !cancelled &&
+      setScanned((current) => ({
+        ...(current?.source === source ? current : { files: null, stats: NO_STATS, moved: NO_MOVES, renamesLimited: false, error: null, done: false }),
+        source,
+        ...patch,
+      }))
     const run = async () => {
-      setScanning(true)
-      setError(null)
+      update({ error: null, done: false })
       try {
         const listed = await source.listFiles()
+        update({ files: listed.files, renamesLimited: listed.renamesLimited })
         if (cancelled) return
-        setFiles(listed.files)
-        setRenamesLimited(listed.renamesLimited)
         const analysis = await source.analyze(listed.files)
-        if (cancelled) return
-        setStats(analysis.stats)
-        setMoved(analysis.moved)
+        update({ stats: analysis.stats, moved: analysis.moved })
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
+        update({ error: err instanceof Error ? err.message : String(err) })
       } finally {
-        if (!cancelled) setScanning(false)
+        update({ done: true })
       }
     }
-    run()
+    void run()
     return () => {
       cancelled = true
     }
   }, [source, generation])
 
   const rescan = useCallback(() => setGeneration((n) => n + 1), [])
-  return { files, stats, moved, renamesLimited, error, scanning, rescan }
+  const current = source && scanned?.source === source ? scanned : null
+  return {
+    files: current?.files ?? null,
+    stats: current?.stats ?? NO_STATS,
+    moved: current?.moved ?? NO_MOVES,
+    renamesLimited: current?.renamesLimited ?? false,
+    error: current?.error ?? null,
+    scanning: source !== null && !current?.done,
+    rescan,
+  }
 }

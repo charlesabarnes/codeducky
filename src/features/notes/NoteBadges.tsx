@@ -20,6 +20,11 @@ export function NoteBadges({ note }: { note: Note }) {
           on GitHub
         </span>
       )}
+      {note.commit && (
+        <span className="badge muted mono" title={`On commit ${note.commit}: the line is gone from the final version of the file`}>
+          @{note.commit.slice(0, 7)}
+        </span>
+      )}
       {note.source === 'claude' && <span className="badge">Claude</span>}
       {note.source === 'mcp' && <span className="badge">MCP</span>}
     </>

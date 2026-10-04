@@ -8,6 +8,7 @@ import { lineKey } from '../../diff/hunks'
 import type { LineActions, NoteAction } from '../../keys/lineActions'
 import { createAnchor } from '../../review/anchor'
 import type { NumberedLine } from '../../review/lines'
+import type { AnchorResult } from '../../review/viewNotes'
 import { NoteCard } from './NoteCard'
 import { NoteEditor } from './NoteEditor'
 
@@ -17,6 +18,12 @@ interface Options {
   notes: Note[]
   lines: Record<NoteSide, NumberedLine[] | null>
   focusedId: string | null
+  /** Where a new note on this diff is anchored; the branch-wide diff anchors on the clicked line itself. */
+  anchorFor?: (side: NoteSide, line: number) => Promise<AnchorResult>
+  /** Why notes cannot be made on this side of the diff, or null when they can. */
+  refuseSide?: (side: NoteSide) => string | null
+  /** Shown when a note cannot be made here. */
+  onRefuse?: (message: string) => void
 }
 
 const ACCEPTS: Record<NoteAction, (note: Note) => boolean> = {
@@ -31,7 +38,7 @@ const summary = (note: Note) => {
   return text.length > 60 ? `${text.slice(0, 59)}…` : text
 }
 
-export function useNoteAnnotations({ sessionId, path, notes, lines, focusedId }: Options): LineAnnotations {
+export function useNoteAnnotations({ sessionId, path, notes, lines, focusedId, anchorFor, refuseSide, onRefuse }: Options): LineAnnotations {
   const [draft, setDraft] = useState<{ path: string; key: string } | null>(null)
   const draftKey = draft?.path === path ? draft.key : null
   const [editingId, setEditingId] = useState<Note['id'] | null>(null)
@@ -50,7 +57,11 @@ export function useNoteAnnotations({ sessionId, path, notes, lines, focusedId }:
 
   const actions: LineActions = {
     noted: new Set(byLine.keys()),
-    comment: (side, line) => setDraft({ path, key: lineKey(side, line) }),
+    comment: (side, line) => {
+      const refusal = refuseSide?.(side)
+      if (refusal) return onRefuse?.(refusal)
+      setDraft({ path, key: lineKey(side, line) })
+    },
     act: (action, keys) => {
       for (const key of keys) {
         const note = byLine.get(key)?.find(ACCEPTS[action])
@@ -99,7 +110,9 @@ export function useNoteAnnotations({ sessionId, path, notes, lines, focusedId }:
               onSubmit={async ({ body, severity }) => {
                 const sideLines = lines[side]
                 if (!sideLines) return
-                await addNote(db, { sessionId, path, anchor: createAnchor(sideLines, line, side), body, severity })
+                const placed = anchorFor ? await anchorFor(side, line) : { anchor: createAnchor(sideLines, line, side) }
+                if ('error' in placed) return onRefuse?.(placed.error)
+                await addNote(db, { sessionId, path, ...placed, body, severity })
                 setDraft(null)
               }}
             />

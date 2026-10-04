@@ -7,7 +7,8 @@ import type { FileChange } from '../../git/types'
 import { useShortcuts } from '../../keys/context'
 import { DiffNavContext, type DiffNavApi, type NavRequest } from '../../keys/diffNavContext'
 import { withShortcut } from '../../keys/help'
-import { sideLines } from '../../review/lines'
+import { sideLines, type NumberedLine } from '../../review/lines'
+import { anchorForView, placeNotes, type NoteView } from '../../review/viewNotes'
 import { UnplacedAnnotations } from '../ci/CiAnnotationCard'
 import { useCiAnnotations } from '../ci/useCiAnnotations'
 import type { CiView } from '../ci/useCiStatus'
@@ -48,19 +49,49 @@ interface FilePaneProps {
   /** Where the keyboard cursor should start, e.g. after n/p crossed into this file. */
   navRequest: NavRequest | null
   onBoundary: (direction: 1 | -1) => boolean
+  /** What this diff is (the whole branch, an interdiff, a commit), for placing and anchoring notes. */
+  noteView?: NoteView
+  /** The file's final content, for anchoring notes made on a commit. */
+  finalLines?: (path: string) => Promise<NumberedLine[] | null>
+  /** Viewed files fold away in the branch-wide view only. */
+  collapseViewed?: boolean
+  /** The file is not in the branch's final diff, so there is nothing to mark viewed. */
+  viewedDisabled?: boolean
+  /** Says why a note cannot be made where it was asked for. */
+  onNoteRefused?: (message: string) => void
 }
+
+const ALL: NoteView = { kind: 'all' }
 
 export function FilePane(props: FilePaneProps) {
   const { sessionId, change, notes, mode, onModeChange, generation, viewed, onToggleViewed, focus } = props
   const { navRequest, onBoundary, ignoreWhitespace, onIgnoreWhitespaceChange, moved, onOpenMoved, ci } = props
-  const { source, threads, threadActions } = props
+  const { source, threads, threadActions, finalLines, collapseViewed = true, viewedDisabled, onNoteRefused } = props
   const { contents, error, loading, loadLarge } = useFileContents(source, change, generation)
   const lines = useMemo(
     () => ({ old: sideLines(contents?.old ?? null), new: sideLines(contents?.new ?? null) }),
     [contents],
   )
-  const focusedId = focus && notes.some((note) => note.id === focus.id) ? focus.id : null
-  const noteAnnotations = useNoteAnnotations({ sessionId, path: change.path, notes, lines, focusedId })
+  const viewKey = props.noteView ? JSON.stringify(props.noteView) : 'all'
+  const noteView = useMemo<NoteView>(() => (viewKey === 'all' ? ALL : (JSON.parse(viewKey) as NoteView)), [viewKey])
+  const placement = useMemo(() => placeNotes(notes, lines.new, noteView), [notes, lines.new, noteView])
+  const focusedId = focus && placement.placed.some((note) => note.id === focus.id) ? focus.id : null
+  const branchWide = noteView.kind === 'all'
+  const noteAnnotations = useNoteAnnotations({
+    sessionId,
+    path: change.path,
+    notes: placement.placed,
+    lines,
+    focusedId,
+    anchorFor: branchWide
+      ? undefined
+      : async (side, line) =>
+          anchorForView(noteView, side, line, lines, noteView.kind === 'commit' && finalLines ? await finalLines(change.path) : null),
+    refuseSide: branchWide
+      ? undefined
+      : (side) => (side === 'old' ? 'In this view, comment on the new (right-hand) side. Base lines take notes in All changes.' : null),
+    onRefuse: onNoteRefused,
+  })
   const withCi = useCiAnnotations(ci, change.path, lines.new?.length ?? null, noteAnnotations)
   const placed = withCi.placed
   const { annotations, listed: listedThreads } = useThreadAnnotations(threads, threadActions, withCi.annotations)
@@ -68,10 +99,11 @@ export function FilePane(props: FilePaneProps) {
   const movedLines = useMemo(() => (moved?.length ? { ranges: moved, onOpen: onOpenMoved } : undefined), [moved, onOpenMoved])
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const paneKey = `${change.path}:${change.oldOid}:${change.newOid}`
-  const collapsed = viewed && expandedKey !== paneKey && focusedId === null && !threadFocused
-  const lost = notes.filter((note) => note.anchorLost && note.status !== 'dismissed')
+  const collapsed = collapseViewed && viewed && expandedKey !== paneKey && focusedId === null && !threadFocused
+  const lost = placement.placed.filter((note) => note.anchorLost && note.status !== 'dismissed')
+  const elsewhere = placement.elsewhere.filter((note) => note.status !== 'dismissed')
 
-  const focusedNote = focusedId === null ? undefined : notes.find((note) => note.id === focusedId)
+  const focusedNote = focusedId === null ? undefined : placement.placed.find((note) => note.id === focusedId)
   const noteRequest = useMemo<NavRequest | null>(
     () =>
       focus && focusedNote && !focusedNote.anchorLost
@@ -135,8 +167,15 @@ export function FilePane(props: FilePaneProps) {
         >
           Hide whitespace
         </button>
-        <label className="viewed-toggle" title={withShortcut('Viewed', 'file.viewed')}>
-          <input type="checkbox" checked={viewed} onChange={onToggleViewed} aria-keyshortcuts="v" /> Viewed
+        <label
+          className="viewed-toggle"
+          title={
+            viewedDisabled
+              ? 'Not in the final diff of the branch, so there is nothing to mark viewed'
+              : withShortcut(branchWide ? 'Viewed' : 'Viewed (per file for the whole branch)', 'file.viewed')
+          }
+        >
+          <input type="checkbox" checked={viewed} onChange={onToggleViewed} disabled={viewedDisabled} aria-keyshortcuts="v" /> Viewed
         </label>
         <div className="segmented" role="group" aria-label="Diff layout" title={withShortcut('Switch layout', 'view.mode')}>
           {(['unified', 'split'] as const).map((option) => (
@@ -153,6 +192,19 @@ export function FilePane(props: FilePaneProps) {
         </div>
       </div>
       <LostNotes notes={lost} heading="Possibly resolved: the anchored line is gone" focusedId={focusedId} />
+      {elsewhere.length > 0 && (
+        <div className="elsewhere-notes">
+          <LostNotes
+            notes={elsewhere}
+            heading={
+              noteView.kind === 'all'
+                ? 'Notes on earlier commits (pick the commit to see them in place)'
+                : 'Notes not on this diff: base lines, lines this view does not show, or another commit'
+            }
+          />
+        </div>
+      )}
+      {contents?.notice && <p className="base-banner warn">{contents.notice}</p>}
       {threadActions && listedThreads.length > 0 && (
         <section className="listed-threads stack" aria-label="Outdated and file comments">
           <h3>

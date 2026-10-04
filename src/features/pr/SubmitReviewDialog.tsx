@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { db } from '../../db/db'
 import type { Note } from '../../db/schema'
+import type { FileChange } from '../../git/types'
 import type { GitHubClient } from '../../github/client'
 import { errorMessage } from '../../github/errors'
 import type { PrSnapshot } from '../../github/prDiff'
@@ -24,10 +25,12 @@ interface SubmitReviewDialogProps {
   notes: Note[]
   pending: PendingReview | null
   viewer: string | null
+  /** The session's files at the head being reviewed, recorded as reviewed when the review is submitted. */
+  reviewedFiles?: readonly FileChange[]
   onClose: () => void
 }
 
-export function SubmitReviewDialog({ sessionId, gh, snapshot, notes, pending, viewer, onClose }: SubmitReviewDialogProps) {
+export function SubmitReviewDialog({ sessionId, gh, snapshot, notes, pending, viewer, reviewedFiles, onClose }: SubmitReviewDialogProps) {
   const dialog = useRef<HTMLDialogElement>(null)
   const { pull, ref, files } = snapshot
   const ownPull = viewer !== null && viewer === pull.author
@@ -54,7 +57,7 @@ export function SubmitReviewDialog({ sessionId, gh, snapshot, notes, pending, vi
     setError(null)
     try {
       const result = await submitPrReview(db, gh, ref, pull, pending, input)
-      await archiveWithReview(db, sessionId, result)
+      await archiveWithReview(db, sessionId, result, Date.now(), reviewedFiles ? { headSha: pull.headSha, files: reviewedFiles } : undefined)
       dialog.current?.close()
     } catch (err) {
       setError(errorMessage(err))

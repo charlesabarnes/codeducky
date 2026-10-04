@@ -44,6 +44,9 @@ export const KEYMAP = [
   { id: 'side.old', keys: ['h', 'ArrowLeft'], label: 'Left side (base) in split view', group: 'Navigation' },
   { id: 'side.new', keys: ['l', 'ArrowRight'], label: 'Right side (changes) in split view', group: 'Navigation' },
   { id: 'gap.expand', keys: ['x'], label: 'Expand collapsed lines next to the focus', group: 'Navigation' },
+  // `]c`/`[c` would never fire: `]` and `[` already step files, and a complete match wins over a longer sequence.
+  { id: 'commit.next', keys: ['}'], label: 'Next commit (from All changes, the first one)', group: 'Navigation', repeat: true },
+  { id: 'commit.prev', keys: ['{'], label: 'Previous commit (before the first, All changes)', group: 'Navigation', repeat: true },
 
   { id: 'note.comment', keys: ['c'], label: 'Comment on the focused line', group: 'Notes' },
   { id: 'note.edit', keys: ['e'], label: 'Edit the note at or near the focus', group: 'Notes' },
@@ -61,6 +64,8 @@ export const KEYMAP = [
   { id: 'view.mode', keys: ['s'], label: 'Switch split and unified', group: 'View' },
   { id: 'view.whitespace', keys: ['w'], label: 'Hide or show whitespace changes', group: 'View' },
   { id: 'files.filter', keys: ['/'], label: 'Filter files', group: 'View' },
+  { id: 'mode.since', keys: ['L'], label: 'Since last look: only what changed since you viewed each file', group: 'View' },
+  { id: 'mode.all', keys: ['g a'], label: 'All changes on the branch', group: 'View' },
   { id: 'tab.files', keys: ['g f'], label: 'Files tab', group: 'View' },
   { id: 'tab.notes', keys: ['g n'], label: 'Notes tab', group: 'View' },
   { id: 'tab.checklists', keys: ['g c'], label: 'Checklists tab', group: 'View' },

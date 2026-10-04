@@ -2,14 +2,13 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { db } from '../../db/db'
-import { setViewed } from '../../db/fileViews'
 import { repoLabel } from '../../db/repos'
 import type { Note, Repo, Session } from '../../db/schema'
 import type { ViewMode } from '../../diff/DiffTable'
 import type { MoveTarget } from '../../diff/moved'
 import type { FileChange, FileStats } from '../../git/types'
 import { orderFiles, riskOf, type Risk } from '../../review/order'
-import { contentHash, viewedPaths } from '../../review/viewed'
+import { viewedPaths } from '../../review/viewed'
 import { SessionChecklists } from '../checklists/SessionChecklists'
 import { useChecklistProgress } from '../checklists/useChecklistProgress'
 import { BaseBanner } from '../github/BaseBanner'
@@ -45,6 +44,11 @@ import { useFileSummary } from './useFileSummary'
 import { useSessionScan } from './useSessionScan'
 import { useViewPrefs } from './useViewPrefs'
 import { repoPath } from '../../app/paths'
+import { ModeBar } from '../modes/ModeBar'
+import { recordViewed } from '../modes/recordViewed'
+import { SinceBanner } from '../modes/SinceBanner'
+import { useReviewMode, type ReviewMode } from '../modes/useReviewMode'
+import { describeRange } from '../../review/commitRange'
 
 const EMPTY_NOTES: Note[] = []
 const NO_THREADS: ReviewThread[] = []
@@ -105,6 +109,10 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
   const filterRef = useRef<HTMLInputElement>(null)
   const { announce } = useKeys()
   const isLocal = dirHandle !== null
+  const modes = useReviewMode({ session, source, scan, dirHandle, pr: pr && { gh: pr.gh, snapshot: pr.snapshot }, generation })
+  const display = modes.display
+  const branchWide = modes.mode.kind === 'all'
+  const [bannerDismissed, setBannerDismissed] = useState(false)
   const freshness = useBaseFreshness(repo, isLocal && scan.files !== null, generation)
   const branchPull = useBranchPull(session, repo, isLocal && scan.files !== null)
 
@@ -118,21 +126,26 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
   const renamed = useMemo(() => renamedPaths(scan.files), [scan.files])
   const noteCounts = useMemo(() => countByFile(notes, renamed), [notes, renamed])
   const risks = useMemo(() => {
-    if (order !== 'risk' || !scan.files) return null
+    if (order !== 'risk' || !display.files) return null
     return new Map<string, Risk>(
-      scan.files.map((file) => [file.path, riskOf(file, { stats: scan.stats[file.path], openNotes: noteCounts.get(file.path)?.open })]),
+      display.files.map((file) => [file.path, riskOf(file, { stats: display.stats[file.path], openNotes: noteCounts.get(file.path)?.open })]),
     )
-  }, [order, scan.files, scan.stats, noteCounts])
+  }, [order, display.files, display.stats, noteCounts])
   const orderedFiles = useMemo(
     () =>
-      orderFiles(scan.files ?? [], order, (file) => ({ stats: scan.stats[file.path], openNotes: noteCounts.get(file.path)?.open })),
-    [scan.files, scan.stats, order, noteCounts],
+      orderFiles(display.files ?? [], order, (file) => ({ stats: display.stats[file.path], openNotes: noteCounts.get(file.path)?.open })),
+    [display.files, display.stats, order, noteCounts],
   )
   const requestedPath = params.get('file')
-  const selectedPath = requestedPath === null ? (orderedFiles[0]?.path ?? null) : currentPath(requestedPath, renamed)
+  const requested = requestedPath === null ? null : currentPath(requestedPath, renamed)
+  // Outside All changes a file that is not in the view falls back to the first one listed.
+  const selectedPath =
+    requested === null || (!branchWide && display.files && !display.files.some((file) => file.path === requested))
+      ? (orderedFiles[0]?.path ?? null)
+      : requested
   const selected = useMemo(
-    () => scan.files?.find((file) => file.path === selectedPath) ?? null,
-    [scan.files, selectedPath],
+    () => display.files?.find((file) => file.path === selectedPath) ?? null,
+    [display.files, selectedPath],
   )
   const fileNotes = useMemo(
     () => notes.filter((note) => currentPath(note.path, renamed) === selectedPath),
@@ -198,8 +211,32 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
     goToFile(target, direction > 0 ? 'first-change' : 'last-change')
     return true
   }
-  const toggleViewed = (file: FileChange) =>
-    setViewed(db, { sessionId, path: file.path, contentHash: contentHash(file), viewed: !viewed.has(file.path) })
+  /** Viewed is per file for the whole branch, so every view toggles the branch's change for the path. */
+  const toggleViewed = (file: FileChange) => {
+    const change = modes.branchChange(file.path)
+    if (!change) return
+    recordViewed(sessionId, change, !viewed.has(change.path), pr ? pr.snapshot.pull.headSha : null).catch((error: unknown) =>
+      console.error('Could not record the review', error),
+    )
+  }
+  const switchMode = (next: ReviewMode, message?: string) => {
+    modes.setMode(next)
+    setNavRequest(null)
+    if (message) announce(message, { visible: true })
+  }
+  const toggleSince = () =>
+    modes.mode.kind === 'since'
+      ? switchMode({ kind: 'all' }, 'All changes')
+      : switchMode({ kind: 'since' }, 'Since last look: only what changed since you viewed each file')
+  const stepCommits = (delta: 1 | -1) => {
+    if (modes.commits.status !== 'ready') return announce(modes.commits.status === 'loading' ? 'Commits are still loading' : 'Could not list the commits', { visible: true })
+    if (modes.commits.commits.length === 0) return announce('No commits on this branch yet', { visible: true })
+    const next = modes.stepCommits(delta)
+    setNavRequest(null)
+    if (next.kind !== 'commits') return announce('All changes', { visible: true })
+    const index = modes.commits.commits.findIndex((commit) => commit.sha === next.toSha)
+    announce(`Commit ${index + 1} of ${modes.commits.commits.length}: ${describeRange(modes.commits.commits, { from: index, to: index })}`, { visible: true })
+  }
   const jumpTo = (note: Note) => {
     selectFile(note.path)
     setFocus({ id: note.id!, at: Date.now() })
@@ -284,6 +321,10 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
     'tab.files': () => switchTab('files'),
     'tab.notes': () => switchTab('notes'),
     'tab.checklists': () => switchTab('checklists'),
+    'mode.since': toggleSince,
+    'mode.all': () => switchMode({ kind: 'all' }, 'All changes'),
+    'commit.next': () => stepCommits(1),
+    'commit.prev': () => stepCommits(-1),
   })
   useShortcuts(
     'session',
@@ -375,14 +416,18 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
           {pr && <TabButton tab="conversation" current={tab} onSelect={setTab} label="Conversation" />}
         </div>
         {scan.error && <p className="error" style={{ padding: '0 1rem' }}>{scan.error}</p>}
-        {tab === 'files' && scan.files && (
+        {tab === 'files' && display.error && display.error !== scan.error && (
+          <p className="error" style={{ padding: '0 1rem' }}>{display.error}</p>
+        )}
+        {tab === 'files' && !display.files && display.scanning && <p className="muted" style={{ padding: '0 1rem' }}>Loading…</p>}
+        {tab === 'files' && display.files && (
           <FileList
             files={shownFiles}
-            total={scan.files.length}
+            total={display.files.length}
             filter={filter}
             onFilterChange={setFilter}
             filterRef={filterRef}
-            stats={scan.stats}
+            stats={display.stats}
             selected={selected?.path ?? null}
             noteCounts={noteCounts}
             viewed={viewed}
@@ -391,6 +436,8 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
             order={order}
             onOrderChange={prefs.setOrder}
             risks={risks}
+            badges={modes.badges}
+            canView={branchWide ? undefined : (path) => modes.branchChange(path) !== null}
           />
         )}
         {tab === 'notes' && <NotesPanel notes={notes} selectedId={focus?.id ?? null} onSelect={jumpTo} />}
@@ -401,11 +448,36 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
         {isLocal && <BaseBanner state={freshness} session={session} repo={repo} />}
         {pr && <PrHeader snapshot={pr.snapshot} conversation={pr.conversation} pendingReview={pr.threads.data?.pendingReview ?? null} />}
         {pr?.threads.error && <p className="diff-notice error">Review threads: {pr.threads.error}</p>}
+        {!bannerDismissed && modes.lastLook.headChange && modes.lastLook.counts && (
+          <SinceBanner
+            change={modes.lastLook.headChange}
+            counts={modes.lastLook.counts}
+            active={modes.mode.kind === 'since'}
+            onShow={() => switchMode({ kind: 'since' })}
+            onDismiss={() => setBannerDismissed(true)}
+          />
+        )}
+        {scan.files && scan.files.length > 0 && (
+          <ModeBar
+            mode={modes.mode}
+            onModeChange={(next) => switchMode(next)}
+            counts={modes.lastLook.counts}
+            showUnchanged={modes.showUnchanged}
+            onShowUnchangedChange={modes.setShowUnchanged}
+            commits={modes.commits}
+            range={modes.range}
+            onPickCommit={(index, extend) => {
+              modes.pickCommit(index, extend)
+              setNavRequest(null)
+            }}
+            isPr={pr !== null}
+          />
+        )}
         {selected ? (
           <FilePane
-            key={selected.path}
+            key={`${display.source.key}:${selected.path}`}
             sessionId={sessionId}
-            source={source}
+            source={display.source}
             threads={fileThreads}
             threadActions={threadActions}
             change={selected}
@@ -414,7 +486,7 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
             onModeChange={changeMode}
             ignoreWhitespace={ignoreWhitespace}
             onIgnoreWhitespaceChange={toggleWhitespace}
-            moved={scan.moved[selected.path]}
+            moved={display.moved[selected.path]}
             onOpenMoved={openMoved}
             ci={ci}
             generation={generation}
@@ -423,11 +495,20 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
             focus={focus}
             navRequest={navRequest}
             onBoundary={onBoundary}
+            noteView={modes.noteViewFor(selected.path)}
+            finalLines={modes.finalLines}
+            collapseViewed={branchWide}
+            viewedDisabled={!branchWide && modes.branchChange(selected.path) === null}
+            onNoteRefused={(message) => announce(message, { visible: true })}
           />
-        ) : selectedPath && fileNotes.length > 0 && scan.files ? (
+        ) : branchWide && selectedPath && fileNotes.length > 0 && scan.files ? (
           <OrphanPane path={selectedPath} notes={fileNotes} focus={focus} />
         ) : (
-          !scan.scanning && <p className="diff-notice muted">Select a file.</p>
+          !display.scanning && (
+            <p className="diff-notice muted">
+              {modes.mode.kind === 'since' && display.files?.length === 0 ? 'Nothing changed since your last look.' : 'Select a file.'}
+            </p>
+          )
         )}
       </section>
       {pushOpen && (
@@ -446,6 +527,7 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
           notes={notes}
           pending={pr.threads.data?.pendingReview ?? null}
           viewer={pr.threads.data?.viewer ?? null}
+          reviewedFiles={scan.files ?? undefined}
           onClose={() => setSubmitOpen(false)}
         />
       )}
