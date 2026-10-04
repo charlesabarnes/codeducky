@@ -69,7 +69,7 @@ export function channelRoutes({ db, tokens, registry, publicUrl }: ChannelRoutes
         stream.writeSSE({ event, data: JSON.stringify(data) }).catch(() => stream.abort())
         return true
       }
-      registry.connect(registration, owner, sink)
+      if (registry.connect(registration, owner, sink) !== 'ok') return
       await holdOpen(stream, registry.heartbeatMs, () => {
         if (!tokens.verify(raw)) {
           registry.removeOwner(owner)
