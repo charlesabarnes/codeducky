@@ -3,6 +3,7 @@ import { clientIp, requireToken, type AuthEnv } from './middleware'
 import { createFailureLimiter, passphraseMatches, type FailureLimiter } from './passphrase'
 import type { OAuthStore } from './oauth/store'
 import type { TokenStore } from './tokens'
+import { ADMIN_USER_ID } from '../users/store'
 
 export interface AuthRoutesOptions {
   tokens: TokenStore
@@ -28,6 +29,7 @@ export function authRoutes({
 }: AuthRoutesOptions) {
   const routes = new Hono<AuthEnv>()
 
+  /** The passphrase signs in to the built-in admin account until GitHub sign-in replaces it. */
   routes.post('/login', async (c) => {
     const ip = clientIp(c)
     const retryAfter = limiter.retryAfter(ip)
@@ -43,37 +45,38 @@ export function authRoutes({
     limiter.succeed(ip)
     const name = tokenName(body?.name, 'Browser')
     if (name === null) return c.json({ error: 'invalid_name' }, 400)
-    const { token, info } = tokens.issue({ name, kind: 'session' })
-    return c.json({ token, tokenId: info.id })
+    const { token, info } = tokens.issue({ userId: ADMIN_USER_ID, name, kind: 'session' })
+    return c.json({ token, tokenId: info.id, user: info.user })
   })
 
   routes.use('*', requireToken(tokens))
 
   routes.get('/session', (c) => {
-    const { id, name, kind } = c.get('principal')
-    return c.json({ tokenId: id, name, kind })
+    const { id, name, kind, user } = c.get('principal')
+    return c.json({ tokenId: id, name, kind, user })
   })
 
   routes.post('/logout', (c) => {
-    tokens.revoke(c.get('principal').id)
+    const { userId, id } = c.get('principal')
+    tokens.revoke(userId, id)
     return c.json({ ok: true })
   })
 
-  /** Token management is for the owner signed in to the PWA, not for API or OAuth clients. */
-  const ownerOnly = new Hono<AuthEnv>()
-  ownerOnly.use('*', async (c, next) => {
+  /** Token management is for the user signed in to the PWA, not for API or OAuth clients, and covers only their own. */
+  const sessionOnly = new Hono<AuthEnv>()
+  sessionOnly.use('*', async (c, next) => {
     if (c.get('principal').kind !== 'session') return c.json({ error: 'forbidden' }, 403)
     return next()
   })
 
   /** OAuth clients are listed once per grant (approval) rather than per short-lived access token. */
-  ownerOnly.get('/', (c) => {
-    const current = c.get('principal').id
+  sessionOnly.get('/', (c) => {
+    const { id: current, userId } = c.get('principal')
     const own = tokens
-      .list()
+      .list(userId)
       .filter((info) => info.grantId === null)
       .map((info) => ({ ...info, current: info.id === current }))
-    const grants = (oauth?.listGrants() ?? []).map((grant) => ({
+    const grants = (oauth?.listGrants(userId) ?? []).map((grant) => ({
       id: grant.id,
       name: grant.clientName,
       kind: 'oauth' as const,
@@ -88,20 +91,21 @@ export function authRoutes({
     return c.json({ tokens: [...own, ...grants].sort((a, b) => b.createdAt - a.createdAt) })
   })
 
-  ownerOnly.post('/', async (c) => {
+  sessionOnly.post('/', async (c) => {
     const body = (await c.req.json().catch(() => null)) as { name?: unknown } | null
     const name = tokenName(body?.name, '')
     if (!name) return c.json({ error: 'invalid_name' }, 400)
-    const { token, info } = tokens.issue({ name, kind: 'api' })
+    const { token, info } = tokens.issue({ userId: c.get('principal').userId, name, kind: 'api' })
     return c.json({ token, info })
   })
 
-  ownerOnly.delete('/:id', (c) => {
+  sessionOnly.delete('/:id', (c) => {
     const id = c.req.param('id')
-    const revoked = tokens.revoke(id) || (oauth?.revokeGrant(id) ?? false)
+    const { userId } = c.get('principal')
+    const revoked = tokens.revoke(userId, id) || (oauth?.revokeUserGrant(userId, id) ?? false)
     return revoked ? c.json({ ok: true }) : c.json({ error: 'not_found' }, 404)
   })
 
-  routes.route('/tokens', ownerOnly)
+  routes.route('/tokens', sessionOnly)
   return routes
 }

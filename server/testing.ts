@@ -1,9 +1,13 @@
+import type { Database } from 'bun:sqlite'
+import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createApp, type AppDeps } from './app'
+import { createTokenStore } from './auth/tokens'
 import { openDatabase } from './db'
 import { silentSink } from './log'
+import { upsertGitHubUser } from './users/store'
 
 export const PASSPHRASE = 'correct horse battery'
 
@@ -11,11 +15,12 @@ export const PASSPHRASE = 'correct horse battery'
 export function makeApp(overrides: Partial<AppDeps> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'codeducky-server-'))
   const db = openDatabase(join(dir, 'test.db'))
-  const { app, tokens, channel } = createApp({ db, passphrase: PASSPHRASE, log: silentSink, ...overrides })
+  const { app, tokens, oauth, channel } = createApp({ db, passphrase: PASSPHRASE, log: silentSink, ...overrides })
   return {
     app,
     db,
     tokens,
+    oauth,
     channel,
     cleanup: () => {
       db.close()
@@ -37,6 +42,16 @@ export async function login(app: App, name?: string): Promise<string> {
   const res = await request(app, 'POST', '/api/auth/login', { passphrase: PASSPHRASE, name })
   if (res.status !== 200) throw new Error(`login failed: ${res.status}`)
   return ((await res.json()) as { token: string }).token
+}
+
+/** A stable fake GitHub id per login, so the same login is the same user across calls. */
+export const githubIdFor = (login: string) => createHash('sha256').update(login).digest().readUInt32BE(0)
+
+/** Signs a GitHub user in without the GitHub round-trip: creates the user if needed and issues a device session. */
+export function createUserSession(db: Database, login: string, name = 'Browser') {
+  const user = upsertGitHubUser(db, { id: githubIdFor(login), login, name: null, avatarUrl: null })
+  const { token } = createTokenStore(db).issue({ userId: user.id, name, kind: 'session' })
+  return { token, user }
 }
 
 export const TEST_ORIGIN = 'http://codeducky.test'
