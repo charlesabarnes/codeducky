@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { auth, type OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js'
 import type { OAuthClientInformationMixed, OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js'
-import { canonicalResource, isAllowedRedirectUri, pkceChallenge } from './auth/oauth/routes'
+import { canonicalResource, isAllowedRedirectUri } from './auth/oauth/routes'
+import { pkceChallenge } from './auth/pkce'
 import { createFailureLimiter } from './auth/passphrase'
-import { appFetch, login, makeApp, mcpClient, PASSPHRASE, request, TEST_ORIGIN } from './testing'
+import { ADMIN_PASSPHRASE, adminLogin, appFetch, makeApp, mcpClient, request, TEST_ORIGIN } from './testing'
 
 const cleanups: (() => void)[] = []
 afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
@@ -65,7 +66,7 @@ const form = (values: Record<string, string>) => new URLSearchParams(values).toS
 const FORM = { 'Content-Type': 'application/x-www-form-urlencoded' }
 
 /** Submits the consent page as the owner would. */
-async function approve(app: App, authorizationUrl: URL, passphrase = PASSPHRASE, decision = 'approve') {
+async function approve(app: App, authorizationUrl: URL, passphrase = ADMIN_PASSPHRASE, decision = 'approve') {
   return app.request(`${TEST_ORIGIN}/oauth/authorize`, {
     method: 'POST',
     headers: FORM,
@@ -159,8 +160,8 @@ describe('oauth flow', () => {
     expect(listed.isError).toBeFalsy()
     await client.close()
 
-    // Settings lists the grant once, under the client's name.
-    const owner = await login(app)
+    // Settings lists the grant once, under the client's name. Until consent signs in with GitHub, it approves for the admin.
+    const { token: owner } = await adminLogin(app)
     const tokens = ((await (await request(app, 'GET', '/api/auth/tokens', undefined, owner)).json()) as { tokens: { id: string; kind: string; name: string }[] })
       .tokens
     const grants = tokens.filter((t) => t.kind === 'oauth')
@@ -252,7 +253,7 @@ describe('oauth flow', () => {
     expect(good).toMatchObject({ status: 400, body: { error: 'invalid_grant' } })
   })
 
-  it('rate-limits the consent passphrase together with sign-in', async () => {
+  it('rate-limits the consent passphrase together with admin sign-in', async () => {
     const limiter = createFailureLimiter({ perClient: 2, global: 50, windowMs: 60_000 })
     const { app } = setup({ limiter })
     const reg = (await (await register(app, { redirect_uris: [REDIRECT], token_endpoint_auth_method: 'none' })).json()) as { client_id: string }
@@ -260,7 +261,7 @@ describe('oauth flow', () => {
       `${TEST_ORIGIN}/oauth/authorize?${form({ response_type: 'code', client_id: reg.client_id, code_challenge: pkceChallenge('v'.repeat(43)), code_challenge_method: 'S256' })}`,
     )
     expect((await approve(app, url, 'wrong')).status).toBe(401)
-    expect((await request(app, 'POST', '/api/auth/login', { passphrase: 'wrong' })).status).toBe(401)
+    expect((await request(app, 'POST', '/api/auth/admin/login', { passphrase: 'wrong' })).status).toBe(401)
     expect((await approve(app, url)).status).toBe(429)
   })
 })
