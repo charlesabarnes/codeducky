@@ -1,5 +1,6 @@
 import type { Database } from 'bun:sqlite'
 import { randomUUID } from 'node:crypto'
+import type { UserRole, UserStatus } from '../users/store'
 import { hashToken, newToken } from './passphrase'
 
 /**
@@ -11,6 +12,9 @@ export type TokenKind = 'session' | 'api' | 'oauth'
 
 export interface TokenInfo {
   id: string
+  /** The user the token acts for; every data access is scoped to them. */
+  userId: string
+  user: { id: string; login: string; role: UserRole }
   name: string
   kind: TokenKind
   createdAt: number
@@ -23,6 +27,7 @@ export interface TokenInfo {
 }
 
 export interface IssueOptions {
+  userId: string
   name: string
   kind: TokenKind
   expiresAt?: number | null
@@ -33,6 +38,11 @@ export interface IssueOptions {
 
 interface Row {
   id: string
+  user_id: string
+  user_login: string
+  user_role: UserRole
+  user_status: UserStatus
+  user_last_seen_at: number | null
   name: string
   kind: TokenKind
   created_at: number
@@ -43,12 +53,17 @@ interface Row {
   grant_id: string | null
 }
 
-const COLUMNS = 'id, name, kind, created_at, last_used_at, expires_at, client_id, scope, grant_id'
-/** last_used_at is only rewritten when it is older than this, to avoid a write per request. */
+const COLUMNS = 'id, user_id, name, kind, created_at, last_used_at, expires_at, client_id, scope, grant_id'
+const SELECT = `SELECT t.id, t.user_id, t.name, t.kind, t.created_at, t.last_used_at, t.expires_at, t.client_id, t.scope, t.grant_id,
+  u.login AS user_login, u.role AS user_role, u.status AS user_status, u.last_seen_at AS user_last_seen_at
+  FROM tokens t JOIN users u ON u.id = t.user_id`
+/** last_used_at and last_seen_at are only rewritten when older than this, to avoid a write per request. */
 const TOUCH_AFTER_MS = 60_000
 
 const toInfo = (row: Row): TokenInfo => ({
   id: row.id,
+  userId: row.user_id,
+  user: { id: row.user_id, login: row.user_login, role: row.user_role },
   name: row.name,
   kind: row.kind,
   createdAt: row.created_at,
@@ -64,36 +79,27 @@ export function createTokenStore(db: Database, now: () => number = Date.now) {
     /** Returns the raw token once; only its hash is kept. */
     issue(options: IssueOptions): { token: string; info: TokenInfo } {
       const token = newToken()
-      const row: Row = {
-        id: randomUUID(),
-        name: options.name,
-        kind: options.kind,
-        created_at: now(),
-        last_used_at: null,
-        expires_at: options.expiresAt ?? null,
-        client_id: options.clientId ?? null,
-        scope: options.scope ?? null,
-        grant_id: options.grantId ?? null,
-      }
-      db.query(`INSERT INTO tokens (token_hash, ${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      const id = randomUUID()
+      db.query(`INSERT INTO tokens (token_hash, ${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
         hashToken(token),
-        row.id,
-        row.name,
-        row.kind,
-        row.created_at,
+        id,
+        options.userId,
+        options.name,
+        options.kind,
+        now(),
         null,
-        row.expires_at,
-        row.client_id,
-        row.scope,
-        row.grant_id,
+        options.expiresAt ?? null,
+        options.clientId ?? null,
+        options.scope ?? null,
+        options.grantId ?? null,
       )
-      return { token, info: toInfo(row) }
+      return { token, info: toInfo(db.query<Row, [string]>(`${SELECT} WHERE t.id = ?`).get(id)!) }
     },
 
     /** The single validation path for every bearer token. */
     verify(token: string): TokenInfo | null {
-      const row = db.query<Row, [string]>(`SELECT ${COLUMNS} FROM tokens WHERE token_hash = ?`).get(hashToken(token))
-      if (!row) return null
+      const row = db.query<Row, [string]>(`${SELECT} WHERE t.token_hash = ?`).get(hashToken(token))
+      if (!row || row.user_status !== 'active') return null
       if (row.expires_at !== null && row.expires_at <= now()) {
         db.query('DELETE FROM tokens WHERE id = ?').run(row.id)
         return null
@@ -102,18 +108,23 @@ export function createTokenStore(db: Database, now: () => number = Date.now) {
         row.last_used_at = now()
         db.query('UPDATE tokens SET last_used_at = ? WHERE id = ?').run(row.last_used_at, row.id)
       }
+      if (row.user_last_seen_at === null || now() - row.user_last_seen_at > TOUCH_AFTER_MS) {
+        db.query('UPDATE users SET last_seen_at = ? WHERE id = ?').run(now(), row.user_id)
+      }
       return toInfo(row)
     },
 
-    list(): TokenInfo[] {
+    list(userId: string): TokenInfo[] {
       db.query('DELETE FROM tokens WHERE expires_at IS NOT NULL AND expires_at <= ?').run(now())
-      return db.query<Row, []>(`SELECT ${COLUMNS} FROM tokens ORDER BY created_at DESC`).all().map(toInfo)
+      return db.query<Row, [string]>(`${SELECT} WHERE t.user_id = ? ORDER BY t.created_at DESC`).all(userId).map(toInfo)
     },
 
-    revoke(id: string): boolean {
-      return db.query('DELETE FROM tokens WHERE id = ?').run(id).changes > 0
+    /** Only the user's own tokens; another user's id is treated as unknown. */
+    revoke(userId: string, id: string): boolean {
+      return db.query('DELETE FROM tokens WHERE id = ? AND user_id = ?').run(id, userId).changes > 0
     },
 
+    /** Internal: callers check that the grant belongs to the user first. */
     revokeGrant(grantId: string): number {
       return db.query('DELETE FROM tokens WHERE grant_id = ?').run(grantId).changes
     },

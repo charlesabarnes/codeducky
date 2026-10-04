@@ -4,6 +4,7 @@ import type { SyncResponse, WireChange } from '../shared/sync'
 import { checklist, note, record, repo, REPO, session, ticked } from './fixtures'
 import { recurringPatterns } from './review/patterns'
 import { login, makeApp, mcpClient, request } from './testing'
+import { ADMIN_USER_ID } from './users/store'
 
 const cleanups: (() => void)[] = []
 afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
@@ -37,7 +38,7 @@ async function setup() {
   const device = await login(made.app)
   const pushed = (await (await request(made.app, 'POST', '/api/sync', { cursor: 0, changes: SEED }, device)).json()) as SyncResponse
   expect(pushed.rejected).toEqual([])
-  const { token } = made.tokens.issue({ name: 'Claude Code', kind: 'api' })
+  const { token } = made.tokens.issue({ userId: ADMIN_USER_ID, name: 'Claude Code', kind: 'api' })
   const client = await mcpClient(made.app, token)
   cleanups.push(() => void client.close())
   const prompt = async (name: string, args: Record<string, string> = {}) => {

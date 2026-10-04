@@ -2,8 +2,8 @@ import type { Database } from 'bun:sqlite'
 import { Hono } from 'hono'
 import { requireToken, type AuthEnv } from '../auth/middleware'
 import type { TokenStore } from '../auth/tokens'
-import { loadData } from '../mcp/records'
 import { publicOrigin } from '../origin'
+import { loadData } from '../records/store'
 import { evaluateGate, gateText } from './gate'
 import { isGateScript, renderScript } from './scripts'
 
@@ -20,7 +20,7 @@ export function gateApi({ db, tokens, publicUrl }: GateOptions) {
     const repo = c.req.query('repo')?.trim()
     const branch = c.req.query('branch')?.trim()
     if (!repo || !branch) return c.json({ error: 'repo (owner/name) and branch are required' }, 400)
-    const result = evaluateGate(loadData(db), repo, branch, publicOrigin(c, publicUrl))
+    const result = evaluateGate(loadData(db, c.get('principal').userId), repo, branch, publicOrigin(c, publicUrl))
     c.header('Cache-Control', 'no-store')
     if (c.req.query('format') === 'text') return c.text(gateText(result))
     return c.json(result)

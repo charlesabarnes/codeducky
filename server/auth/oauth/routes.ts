@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { cors } from 'hono/cors'
 import { mcpResource, PROTECTED_RESOURCE_PATH, publicOrigin, MCP_PATH } from '../../origin'
+import { ADMIN_USER_ID } from '../../users/store'
 import { clientIp } from '../middleware'
 import { createFailureLimiter, passphraseMatches, type FailureLimiter } from '../passphrase'
 import { consentPage, errorPage, PAGE_HEADERS } from './consent'
@@ -253,6 +254,7 @@ export function oauthRoutes({
     }
     limiter.succeed(ip)
     const code = store.createCode({
+      userId: ADMIN_USER_ID,
       clientId: check.client.id,
       redirectUri: check.redirectUri,
       codeChallenge: check.challenge,

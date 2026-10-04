@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { createFailureLimiter } from './auth/passphrase'
-import { login, makeApp, PASSPHRASE, request } from './testing'
+import { createUserSession, login, makeApp, PASSPHRASE, request } from './testing'
+import { ADMIN_USER_ID } from './users/store'
 
 const cleanups: (() => void)[] = []
 const setup = (...args: Parameters<typeof makeApp>) => {
@@ -23,7 +24,7 @@ describe('auth', () => {
     expect(row.token_hash).toHaveLength(64)
 
     const session = await request(app, 'GET', '/api/auth/session', undefined, token)
-    expect(await session.json()).toEqual({ tokenId, name: 'Laptop', kind: 'session' })
+    expect(await session.json()).toEqual({ tokenId, name: 'Laptop', kind: 'session', user: { id: ADMIN_USER_ID, login: 'admin', role: 'admin' } })
   })
 
   it('refuses a wrong passphrase and requests without a valid token', async () => {
@@ -106,10 +107,60 @@ describe('auth', () => {
   it('expires tokens issued with an expiry, through the same validation', () => {
     let now = 5_000
     const { tokens } = setup({ now: () => now })
-    const { token } = tokens.issue({ name: 'oauth client', kind: 'oauth', expiresAt: 10_000, clientId: 'c1' })
+    const { token } = tokens.issue({ userId: ADMIN_USER_ID, name: 'oauth client', kind: 'oauth', expiresAt: 10_000, clientId: 'c1' })
     expect(tokens.verify(token)).toMatchObject({ kind: 'oauth', clientId: 'c1', lastUsedAt: 5_000 })
     now = 10_000
     expect(tokens.verify(token)).toBeNull()
-    expect(tokens.list()).toHaveLength(0)
+    expect(tokens.list(ADMIN_USER_ID)).toHaveLength(0)
+  })
+
+  it('returns the admin account from the passphrase sign-in', async () => {
+    const { app } = setup()
+    const res = await request(app, 'POST', '/api/auth/login', { passphrase: PASSPHRASE })
+    expect(((await res.json()) as { user: unknown }).user).toEqual({ id: ADMIN_USER_ID, login: 'admin', role: 'admin' })
+  })
+
+  it('lists, mints and revokes only the signed-in user\'s tokens and grants', async () => {
+    const { app, db, oauth } = setup()
+    const alice = createUserSession(db, 'alice', 'Alice laptop')
+    const bob = createUserSession(db, 'bob', 'Bob laptop')
+    const minted = (await (await request(app, 'POST', '/api/auth/tokens', { name: 'Alice CLI' }, alice.token)).json()) as {
+      token: string
+      info: { id: string; userId: string }
+    }
+    expect(minted.info.userId).toBe(alice.user.id)
+    const { client } = oauth.registerClient({ name: 'Alice MCP', redirectUris: ['http://localhost/cb'], authMethod: 'none', grantTypes: ['authorization_code'] })
+    const code = oauth.consumeCode(
+      oauth.createCode({ userId: alice.user.id, clientId: client.id, redirectUri: 'http://localhost/cb', codeChallenge: 'x', scope: 'codeducky', resource: 'r' }),
+    )!
+    const { accessToken } = oauth.createGrant(client, code)
+    const grantId = oauth.listGrants(alice.user.id)[0]!.id
+
+    const names = async (token: string) =>
+      ((await (await request(app, 'GET', '/api/auth/tokens', undefined, token)).json()) as { tokens: { name: string }[] }).tokens
+        .map((t) => t.name)
+        .sort()
+    expect(await names(alice.token)).toEqual(['Alice CLI', 'Alice MCP', 'Alice laptop'])
+    expect(await names(bob.token)).toEqual(['Bob laptop'])
+
+    for (const id of [minted.info.id, grantId, alice.user.id]) {
+      expect((await request(app, 'DELETE', `/api/auth/tokens/${id}`, undefined, bob.token)).status).toBe(404)
+    }
+    expect((await request(app, 'GET', '/api/auth/session', undefined, minted.token)).status).toBe(200)
+    expect((await request(app, 'GET', '/api/auth/session', undefined, accessToken)).status).toBe(200)
+
+    expect((await request(app, 'DELETE', `/api/auth/tokens/${grantId}`, undefined, alice.token)).status).toBe(200)
+    expect((await request(app, 'GET', '/api/auth/session', undefined, accessToken)).status).toBe(401)
+  })
+
+  it('scopes the session to its user and refuses tokens of a disabled user', async () => {
+    const { app, db } = setup()
+    const alice = createUserSession(db, 'alice')
+    const session = await request(app, 'GET', '/api/auth/session', undefined, alice.token)
+    expect(((await session.json()) as { user: unknown }).user).toEqual({ id: alice.user.id, login: 'alice', role: 'user' })
+
+    db.query("UPDATE users SET status = 'disabled' WHERE id = ?").run(alice.user.id)
+    expect((await request(app, 'GET', '/api/auth/session', undefined, alice.token)).status).toBe(401)
+    expect((await request(app, 'POST', '/api/sync', { cursor: 0, changes: [] }, alice.token)).status).toBe(401)
   })
 })
