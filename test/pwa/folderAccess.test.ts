@@ -83,4 +83,20 @@ describe('folder access', () => {
     expect(first.requests).toEqual(['read'])
     expect(seen).toEqual([2, 1, 0])
   })
+
+  it('drops a check that finishes after a later restore', async () => {
+    const lapsed = memoryRoot({}, { permissions: { read: 'prompt' } })
+    const db = fakeDb([{ repoId: 'gh:a/one', repo: repo('gh:a/one', 'a', 'one'), handle: lapsed.handle }])
+    const store = new FolderAccessStore(db)
+    await store.refresh()
+    const before: RepoHandle[] = [{ repoId: 'gh:a/one', dirHandle: memoryRoot({}, { permissions: { read: 'prompt' } }).handle }]
+    let release = () => {}
+    vi.spyOn(db.repoHandles, 'toArray').mockImplementationOnce((() => new Promise((resolve) => (release = () => resolve(before)))) as never)
+    const stale = store.refresh()
+    await store.restore()
+    expect(store.getSnapshot().entries[0]!.state).toBe('granted')
+    release()
+    await stale
+    expect(store.getSnapshot().entries[0]!.state).toBe('granted')
+  })
 })

@@ -59,11 +59,11 @@ export class UpdateController {
 
   needRefresh() {
     this.update({ available: true })
-    if (this.snapshot.required) void this.activate()
+    if (this.snapshot.required !== null) void this.activate()
   }
 
   clientOutdated(minimum: string) {
-    if (this.snapshot.required) return
+    if (this.snapshot.required !== null) return
     this.update({ required: minimum })
     void this.force()
   }

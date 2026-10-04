@@ -64,12 +64,24 @@ describe('UpdateController', () => {
     expect(looping.reload).toHaveBeenCalledOnce()
   })
 
-  it('ignores repeated 426s', async () => {
-    const { updater, worker } = controller({ waiting: true })
-    updater.clientOutdated('m')
-    updater.clientOutdated('m')
+  it('ignores repeated 426s, even without a minimum', async () => {
+    for (const minimum of ['m', '']) {
+      const { updater, worker } = controller({ waiting: true })
+      updater.clientOutdated(minimum)
+      updater.clientOutdated(minimum)
+      await settle()
+      expect(worker.check, minimum).toHaveBeenCalledOnce()
+    }
+  })
+
+  it('activates a version that arrives after a 426 without a minimum', async () => {
+    const { updater, worker } = controller({ lastForcedReload: 1_000_000 })
+    updater.clientOutdated('')
     await settle()
-    expect(worker.check).toHaveBeenCalledOnce()
+    expect(worker.activate).not.toHaveBeenCalled()
+    updater.needRefresh()
+    await settle()
+    expect(worker.activate).toHaveBeenCalledOnce()
   })
 
   it('lets the user retry when activation fails', async () => {

@@ -68,6 +68,7 @@ export class FolderAccessStore {
   private snapshot: FolderAccessSnapshot = { checked: false, entries: [] }
   private readonly listeners = new Set<() => void>()
   private readonly db: FolderDb
+  private generation = 0
 
   constructor(db: FolderDb) {
     this.db = db
@@ -85,12 +86,16 @@ export class FolderAccessStore {
     this.listeners.forEach((listener) => listener())
   }
 
+  /** A check that finishes after a later check or restore has started is stale and dropped. */
   async refresh(): Promise<void> {
-    this.set(await checkFolderAccess(this.db))
+    const generation = ++this.generation
+    const entries = await checkFolderAccess(this.db)
+    if (generation === this.generation) this.set(entries)
   }
 
   /** Re-requests access for the given repos, or every repo that needs it. */
   async restore(repoIds?: string[]): Promise<void> {
+    this.generation++
     const targets = this.snapshot.entries.filter((entry) => !repoIds || repoIds.includes(entry.repoId))
     const restored = new Map((await restoreFolderAccess(targets)).map((entry) => [entry.repoId, entry]))
     this.set(this.snapshot.entries.map((entry) => restored.get(entry.repoId) ?? entry))
