@@ -93,3 +93,198 @@
 .copy-row > button {
   padding: 2px 10px;
 }
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.signin-callback p {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-signin > summary,
+.delete-account > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--fg-2);
+}
+
+.admin-signin > summary:hover,
+.delete-account > summary:hover {
+  color: var(--fg);
+}
+
+.admin-signin[open] > summary,
+.delete-account[open] > summary {
+  margin-bottom: 8px;
+}
+
+.avatar {
+  flex: none;
+  border: 1px solid var(--line);
+}
+
+.avatar-glyph {
+  padding: 1px;
+  color: var(--fg-2);
+}
+
+.admin-badge {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.account-chip {
+  position: relative;
+}
+
+.account-button {
+  gap: 6px;
+}
+
+.account-button[aria-expanded='true'] {
+  color: var(--fg);
+}
+
+.account-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 240px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  box-shadow: var(--shadow);
+}
+
+.account-menu-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+}
+
+.stack-tight {
+  display: grid;
+}
+
+.account-menu [role='menuitem'] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 12px;
+  border: none;
+  background: none;
+  color: var(--fg);
+  font-weight: 400;
+  text-align: left;
+}
+
+.account-menu [role='menuitem']:hover,
+.account-menu [role='menuitem']:focus-visible {
+  filter: none;
+  background: var(--bg-3);
+  text-decoration: none;
+}
+
+.account-menu [role='menuitem']::before {
+  content: '>' / '';
+  width: 1ch;
+  color: transparent;
+}
+
+.account-menu [role='menuitem']:hover::before,
+.account-menu [role='menuitem']:focus-visible::before {
+  color: var(--accent);
+}
+
+.account-menu [role='menuitem'].danger {
+  border-top: 1px solid var(--line);
+  color: var(--del-fg);
+}
+
+.account-name {
+  gap: 6px;
+}
+
+.account-name strong {
+  font-weight: 600;
+}
+
+.usage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-2);
+}
+
+.usage-meter {
+  flex: none;
+  width: 120px;
+  height: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+}
+
+.usage-meter > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.usage-meter > span.full {
+  background: var(--del-fg);
+}
+
+.sign-out-actions {
+  gap: 8px;
+}
+
+button.secondary.danger-text {
+  color: var(--del-fg);
+}
+
+button.danger-button {
+  border-color: var(--del-fg);
+  background: var(--del-fg);
+  color: var(--bg);
+}
+
+.switch-dialog {
+  width: min(560px, calc(100vw - 2rem));
+}
+
+.switch-dialog .modal-body {
+  padding: 12px 14px;
+}
+
+.switch-accounts {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+}
+
+.switch-account {
+  display: grid;
+}
+
+.switch-account strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

@@ -1,8 +1,9 @@
-import { CircleCheck, PlugZap } from 'lucide-react'
+import { CircleAlert, CircleCheck, PlugZap } from 'lucide-react'
 import { useState } from 'react'
 import { createGitHubClient } from '../../github/client'
 import { errorMessage } from '../../github/errors'
 import type { Viewer } from '../../github/types'
+import { useSyncState } from '../../sync/client'
 import './github.css'
 
 type State = { status: 'idle' } | { status: 'testing' } | { status: 'ok'; viewer: Viewer } | { status: 'error'; message: string }
@@ -11,6 +12,8 @@ export function TokenTest({ token }: { token: string }) {
   const [state, setState] = useState<State>({ status: 'idle' })
   const [testedToken, setTestedToken] = useState(token)
   const current = testedToken === token ? state : { status: 'idle' as const }
+  const { user } = useSyncState()
+  const mismatch = current.status === 'ok' && user?.role === 'user' && current.viewer.login.toLowerCase() !== user.login.toLowerCase()
 
   const test = async () => {
     setTestedToken(token)
@@ -45,6 +48,12 @@ export function TokenTest({ token }: { token: string }) {
         )}
       </div>
       {current.status === 'ok' && current.viewer.scopes && <small className="muted">Scopes: {current.viewer.scopes.join(', ') || 'none'}.</small>}
+      {mismatch && (
+        <small className="warn-text">
+          <CircleAlert size={12} aria-hidden /> This token belongs to @{current.viewer.login}, but you are signed in to Code Ducky as @
+          {user.login}.
+        </small>
+      )}
       {current.status === 'error' && <small className="error">{current.message}</small>}
     </div>
   )

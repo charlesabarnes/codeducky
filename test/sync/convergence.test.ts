@@ -7,7 +7,7 @@ import { saveOpenedRepo } from '../../src/db/repos'
 import { startOrResumeSession } from '../../src/db/sessions'
 import { runSync } from '../../src/sync/engine'
 import { SyncController } from '../../src/sync/controller'
-import { FakeSyncServer } from '../support/fakeSyncServer'
+import { fakeBrowser, FakeSyncServer, signInWithGitHub, type FakeBrowser } from '../support/fakeSyncServer'
 
 const opened: { db: CodeDuckyDb; controller: SyncController }[] = []
 afterEach(async () => {
@@ -20,10 +20,14 @@ afterEach(async () => {
 
 function client(name: string, server: FakeSyncServer) {
   const db = new CodeDuckyDb(name)
-  const controller = new SyncController(db, { fetch: server.fetch, listenToBrowser: false, debounceMs: 10_000, intervalMs: 3_600_000 })
+  const browser = fakeBrowser(server)
+  const controller = new SyncController(db, { ...browser, listenToBrowser: false, debounceMs: 10_000, intervalMs: 3_600_000 })
   opened.push({ db, controller })
-  return { db, controller }
+  return { db, controller, browser, server }
 }
+
+const signIn = (c: { controller: SyncController; browser: FakeBrowser; server: FakeSyncServer }, name: string) =>
+  signInWithGitHub(c.controller, c.browser, c.server, 'me', name)
 
 const anchor = { line: 1, side: 'new' as const, text: 'x', before: [], after: [] }
 const folder = (name: string) => ({ kind: 'directory', name }) as unknown as FileSystemDirectoryHandle
@@ -55,10 +59,10 @@ describe('two clients', () => {
     const doomed = await addNote(a.db, { sessionId, path: 'src/a.ts', anchor, body: 'doomed', severity: 'nit' })
     const listId = await createChecklist(a.db, 'global', { title: 'Before push', items: ['Tests pass'] })
     await a.db.fileViews.put({ sessionId, path: 'src/a.ts', contentHash: 'c', viewed: true })
-    expect(await a.controller.signIn('pass', 'A')).toBe('ok')
+    expect(await signIn(a, 'A')).toBe('ok')
     expect(server.live('notes')).toHaveLength(2)
 
-    expect(await b.controller.signIn('pass', 'B')).toBe('ok')
+    expect(await signIn(b, 'B')).toBe('ok')
     expect(await contents(b.db)).toEqual(await contents(a.db))
     expect(await b.db.repoHandles.count()).toBe(0)
 
@@ -101,8 +105,8 @@ describe('two clients', () => {
     const server = new FakeSyncServer()
     const a = client('del-a', server)
     const b = client('del-b', server)
-    await a.controller.signIn('pass', 'A')
-    await b.controller.signIn('pass', 'B')
+    await signIn(a, 'A')
+    await signIn(b, 'B')
     const id = await addNote(a.db, { sessionId: 's', path: 'x', anchor, body: 'bye', severity: 'nit' })
     await a.controller.sync()
     await b.controller.sync()
@@ -121,8 +125,8 @@ describe('two clients', () => {
     const server = new FakeSyncServer()
     const a = client('race-a', server)
     const b = client('race-b', server)
-    await a.controller.signIn('pass', 'A')
-    await b.controller.signIn('pass', 'B')
+    await signIn(a, 'A')
+    await signIn(b, 'B')
     const id = await addNote(a.db, { sessionId: 's', path: 'x', anchor, body: 'v1', severity: 'nit' })
     await a.controller.sync()
     await b.controller.sync()
@@ -141,7 +145,7 @@ describe('two clients', () => {
   it('parks refused records, and retries or discards them', async () => {
     const server = new FakeSyncServer()
     const a = client('reject-a', server)
-    await a.controller.signIn('pass', 'A')
+    await signIn(a, 'A')
     server.reject = (change) => (change.kind === 'notes' && change.data?.body === 'bad' ? 'not allowed' : null)
     const bad = await addNote(a.db, { sessionId: 's', path: 'x', anchor, body: 'bad', severity: 'nit' })
     const good = await addNote(a.db, { sessionId: 's', path: 'x', anchor, body: 'good', severity: 'nit' })
@@ -165,10 +169,10 @@ describe('two clients', () => {
   })
 
   it('pulls in pages', async () => {
-    const server = new FakeSyncServer('pass', 3)
+    const server = new FakeSyncServer(3)
     const a = client('page-a', server)
     const b = client('page-b', server)
-    await a.controller.signIn('pass', 'A')
+    await signIn(a, 'A')
     for (let i = 0; i < 8; i++) await addNote(a.db, { sessionId: 's', path: `f${i}`, anchor, body: String(i), severity: 'nit' })
     await a.controller.sync()
     const result = await runSync(b.db, (request) => Promise.resolve(server.handle(request)))
@@ -179,7 +183,7 @@ describe('two clients', () => {
   it('stops syncing when the token is revoked and keeps local data', async () => {
     const server = new FakeSyncServer()
     const a = client('revoke-a', server)
-    await a.controller.signIn('pass', 'A')
+    await signIn(a, 'A')
     server.revokeAll()
     await addNote(a.db, { sessionId: 's', path: 'x', anchor, body: 'kept', severity: 'nit' })
     await a.controller.sync()
@@ -187,22 +191,23 @@ describe('two clients', () => {
     expect(await a.db.notes.count()).toBe(1)
     expect(await a.db.outbox.count()).toBe(1)
 
-    expect(await a.controller.signIn('wrong', 'A')).toBe('invalid')
-    expect(await a.controller.signIn('pass', 'A')).toBe('ok')
+    await a.controller.beginGitHubSignIn('A')
+    expect(await a.controller.completeSignIn('forged')).toBe('invalid')
+    expect(await signIn(a, 'A')).toBe('ok')
     expect(server.live('notes')).toHaveLength(1)
   })
 
   it('signs out without losing local data or unsent changes', async () => {
     const server = new FakeSyncServer()
     const a = client('signout-a', server)
-    await a.controller.signIn('pass', 'A')
+    await signIn(a, 'A')
     server.offline = true
     await addNote(a.db, { sessionId: 's', path: 'x', anchor, body: 'unsent', severity: 'nit' })
     await a.controller.signOut()
     expect(a.controller.getSnapshot().auth).toBe('signedOut')
     expect(await a.db.outbox.count()).toBe(1)
     server.offline = false
-    await a.controller.signIn('pass', 'A')
+    await signIn(a, 'A')
     expect(server.live('notes')).toHaveLength(1)
   })
 
@@ -210,9 +215,10 @@ describe('two clients', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
     const server = new FakeSyncServer()
     const db = new CodeDuckyDb('auto-a')
-    const controller = new SyncController(db, { fetch: server.fetch, listenToBrowser: false, debounceMs: 50 })
+    const browser = fakeBrowser(server)
+    const controller = new SyncController(db, { ...browser, listenToBrowser: false, debounceMs: 50 })
     opened.push({ db, controller })
-    await controller.signIn('pass', 'A')
+    await signInWithGitHub(controller, browser, server, 'me', 'A')
     await addNote(db, { sessionId: 's', path: 'x', anchor, body: 'auto', severity: 'nit' })
     await vi.waitFor(async () => {
       await vi.advanceTimersByTimeAsync(60)
@@ -225,12 +231,12 @@ describe('app start', () => {
   it('syncs as soon as a signed-in device starts', async () => {
     const server = new FakeSyncServer()
     const a = client('start-a', server)
-    await a.controller.signIn('pass', 'A')
+    await signIn(a, 'A')
     await addNote(a.db, { sessionId: 's', path: 'x', anchor, body: 'from A', severity: 'nit' })
     await a.controller.sync()
 
     const b = client('start-b', server)
-    await b.controller.signIn('pass', 'B')
+    await signIn(b, 'B')
     b.controller.dispose()
     await addNote(a.db, { sessionId: 's', path: 'y', anchor, body: 'later', severity: 'nit' })
     await a.controller.sync()

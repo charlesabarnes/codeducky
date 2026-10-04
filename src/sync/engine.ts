@@ -1,4 +1,4 @@
-import { Dexie } from 'dexie'
+import { Dexie, type Table } from 'dexie'
 import { SYNC_KINDS, wins, type ServerChange, type SyncRequest, type SyncResponse, type WireChange } from '../../shared/sync'
 import type { CodeDuckyDb } from '../db/db'
 import { META_CURSOR, META_LAST_SYNCED_AT, getMeta, setMeta } from './meta'
@@ -29,8 +29,8 @@ const syncTables = (db: CodeDuckyDb) => [...SYNC_KINDS.map((kind) => db.table(ki
  * database, `await undefined`) silently drops the transaction. Helpers called from `fn` therefore
  * start with a database read.
  */
-export function remoteTransaction<T>(db: CodeDuckyDb, fn: () => Promise<T>): Promise<T> {
-  return db.transaction('rw', syncTables(db), () => {
+export function remoteTransaction<T>(db: CodeDuckyDb, fn: () => Promise<T>, tables: Table[] = syncTables(db)): Promise<T> {
+  return db.transaction('rw', tables, () => {
     markRemote(Dexie.currentTransaction.idbtrans)
     return fn()
   })
