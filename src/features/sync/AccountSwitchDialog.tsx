@@ -13,12 +13,14 @@ export function AccountSwitchDialog() {
 
 function SwitchDialog({ request }: { request: SwitchRequest }) {
   const dialog = useRef<HTMLDialogElement>(null)
+  const cancelButton = useRef<HTMLButtonElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { from, to, unsent } = request
 
   useEffect(() => {
     dialog.current?.showModal()
+    cancelButton.current?.focus()
   }, [])
 
   const confirm = async () => {
@@ -80,7 +82,7 @@ function SwitchDialog({ request }: { request: SwitchRequest }) {
       </div>
       <footer className="modal-foot">
         <p>Appearance and keyboard settings stay.</p>
-        <button type="button" className="secondary" autoFocus disabled={busy} onClick={() => void syncController.cancelSwitch()}>
+        <button type="button" ref={cancelButton} className="secondary" disabled={busy} onClick={() => void syncController.cancelSwitch()}>
           cancel
         </button>
         <button type="button" className="danger-button" disabled={busy} onClick={() => void confirm()}>
