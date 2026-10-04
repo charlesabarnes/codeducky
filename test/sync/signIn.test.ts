@@ -60,6 +60,14 @@ describe('GitHub sign-in', () => {
     expect(a.controller.getSnapshot().auth).toBe('signedOut')
   })
 
+  it('reports a disabled account', async () => {
+    const server = new FakeSyncServer()
+    server.disabled.add('mallory')
+    const a = tab('disabled-account', server)
+    expect(await a.signIn('mallory')).toBe('disabled')
+    expect(a.controller.getSnapshot().auth).toBe('signedOut')
+  })
+
   it('reports offline when the exchange cannot reach the server', async () => {
     const server = new FakeSyncServer()
     const a = tab('offline', server)

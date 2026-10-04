@@ -1,7 +1,8 @@
+import { isRange, lastLine, lineSpan } from '../../shared/anchor'
 import { githubPrUrl, prUrl } from '../../shared/links'
 import { repoLabel, sessionChecklists, type DataSnapshot, type NoteRecord, type SessionRecord } from './records'
 
-/** How notes and checklists look in tool results. */
+/** How notes and checklists look in tool results. Pure functions of one user's snapshot, with no database access. */
 
 export const iso = (ms: number) => new Date(ms).toISOString()
 
@@ -15,13 +16,19 @@ export function noteView(note: NoteRecord, data: DataSnapshot) {
     session: note.sessionId,
     path: note.path,
     line: note.anchor.line,
+    ...(isRange(note.anchor) ? { endLine: lastLine(note.anchor), lines: lineSpan(note.anchor) } : {}),
     side: note.anchor.side,
     severity: note.severity,
     status: note.status,
     source: note.source,
     ...(note.title ? { title: note.title } : {}),
     body: note.body,
-    anchor: { text: note.anchor.text, before: note.anchor.before, after: note.anchor.after },
+    anchor: {
+      text: note.anchor.text,
+      ...(note.anchor.rangeText?.length ? { rangeText: note.anchor.rangeText } : {}),
+      before: note.anchor.before,
+      after: note.anchor.after,
+    },
     anchorLost: Boolean(note.anchorLost),
     ...(note.resolution ? { resolution: { ...note.resolution, at: iso(note.resolution.at) } } : {}),
   }

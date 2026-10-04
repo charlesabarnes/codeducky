@@ -18,6 +18,7 @@ const MESSAGES: Record<string, string> = {
   account_disabled: 'This account is disabled. Ask the server admin.',
   github_error: 'GitHub could not complete the sign-in. Try again.',
   rate_limited: 'Too many sign-in attempts. Wait a few minutes and try again.',
+  disabled: 'This account is disabled. Ask the server admin.',
   invalid: 'The sign-in link expired or was already used. Try again.',
   offline: 'Could not reach the server.',
   error: 'The server could not sign you in.',

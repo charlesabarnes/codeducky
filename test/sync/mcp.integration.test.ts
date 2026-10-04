@@ -10,14 +10,14 @@ import { saveOpenedRepo } from '../../src/db/repos'
 import { startOrResumeSession } from '../../src/db/sessions'
 import { acceptSuggestion } from '../../src/db/suggestions'
 import { SyncController } from '../../src/sync/controller'
+import { signInDevice } from '../support/deviceSignIn'
 import { startServer } from '../support/realServer'
 
-const PASSPHRASE = 'mcp integration passphrase'
 let base = ''
 let stop = () => {}
 
 beforeAll(async () => {
-  ;({ base, stop } = await startServer(PASSPHRASE))
+  ;({ base, stop } = await startServer())
 })
 
 afterAll(() => stop())
@@ -42,7 +42,7 @@ describe('MCP against the real server', () => {
       const noteId = await addNote(db, { sessionId, path: 'src/tax.ts', anchor, body: 'Round before multiplying.', severity: 'issue' })
       await addNote(db, { sessionId, path: 'src/tax.ts', anchor: { ...anchor, line: 2 }, body: 'Typo', severity: 'nit' })
       const listId = await createChecklist(db, 'global', { title: 'Before push', items: ['Tests pass'] })
-      expect(await controller.adminSignIn(PASSPHRASE, 'Laptop')).toBe('ok')
+      await signInDevice(controller, db, base, 'alice', 'Laptop')
       const { token } = await controller.mintToken('Claude Code')
 
       const client = new Client({ name: 'integration', version: '1.0.0' })

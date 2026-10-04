@@ -32,6 +32,8 @@ export class FakeSyncServer {
   /** Refuses a pushed change with this message, as server-side validation would. */
   reject: (change: WireChange) => string | null = () => null
   adminPassphrase = 'pass'
+  /** Logins whose accounts the admin disabled. */
+  readonly disabled = new Set<string>()
   quota = { records: 20_000, bytes: 50 * 1024 * 1024 }
 
   constructor(private readonly pageSize = SYNC_PAGE_SIZE) {}
@@ -127,7 +129,8 @@ export class FakeSyncServer {
     if (path === '/api/auth/exchange') {
       const handoff = this.handoffs.get(body?.handoff)
       this.handoffs.delete(body?.handoff)
-      if (!handoff || (await challengeOf(String(body?.verifier))) !== handoff.challenge) return json({ error: 'invalid_handoff' }, 400)
+      if (!handoff || (await challengeOf(String(body?.verifier))) !== handoff.challenge) return json({ error: 'invalid_handoff' }, 401)
+      if (this.disabled.has(handoff.user.login)) return json({ error: 'account_disabled' }, 403)
       return json(this.issue(handoff.user))
     }
     if (path === '/api/auth/admin/login') {

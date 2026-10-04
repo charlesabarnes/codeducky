@@ -1,4 +1,5 @@
 import type { Note } from '../db/schema'
+import { isRange, linesLabel } from '../review/anchor'
 import type { NumberedLine } from '../review/lines'
 import { matchAnchor } from '../review/match'
 import { patchSideLines } from '../review/patch'
@@ -73,13 +74,15 @@ export function placeNotes(notes: readonly Note[], files: readonly PullFile[], r
     }
     const match = matchAnchor(note.anchor, linesFor(file, side))
     if (!match) {
-      placement.unplaced.push({ note, reason: 'Line is not in the pull request diff' })
+      const reason = isRange(note.anchor) ? 'Lines are not all in one hunk of the pull request diff' : 'Line is not in the pull request diff'
+      placement.unplaced.push({ note, reason })
       continue
     }
+    const range = match.endLine > match.line ? { startLine: match.line, startSide: side } : {}
     placement.placed.push({
       note,
       exact: match.kind === 'exact',
-      comment: { path: file.path, line: match.line, side, body: commentBody(note) },
+      comment: { path: file.path, line: match.endLine, side, ...range, body: commentBody(note) },
     })
   }
   return placement
@@ -93,7 +96,7 @@ function indent(text: string): string {
 }
 
 function bodyItem(note: Note): string {
-  const where = `line ${note.anchor.line}${note.anchor.side === 'old' ? ' (base)' : ''}`
+  const where = `${linesLabel(note.anchor)}${note.anchor.side === 'old' ? ' (base)' : ''}`
   const excerpt = noteExcerpt(note)
   const fence = fenceFor(excerpt)
   const text = note.body.trim() || '_No text._'

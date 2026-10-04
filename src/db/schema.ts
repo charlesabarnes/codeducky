@@ -119,11 +119,17 @@ export interface ReviewSnapshot {
 }
 
 export interface NoteAnchor {
+  /** The line, or the first line of a range. */
   line: number
   side: NoteSide
+  /** The text of `line`. */
   text: string
   before: string[]
   after: string[]
+  /** The last line of a multi-line note; absent on a single line. */
+  endLine?: number
+  /** With endLine: the text of every line from `line` to `endLine` (empty on a line-only anchor from MCP). */
+  rangeText?: string[]
 }
 
 export interface NoteResolution {

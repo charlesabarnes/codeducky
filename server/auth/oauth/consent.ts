@@ -1,4 +1,4 @@
-const escapeHtml = (value: string) =>
+export const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!)
 
 /** The same palette as the PWA (src/styles.css), so the consent page feels like part of the app. */
@@ -21,7 +21,7 @@ button.primary{background:var(--accent);color:var(--accent-fg)}button.secondary{
 .error{color:var(--del-fg)}
 `
 
-function page(title: string, body: string): string {
+export function page(title: string, body: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(title)} · Code Ducky</title><style>${STYLE}</style></head><body><main><p class="brand">Code Ducky</p>${body}</main></body></html>`
 }
@@ -45,7 +45,7 @@ export function consentPage({ clientName, redirectUri, params, error }: ConsentV
 <p>After you approve, you are sent to:</p>
 <p class="uri">${escapeHtml(redirectUri)}</p>
 <form method="post" action="/oauth/authorize">${hidden}
-<label>Owner passphrase<input type="password" name="passphrase" autocomplete="current-password" required autofocus></label>
+<label>Admin passphrase<input type="password" name="passphrase" autocomplete="current-password" required autofocus></label>
 ${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ''}
 <div class="row"><button class="primary" type="submit" name="decision" value="approve">Approve</button>
 <button class="secondary" type="submit" name="decision" value="deny" formnovalidate>Deny</button></div>

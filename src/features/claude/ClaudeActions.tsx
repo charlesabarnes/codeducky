@@ -6,6 +6,7 @@ import { readStorage, writeStorage } from '../../app/storage'
 import { channelClient, useChannel } from '../../channel/client'
 import { claudeDeepLink, customPrompt, linkPrompt, type LinkTarget } from '../../channel/deepLink'
 import type { Note, Repo, Session } from '../../db/schema'
+import { lineSpan } from '../../review/anchor'
 import { SeverityLabel } from '../notes/Severity'
 import { PermissionPrompt } from './PermissionPrompt'
 import { TaskList } from './TaskList'
@@ -97,6 +98,7 @@ const toTaskNote = (note: Note): TaskNote => ({
   id: note.id!,
   path: note.path,
   line: note.anchor.line,
+  ...(note.anchor.endLine ? { endLine: note.anchor.endLine } : {}),
   severity: note.severity,
   title: note.title,
   body: note.body,
@@ -209,7 +211,7 @@ function SendToClaude({ session, target, notes }: { session: Session; target: Li
                             <input type="checkbox" checked={included.has(note.id!)} onChange={() => toggle(note.id!)} />{' '}
                             <SeverityLabel severity={note.severity} />{' '}
                             <span>
-                              {note.path}:{note.anchor.line}
+                              {note.path}:{lineSpan(note.anchor)}
                             </span>{' '}
                             {note.title ?? note.body.slice(0, 80)}
                           </label>

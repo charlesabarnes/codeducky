@@ -1,12 +1,12 @@
-import { createHash } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { cors } from 'hono/cors'
 import { mcpResource, PROTECTED_RESOURCE_PATH, publicOrigin, MCP_PATH } from '../../origin'
 import { ADMIN_USER_ID } from '../../users/store'
 import { clientIp } from '../middleware'
 import { createFailureLimiter, passphraseMatches, type FailureLimiter } from '../passphrase'
+import { CHALLENGE, pkceChallenge, VERIFIER } from '../pkce'
 import { consentPage, errorPage, PAGE_HEADERS } from './consent'
-import type { ClientAuthMethod, GrantType, OAuthClient, OAuthStore } from './store'
+import { ClientLimitError, type ClientAuthMethod, type GrantType, type OAuthClient, type OAuthStore } from './store'
 
 export const OAUTH_SCOPE = 'codeducky'
 const AUTH_METHODS: readonly ClientAuthMethod[] = ['none', 'client_secret_post', 'client_secret_basic']
@@ -49,9 +49,6 @@ export function canonicalResource(value: string | undefined, origin: string): st
   }
 }
 
-export const pkceChallenge = (verifier: string) => createHash('sha256').update(verifier).digest('base64url')
-const VERIFIER = /^[A-Za-z0-9\-._~]{43,128}$/
-const CHALLENGE = /^[A-Za-z0-9\-_]{43}$/
 
 type Params = Record<string, string>
 
@@ -79,7 +76,8 @@ type AuthorizeCheck =
 
 export interface OAuthRoutesOptions {
   store: OAuthStore
-  passphrase: string
+  /** Until consent moves to GitHub sign-in, approving needs the admin passphrase; unset refuses every approval. */
+  adminPassphrase?: string
   limiter: FailureLimiter
   registrationLimiter?: FailureLimiter
   publicUrl?: string
@@ -87,7 +85,7 @@ export interface OAuthRoutesOptions {
 
 export function oauthRoutes({
   store,
-  passphrase,
+  adminPassphrase,
   limiter,
   registrationLimiter = createFailureLimiter({ perClient: 20, global: 200, windowMs: 60 * 60_000 }),
   publicUrl,
@@ -207,7 +205,15 @@ export function oauthRoutes({
     const name = rawName.slice(0, MAX_CLIENT_NAME) || 'Unnamed MCP client'
 
     registrationLimiter.fail(ip)
-    const { client, secret } = store.registerClient({ name, redirectUris: uris as string[], authMethod, grantTypes: [...new Set(grantTypes)] })
+    let registered: ReturnType<OAuthStore['registerClient']>
+    try {
+      registered = store.registerClient({ name, redirectUris: uris as string[], authMethod, grantTypes: [...new Set(grantTypes)] })
+    } catch (error) {
+      if (!(error instanceof ClientLimitError)) throw error
+      c.header('Retry-After', '3600')
+      return c.json({ error: 'temporarily_unavailable', error_description: 'Too many registered clients; try again later' }, 503)
+    }
+    const { client, secret } = registered
     c.header('Cache-Control', 'no-store')
     return c.json(
       {
@@ -248,7 +254,7 @@ export function oauthRoutes({
       c.header('Retry-After', String(retryAfter))
       return htmlPage(c, consentPage({ ...view, error: 'Too many attempts. Wait a few minutes and try again.' }), 429)
     }
-    if (!passphraseMatches(params.passphrase, passphrase)) {
+    if (!adminPassphrase || !passphraseMatches(params.passphrase, adminPassphrase)) {
       limiter.fail(ip)
       return htmlPage(c, consentPage({ ...view, error: 'Wrong passphrase.' }), 401)
     }

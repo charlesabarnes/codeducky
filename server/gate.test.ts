@@ -5,8 +5,7 @@ import { join } from 'node:path'
 import type { SyncResponse, WireChange } from '../shared/sync'
 import { checklist, note, repo, REPO, session, ticked } from './fixtures'
 import { renderScript } from './gate/scripts'
-import { login, makeApp, request, TEST_ORIGIN } from './testing'
-import { ADMIN_USER_ID } from './users/store'
+import { createUserSession, login, makeApp, OWNER, request, TEST_ORIGIN, userIdFor } from './testing'
 
 const cleanups: (() => void)[] = []
 afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
@@ -17,7 +16,7 @@ async function setup(changes: WireChange[]) {
   const device = await login(made.app)
   const pushed = (await (await request(made.app, 'POST', '/api/sync', { cursor: 0, changes }, device)).json()) as SyncResponse
   expect(pushed.rejected).toEqual([])
-  const { token } = made.tokens.issue({ userId: ADMIN_USER_ID, name: 'Pre-push gate', kind: 'api' })
+  const { token } = made.tokens.issue({ userId: userIdFor(made.db, OWNER), name: 'Pre-push gate', kind: 'api' })
   const gate = async (repoName: string, branch: string, extra = '') => {
     const res = await made.app.request(
       `${TEST_ORIGIN}/api/gate?repo=${encodeURIComponent(repoName)}&branch=${encodeURIComponent(branch)}${extra}`,
@@ -115,6 +114,19 @@ describe('pre-push gate', () => {
     expect(asDevice.status).toBe(403)
     const missing = await app.request(`${TEST_ORIGIN}/api/gate?repo=${REPO}`, { headers: { Authorization: `Bearer ${token}` } })
     expect(missing.status).toBe(400)
+  })
+
+  it('checks only the caller\'s own reviews', async () => {
+    const { app, db, tokens, gate } = await setup([...BASE, note('n-blocker', 's1', { severity: 'blocker' })])
+    const bob = createUserSession(db, 'bob')
+    const { token } = tokens.issue({ userId: bob.user.id, name: 'Bob gate', kind: 'api' })
+    const bobGate = async () =>
+      (await (await app.request(`${TEST_ORIGIN}/api/gate?repo=${REPO}&branch=feature/tax`, { headers: { Authorization: `Bearer ${token}` } })).json()) as GateBody
+
+    expect(await bobGate()).toMatchObject({ pass: true, reasons: [`${REPO} is not in Code Ducky; nothing to check.`], session: null })
+    await request(app, 'POST', '/api/sync', { cursor: 0, changes: [repo()] }, bob.token)
+    expect((await bobGate()).reasons).toEqual([`No Code Ducky session for ${REPO}@feature/tax; nothing to check.`])
+    expect(((await (await gate(REPO, 'feature/tax')).json()) as GateBody).pass).toBe(false)
   })
 })
 

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { NOTE_SEVERITIES, type Note, type NoteSeverity } from '../../db/schema'
+import { lineSpan } from '../../review/anchor'
 import { compareNotes, matchesStatus, type StatusFilter } from '../../review/summary'
 import { SuggestionActions } from './SuggestionActions'
 import { NoteBadges } from './NoteBadges'
@@ -64,7 +65,7 @@ export function NotesPanel({ notes, selectedId, onSelect }: NotesPanelProps) {
                 </span>
                 <span className="note-where mono">
                   {note.path}
-                  {note.anchorLost ? '' : `:${note.anchor.line}${note.anchor.side === 'old' ? ' (base)' : ''}${note.commit ? ` @${note.commit.slice(0, 7)}` : ''}`}
+                  {note.anchorLost ? '' : `:${lineSpan(note.anchor)}${note.anchor.side === 'old' ? ' (base)' : ''}${note.commit ? ` @${note.commit.slice(0, 7)}` : ''}`}
                 </span>
                 <span className="note-snippet">{note.title ?? note.body.split('\n')[0]}</span>
               </button>

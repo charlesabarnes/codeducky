@@ -2,8 +2,7 @@ import { afterEach, describe, expect, it } from 'bun:test'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import type { SyncResponse, WireChange } from '../shared/sync'
 import { note, record, repo, REPO, REPO_ID, session } from './fixtures'
-import { login, makeApp, mcpClient, request, TEST_ORIGIN } from './testing'
-import { ADMIN_USER_ID } from './users/store'
+import { login, makeApp, mcpClient, OWNER, request, TEST_ORIGIN, userIdFor } from './testing'
 
 const cleanups: (() => void)[] = []
 afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
@@ -32,7 +31,7 @@ async function setup(changes: WireChange[] = SEED) {
   const device = await login(made.app)
   const pushed = (await (await request(made.app, 'POST', '/api/sync', { cursor: 0, changes }, device)).json()) as SyncResponse
   expect(pushed.rejected).toEqual([])
-  const { token } = made.tokens.issue({ userId: ADMIN_USER_ID, name: 'Claude Code', kind: 'api' })
+  const { token } = made.tokens.issue({ userId: userIdFor(made.db, OWNER), name: 'Claude Code', kind: 'api' })
   const client = await mcpClient(made.app, token)
   cleanups.push(() => void client.close())
   const call = async <T = Record<string, unknown>>(name: string, args: Record<string, unknown> = {}) => {
