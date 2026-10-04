@@ -10,7 +10,7 @@ export function SignInCallback() {
   const navigate = useNavigate()
   const handled = useRef(false)
   const [waitingFor, setWaitingFor] = useState<string | null>(null)
-  const { switchRequest } = useSyncState()
+  const { auth, switchRequest } = useSyncState()
 
   useEffect(() => {
     if (handled.current) return
@@ -29,8 +29,11 @@ export function SignInCallback() {
   }, [navigate])
 
   useEffect(() => {
-    if (waitingFor && !switchRequest) void navigate(waitingFor, { replace: true })
-  }, [waitingFor, switchRequest, navigate])
+    // Confirming reloads the page at the return path; cancelling leaves this browser signed out.
+    if (waitingFor && !switchRequest && auth !== 'signedIn') {
+      void navigate(DEFAULT_RETURN_TO, { replace: true, state: { signInError: 'switch_cancelled' } })
+    }
+  }, [waitingFor, switchRequest, auth, navigate])
 
   return (
     <section className="page narrow signin-callback">

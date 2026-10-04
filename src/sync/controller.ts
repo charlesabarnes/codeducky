@@ -310,7 +310,12 @@ export class SyncController {
     if (!auth?.user) return
     this.stop()
     await this.inFlight?.catch(() => undefined)
-    await wipeAccountData(this.db)
+    try {
+      await wipeAccountData(this.db)
+    } catch (error) {
+      if (this.auth) this.startTriggers()
+      throw error
+    }
     await setMeta(this.db, META_ACCOUNT, bindingOf(auth.user))
     await setMeta(this.db, META_AUTH, auth)
     this.pendingSwitch = null
@@ -354,12 +359,8 @@ export class SyncController {
 
   /** Revokes this device's token (best effort) and stops syncing. Local data and unsent changes stay. */
   async signOut(): Promise<void> {
-    this.stop()
-    this.rerun = false
-    await this.inFlight?.catch(() => undefined)
+    const auth = await this.halt()
     this.throttledUntil = 0
-    const auth = this.auth
-    this.auth = null
     await this.db.syncMeta.bulkDelete([META_AUTH, META_CURSOR, META_LAST_SYNCED_AT])
     this.update({ ...SIGNED_OUT, auth: 'signedOut', lastSyncedAt: null })
     if (auth) await apiRequest(this.api, 'POST', '/api/auth/logout', { token: auth.token }).catch(() => undefined)
@@ -374,12 +375,19 @@ export class SyncController {
   /** Deletes the signed-in account on the server, then its data in this browser. */
   async deleteAccount(confirm: string): Promise<void> {
     await this.request<{ ok: true }>('DELETE', '/api/account', { confirm })
+    await this.halt()
+    await wipeAccountData(this.db)
+    this.update({ ...SIGNED_OUT, auth: 'signedOut', lastSyncedAt: null })
+  }
+
+  /** Drops the sign-in first, so a sync still running sends nothing more, then waits for it to end. */
+  private async halt(): Promise<StoredAuth | null> {
+    const auth = this.auth
+    this.auth = null
     this.stop()
     this.rerun = false
     await this.inFlight?.catch(() => undefined)
-    this.auth = null
-    await wipeAccountData(this.db)
-    this.update({ ...SIGNED_OUT, auth: 'signedOut', lastSyncedAt: null })
+    return auth
   }
 
   /** Runs a sync now; calls made while one runs coalesce into a single follow-up run. */
@@ -445,11 +453,13 @@ export class SyncController {
     }
     this.update({ status: 'syncing' })
     try {
-      const result = await runSync(this.db, (request) =>
-        apiRequest<SyncResponse>(this.api, 'POST', '/api/sync', { body: request, token: auth.token }),
-      )
+      const result = await runSync(this.db, (request) => {
+        if (this.auth !== auth) throw new UnauthorizedError()
+        return apiRequest<SyncResponse>(this.api, 'POST', '/api/sync', { body: request, token: auth.token })
+      })
       this.update({ status: 'idle', lastSyncedAt: result.syncedAt, lastError: null })
     } catch (error) {
+      if (this.auth !== auth) return
       if (error instanceof UnauthorizedError) {
         await this.expire()
         return

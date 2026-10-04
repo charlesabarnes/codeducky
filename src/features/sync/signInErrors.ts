@@ -22,6 +22,7 @@ const MESSAGES: Record<string, string> = {
   invalid: 'The sign-in link expired or was already used. Try again.',
   offline: 'Could not reach the server.',
   error: 'The server could not sign you in.',
+  switch_cancelled: 'Sign-in cancelled. This browser kept its data and stays signed out.',
   missing: 'This page only finishes a sign-in started from Settings.',
 }
 
