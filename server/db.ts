@@ -74,6 +74,108 @@ export const MIGRATIONS: { name: string; sql: string }[] = [
       CREATE INDEX tokens_grant ON tokens (grant_id);
     `,
   },
+  {
+    name: '0003_multi_user',
+    sql: `
+      DROP TABLE records;
+      DROP TABLE meta;
+      DROP TABLE tokens;
+      DROP TABLE oauth_codes;
+      DROP TABLE oauth_grants;
+
+      CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        github_id INTEGER UNIQUE,
+        login TEXT NOT NULL,
+        name TEXT,
+        avatar_url TEXT,
+        role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+        rev INTEGER NOT NULL DEFAULT 0,
+        record_count INTEGER NOT NULL DEFAULT 0,
+        data_bytes INTEGER NOT NULL DEFAULT 0,
+        quota_records INTEGER,
+        quota_bytes INTEGER,
+        created_at INTEGER NOT NULL,
+        last_login_at INTEGER,
+        last_seen_at INTEGER
+      );
+
+      CREATE TABLE records (
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        id TEXT NOT NULL,
+        changed_at INTEGER NOT NULL,
+        deleted INTEGER NOT NULL DEFAULT 0,
+        rev INTEGER NOT NULL,
+        data TEXT,
+        PRIMARY KEY (user_id, kind, id)
+      );
+      CREATE UNIQUE INDEX records_user_rev ON records (user_id, rev);
+
+      CREATE TABLE tokens (
+        id TEXT PRIMARY KEY,
+        token_hash TEXT NOT NULL UNIQUE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('session', 'api', 'oauth')),
+        created_at INTEGER NOT NULL,
+        last_used_at INTEGER,
+        expires_at INTEGER,
+        client_id TEXT,
+        scope TEXT,
+        grant_id TEXT
+      );
+      CREATE INDEX tokens_user ON tokens (user_id);
+      CREATE INDEX tokens_grant ON tokens (grant_id);
+
+      CREATE TABLE oauth_codes (
+        code_hash TEXT PRIMARY KEY,
+        client_id TEXT NOT NULL,
+        redirect_uri TEXT NOT NULL,
+        code_challenge TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        resource TEXT NOT NULL,
+        expires_at INTEGER NOT NULL,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE oauth_grants (
+        id TEXT PRIMARY KEY,
+        client_id TEXT NOT NULL,
+        refresh_hash TEXT NOT NULL UNIQUE,
+        previous_refresh_hash TEXT,
+        scope TEXT NOT NULL,
+        resource TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        refreshed_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE
+      );
+      CREATE INDEX oauth_grants_previous ON oauth_grants (previous_refresh_hash);
+      CREATE INDEX oauth_grants_user ON oauth_grants (user_id);
+
+      CREATE TABLE auth_flows (
+        id_hash TEXT PRIMARY KEY,
+        state_hash TEXT NOT NULL,
+        purpose TEXT NOT NULL CHECK (purpose IN ('pwa', 'oauth')),
+        github_verifier TEXT NOT NULL,
+        pwa_challenge TEXT,
+        oauth_request TEXT,
+        user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        consent_hash TEXT,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE auth_handoffs (
+        code_hash TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        challenge TEXT NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+    `,
+  },
 ]
 
 export function openDatabase(path: string): Database {
@@ -88,6 +190,8 @@ export function openMemoryDatabase(): Database {
 function prepare(db: Database): Database {
   db.exec('PRAGMA journal_mode = WAL')
   db.exec('PRAGMA busy_timeout = 5000')
+  // Per connection, and a no-op inside a transaction, so it is set here rather than in a migration.
+  db.exec('PRAGMA foreign_keys = ON')
   migrate(db)
   return db
 }
