@@ -203,6 +203,47 @@ describe('mcp tools', () => {
     expect((await call('add_note', { path: 'a', line: 1, body: 'x' })).error).toContain('Give a session id, or repo with branch or pr')
   })
 
+  it('add_note takes an end line for a note on several lines, and the read tools show the range', async () => {
+    const { call, db } = await setup()
+    const target = { repo: 'charlesabarnes/invoice-service', branch: 'feature/tax', path: 'src/tax/rates.ts', body: 'Extract a helper.' }
+    const added = await call<{ added: NoteOut & { endLine?: number; lines?: string } }>('add_note', {
+      ...target,
+      line: 7,
+      endLine: 9,
+      lineText: 'const vat = 0.2\nconst reduced = 0.05\nconst zero = 0\n',
+      before: ['// rates'],
+      after: ['export { vat }'],
+    })
+    expect(added.added).toMatchObject({
+      line: 7,
+      endLine: 9,
+      lines: '7–9',
+      anchor: { text: 'const vat = 0.2', rangeText: ['const vat = 0.2', 'const reduced = 0.05', 'const zero = 0'], after: ['export { vat }'] },
+    })
+    expect(readRecord(db, 'notes', added.added.id)!.data!.anchor).toEqual({
+      line: 7,
+      endLine: 9,
+      side: 'new',
+      text: 'const vat = 0.2',
+      rangeText: ['const vat = 0.2', 'const reduced = 0.05', 'const zero = 0'],
+      before: ['// rates'],
+      after: ['export { vat }'],
+    })
+    expect(await call('get_note', { id: added.added.id })).toMatchObject({ line: 7, endLine: 9, lines: '7–9' })
+    const listed = await call<{ notes: { id: string; endLine?: number }[] }>('list_notes', { session: 's1', status: 'suggested' })
+    expect(listed.notes.find((n) => n.id === added.added.id)).toMatchObject({ endLine: 9 })
+    const context = await call<{ pendingSuggestions: { id: string; endLine?: number }[] }>('get_review_context', { session: 's1' })
+    expect(context.pendingSuggestions.find((n) => n.id === added.added.id)).toMatchObject({ endLine: 9 })
+
+    const lineOnly = await call<{ added: NoteOut & { endLine?: number } }>('add_note', { ...target, line: 3, endLine: 5 })
+    expect(readRecord(db, 'notes', lineOnly.added.id)!.data!.anchor).toEqual({ line: 3, endLine: 5, side: 'new', text: '', before: [], after: [] })
+    const single = await call<{ added: NoteOut & { endLine?: number } }>('add_note', { ...target, line: 3, endLine: 3, lineText: 'x' })
+    expect(single.added).not.toHaveProperty('endLine')
+
+    expect((await call('add_note', { ...target, line: 7, endLine: 9, lineText: 'only one line' })).error).toContain('lineText has 1 line, but lines 7–9 are 3')
+    expect((await call('add_note', { ...target, line: 7, endLine: 5 })).error).toContain('endLine 5 is before line 7')
+  })
+
   it('get_checklist and check_item use the applicable checklists', async () => {
     const { call, db } = await setup()
     type Out = { checklists: { title: string; scope: string; done: string; items: { id: string; checked: boolean }[] }[] }

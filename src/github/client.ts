@@ -364,7 +364,9 @@ export function createGitHubClient({ token, fetch: fetchImpl = globalThis.fetch,
     const body: Record<string, unknown> = {
       commit_id: input.commitId,
       body: input.body,
-      comments: input.comments.map(({ path, line, side, body }) => ({ path, line, side, body })),
+      comments: input.comments.map(({ path, line, side, startLine, startSide, body }) =>
+        startLine === undefined ? { path, line, side, body } : { path, start_line: startLine, start_side: startSide ?? side, line, side, body },
+      ),
     }
     if (input.event) body.event = input.event
     const { data } = await request<{ id: number; state: string; html_url: string }>(`${repoPath(repo)}/pulls/${number}/reviews`, {

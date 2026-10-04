@@ -34,12 +34,12 @@ const tlsHead = numberLines(fixtureText('tls-head.ts.txt'))
 const lineOf = (lines: NumberedLine[], text: string) => lines.find((entry) => entry.text.startsWith(text))!.line
 
 let nextId = 1
-function note(path: string, lines: NumberedLine[], line: number, extra: Partial<Note> = {}, side: 'old' | 'new' = 'new'): Note {
+function note(path: string, lines: NumberedLine[], line: number, extra: Partial<Note> = {}, side: 'old' | 'new' = 'new', endLine = line): Note {
   return {
     id: String(nextId++),
     sessionId: 's1',
     path,
-    anchor: createAnchor(lines, line, side),
+    anchor: createAnchor(lines, line, side, endLine),
     body: 'Check this',
     severity: 'issue',
     status: 'open',
@@ -88,6 +88,35 @@ describe('placeNotes', () => {
       'logo.png': 'GitHub shows no diff for this file (binary or too large)',
       [TLS]: 'Line is not in the pull request diff',
     })
+  })
+})
+
+describe('placing ranges', () => {
+  const start = lineOf(tlsHead, 'export function dnsProvider')
+
+  it('places a range as a multi-line comment from start_line to line', () => {
+    const n = note(TLS, tlsHead, start, {}, 'new', start + 2)
+    const { placed, unplaced } = placeNotes([n], prFiles)
+    expect(unplaced).toEqual([])
+    expect(placed[0]).toMatchObject({
+      exact: true,
+      comment: { path: TLS, startLine: start, startSide: 'RIGHT', line: start + 2, side: 'RIGHT' },
+    })
+  })
+
+  it('moves both ends with local edits', () => {
+    const local = numberLines(['// local 1', '// local 2', ...tlsHead.map((entry) => entry.text)].join('\n'))
+    const n = note(TLS, local, start + 2, {}, 'new', start + 4)
+    expect(placeNotes([n], prFiles).placed[0]?.comment).toMatchObject({ startLine: start, line: start + 2 })
+  })
+
+  it('leaves a range that is not inside one hunk for the review body', () => {
+    const outside = lineOf(tlsHead, '      return acmeCertificates(d);')
+    const n = note(TLS, tlsHead, outside, {}, 'new', start)
+    const { placed, unplaced } = placeNotes([n], prFiles)
+    expect(placed).toEqual([])
+    expect(unplaced).toEqual([{ note: n, reason: 'Lines are not all in one hunk of the pull request diff' }])
+    expect(reviewBody([n])).toContain(`\`${TLS}\`, lines ${outside}–${start}:`)
   })
 })
 
@@ -151,6 +180,14 @@ describe('pushing a pending review', () => {
       body: 'Unrelated',
       severity: 'nit',
     })
+    const rangeStart = lineOf(tlsHead, '  const acmeDnsUrl')
+    const range = await addNote(db, {
+      sessionId: 's7',
+      path: TLS,
+      anchor: createAnchor(tlsHead, rangeStart, 'new', rangeStart + 1),
+      body: 'Both of these',
+      severity: 'issue',
+    })
     const resolved = await addNote(db, {
       sessionId: 's7',
       path: TLS,
@@ -180,7 +217,7 @@ describe('pushing a pending review', () => {
     const { preview } = lookup
     expect(preview.pr.headSha).toBe(HEAD)
     expect(preview.localHead).not.toBe(preview.pr.headSha)
-    expect(preview.placement.placed.map((entry) => entry.note.id)).toEqual([inline])
+    expect(preview.placement.placed.map((entry) => entry.note.id)).toEqual([inline, range])
     expect(preview.placement.unplaced.map((entry) => entry.note.id)).toEqual([outside])
 
     const result = await pushPendingReview(db, gh, ref, preview.pr, {
@@ -192,8 +229,12 @@ describe('pushing a pending review', () => {
     const post = calls.find((call) => call.method === 'POST')!
     expect(post.body).toMatchObject({
       commit_id: HEAD,
-      comments: [{ path: TLS, side: 'RIGHT', body: '**suggestion:** Exported only for tests?' }],
+      comments: [
+        { path: TLS, side: 'RIGHT', body: '**suggestion:** Exported only for tests?' },
+        { path: TLS, start_line: rangeStart, start_side: 'RIGHT', line: rangeStart + 1, side: 'RIGHT', body: '**issue:** Both of these' },
+      ],
     })
+    expect((post.body as { comments: object[] }).comments[0]).not.toHaveProperty('start_line')
     expect((post.body as { body: string }).body).toContain('Unrelated')
     expect(post.body).not.toHaveProperty('event')
     expect(calls.every((call) => call.method === 'GET' || call.url.pathname.endsWith('/pulls/48/reviews'))).toBe(true)
