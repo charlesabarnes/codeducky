@@ -7,15 +7,25 @@ import '@fontsource/ibm-plex-sans/latin-600.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router'
-import { registerSW } from 'virtual:pwa-register'
 import { router } from './app/router'
 import { startAppearance } from './app/appearance'
+import { db } from './db/db'
+import { handleLaunches } from './pwa/launchQueue'
+import { startStoragePersistence } from './pwa/storage'
 import { syncController } from './sync/client'
+import { startServiceWorker } from './update/serviceWorker'
 import './styles.css'
 import './palettes.css'
 
 startAppearance()
-registerSW({ immediate: true })
+startServiceWorker()
+startStoragePersistence(db)
+handleLaunches({
+  launchQueue: window.launchQueue,
+  location: window.location,
+  navigate: (path) => void router.navigate(path),
+  openServerPage: (url) => window.location.assign(url),
+})
 void syncController.start()
 
 createRoot(document.getElementById('root')!).render(

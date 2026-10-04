@@ -1,4 +1,4 @@
-import { prUrl } from '../../shared/links'
+import { prUrl, sessionUrl } from '../../shared/links'
 import { lineSpan } from '../../shared/anchor'
 import { findBranchSession, isPrSession, sessionChecklists, type DataSnapshot, type NoteRecord, type SessionRecord } from '../mcp/records'
 import { headline } from '../review/patterns'
@@ -60,7 +60,7 @@ export function evaluateGate(data: DataSnapshot, repoQuery: string, branch: stri
     pass: reasons.length === 0,
     reasons: listed,
     counts,
-    url: `${origin}/sessions/${encodeURIComponent(session.id)}`,
+    url: sessionUrl(origin, session.id),
     session: session.id,
     ...(pr ? { prUrl: prUrl(origin, pr) } : {}),
   }

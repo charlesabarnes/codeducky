@@ -2,6 +2,8 @@ import { Lock, Unlock } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Panel } from '../../ui/Panel'
 import { hasReadPermission, requestReadPermission } from '../../fs/permission'
+import { folderAccess } from '../../pwa/client'
+import { AccessDurationNote } from '../pwa/FolderAccess'
 
 type State = 'checking' | 'granted' | 'prompt' | 'denied'
 
@@ -26,13 +28,17 @@ export function PermissionGate({ handle, children }: PermissionGateProps) {
   if (state === 'granted') return children
   if (state === 'checking') return <p className="page muted">Checking folder access…</p>
 
-  const request = async () => setState((await requestReadPermission(handle)) ? 'granted' : 'denied')
+  const request = async () => {
+    const granted = await requestReadPermission(handle)
+    setState(granted ? 'granted' : 'denied')
+    if (granted) folderAccess.refresh().catch((error: unknown) => console.warn('Could not check folder access', error))
+  }
 
   return (
     <div className="page narrow stack">
       <Panel icon={Lock} title="folder access">
       <p>
-        Code Ducky needs read access to <strong>{handle.name}</strong> again. Browsers ask each time the app is reopened.
+        Code Ducky needs read access to <strong>{handle.name}</strong> again. <AccessDurationNote />
       </p>
       {state === 'denied' && <p className="error">Access was not granted.</p>}
       <div>

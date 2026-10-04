@@ -17,6 +17,11 @@ export const prPath = ({ owner, name, number }: PullRef) =>
 
 export const prUrl = (origin: string, ref: PullRef) => `${origin.replace(/\/+$/, '')}${prPath(ref)}`
 
+/** A review session in the PWA; inside the manifest scope, so an installed app captures it. */
+export const sessionPath = (sessionId: string) => `/sessions/${encodeURIComponent(sessionId)}`
+
+export const sessionUrl = (origin: string, sessionId: string) => `${origin.replace(/\/+$/, '')}${sessionPath(sessionId)}`
+
 export const githubPrUrl = ({ owner, name, number }: PullRef) => `https://github.com/${owner}/${name}/pull/${number}`
 
 const PR_PATH = /^\/pr\/([^/]+)\/([^/]+)\/(\d+)\/?$/

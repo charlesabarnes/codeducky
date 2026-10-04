@@ -1,6 +1,6 @@
 import { lineSpan } from '../../shared/anchor'
 import { MAX_NOTE_EXCERPT, type TaskRequest } from '../../shared/channel'
-import { prUrl } from '../../shared/links'
+import { prUrl, sessionUrl } from '../../shared/links'
 import type { DataSnapshot } from '../mcp/records'
 import { fixPrompt, reviewPrompt } from '../mcp/prompts'
 import type { TaskMeta } from './registry'
@@ -79,7 +79,7 @@ export function taskMeta(request: TaskRequest, origin: string): TaskMeta {
     const [owner = '', name = ''] = target.repo.split('/')
     meta.session_url = prUrl(origin, { owner, name, number: target.pr })
   } else if (target.sessionId) {
-    meta.session_url = `${origin}/sessions/${encodeURIComponent(target.sessionId)}`
+    meta.session_url = sessionUrl(origin, target.sessionId)
   }
   if (target.sessionId) meta.codeducky_session = target.sessionId
   return meta
