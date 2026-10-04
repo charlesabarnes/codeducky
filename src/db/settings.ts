@@ -39,13 +39,15 @@ export async function loadSettings(db: SkelbertDb): Promise<LoadedSettings> {
 
 /** Saves the given fields and keeps the others. */
 export async function saveSettings(db: SkelbertDb, input: SettingsInput): Promise<void> {
-  const current = await loadSettings(db)
-  await db.settings.put({
-    id: 'app',
-    githubPat: (input.githubPat ?? current.githubPat).trim(),
-    theme: input.theme ?? current.theme,
-    palette: input.palette ?? current.palette,
-    density: input.density ?? current.density,
-    codeFont: input.codeFont ?? current.codeFont,
+  await db.transaction('rw', db.settings, async () => {
+    const current = await loadSettings(db)
+    await db.settings.put({
+      id: 'app',
+      githubPat: (input.githubPat ?? current.githubPat).trim(),
+      theme: input.theme ?? current.theme,
+      palette: input.palette ?? current.palette,
+      density: input.density ?? current.density,
+      codeFont: input.codeFont ?? current.codeFont,
+    })
   })
 }

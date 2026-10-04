@@ -212,7 +212,8 @@ h2 {
   font-weight: 600;
 }
 
-h3 {
+h3,
+.hash-heading {
   display: flex;
   align-items: baseline;
   gap: 6px;
@@ -223,7 +224,8 @@ h3 {
   color: var(--fg-2);
 }
 
-h3::before {
+h3::before,
+.hash-heading::before {
   content: '#';
   color: var(--accent);
 }
@@ -1703,6 +1705,11 @@ tr.current .repo-link {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+  color: inherit;
+}
+
+.checklist-heading::before {
+  content: none;
 }
 
 .checklist-heading strong {

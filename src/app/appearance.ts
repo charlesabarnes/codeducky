@@ -28,6 +28,8 @@ const FONT_LOADERS: Partial<Record<CodeFont, () => Promise<unknown>>> = {
 
 let current: Appearance = DEFAULT_APPEARANCE
 const loadedFonts = new Set<CodeFont>()
+/** Settings picked while the startup load was pending, which it must not overwrite. */
+const chosen = new Set<AppearanceKey>()
 
 export function resolveTheme(pref: ThemePreference, prefersLight: boolean): Theme {
   if (pref === 'system') return prefersLight ? 'light' : 'dark'
@@ -53,6 +55,7 @@ function render() {
 }
 
 export function applyAppearance(next: Partial<Appearance>) {
+  for (const key of Object.keys(next) as AppearanceKey[]) chosen.add(key)
   current = { ...current, ...next }
   for (const key of APPEARANCE_KEYS) localStorage.setItem(CACHE_KEYS[key], current[key])
   render()
@@ -64,6 +67,10 @@ export function startAppearance() {
   render()
   window.matchMedia(LIGHT_QUERY).addEventListener('change', () => current.theme === 'system' && render())
   loadSettings(db)
-    .then((settings) => applyAppearance(appearanceOf(settings)))
+    .then((settings) => {
+      const stored: Partial<Appearance> = appearanceOf(settings)
+      for (const key of chosen) delete stored[key]
+      applyAppearance(stored)
+    })
     .catch((error: unknown) => console.error('Could not load the appearance settings', error))
 }

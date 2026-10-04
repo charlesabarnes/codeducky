@@ -202,10 +202,10 @@ function Preview({ preview, selected, onToggle }: { preview: PushPreview; select
 function NoteSection({ title, count, hint, children }: { title: string; count: number; hint?: string; children: ReactNode }) {
   return (
     <section className="push-section">
-      <div className="muted">
+      <h3 className="push-section-title">
         {title} <span className="strong">{count}</span>
         {hint && <span className="push-hint"> · {hint}</span>}
-      </div>
+      </h3>
       <ul className="push-notes">{children}</ul>
     </section>
   )
