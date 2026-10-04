@@ -10,6 +10,7 @@ const LIGHT_QUERY = '(prefers-color-scheme: light)'
 const THEME_COLORS: Record<Theme, string> = { dark: '#0f0d0a', light: '#f7f5ef' }
 
 let preference: ThemePreference = DEFAULT_THEME
+let chosenThisSession = false
 
 export function resolveTheme(pref: ThemePreference, prefersLight: boolean): Theme {
   if (pref === 'system') return prefersLight ? 'light' : 'dark'
@@ -23,6 +24,7 @@ function render() {
 }
 
 export function applyTheme(next: ThemePreference) {
+  chosenThisSession = true
   preference = next
   localStorage.setItem(CACHE_KEY, next)
   render()
@@ -35,6 +37,8 @@ export function startTheme() {
   render()
   window.matchMedia(LIGHT_QUERY).addEventListener('change', () => preference === 'system' && render())
   loadSettings(db)
-    .then(({ theme }) => applyTheme(theme))
+    .then(({ theme }) => {
+      if (!chosenThisSession) applyTheme(theme)
+    })
     .catch((error: unknown) => console.error('Could not load the theme', error))
 }
