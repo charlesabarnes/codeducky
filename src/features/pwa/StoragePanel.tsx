@@ -78,8 +78,8 @@ function UsageLine({ usage, quota }: { usage: number; quota: number | null }) {
   return (
     <span className="stack">
       <span>
-        {formatBytes(usage)}
-        {quota ? ` of ${formatBytes(quota)} available` : ''}
+        {formatBytes(usage)} used
+        {quota ? ` of a ${formatBytes(quota)} quota` : ''}
       </span>
       {share !== null && (
         <span className="storage-meter" aria-hidden>

@@ -36,10 +36,22 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
   padding: 6px 10px;
   background: var(--bg-2);
   box-shadow: inset 2px 0 0 var(--mod-fg);
+}
+
+.access-notice > svg {
+  flex: none;
+  color: var(--mod-fg);
+}
+
+.access-notice > span {
+  flex: 1;
+}
+
+.access-notice > button {
+  flex: none;
 }
 
 .storage-meter {
