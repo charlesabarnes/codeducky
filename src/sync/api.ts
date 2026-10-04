@@ -24,13 +24,15 @@ export class HttpError extends Error {
   }
 }
 
-/** Retry-After as delay-seconds or an HTTP date; null when absent or unreadable. */
+/** Longer waits are ignored in favour of the normal retry delay. */
+const MAX_RETRY_AFTER_MS = 60 * 60_000
+
+/** Retry-After as delay-seconds or an HTTP date; null when absent, unreadable, past or implausibly long. */
 export function parseRetryAfter(value: string | null, now = Date.now()): number | null {
   if (!value) return null
   const seconds = Number(value)
-  if (Number.isFinite(seconds)) return seconds >= 0 ? seconds * 1000 : null
-  const at = Date.parse(value)
-  return Number.isNaN(at) ? null : Math.max(0, at - now)
+  const ms = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - now
+  return ms > 0 && ms <= MAX_RETRY_AFTER_MS ? ms : null
 }
 
 export interface ApiOptions {

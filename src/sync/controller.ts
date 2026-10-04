@@ -71,6 +71,8 @@ export class SyncController {
   private stopTriggers: (() => void) | null = null
   private debounceTimer: ReturnType<typeof setTimeout> | null = null
   private retryTimer: ReturnType<typeof setTimeout> | null = null
+  /** Until when the server asked us (Retry-After) not to sync. */
+  private throttledUntil = 0
   private inFlight: Promise<void> | null = null
   private rerun = false
 
@@ -224,7 +226,7 @@ export class SyncController {
 
   private async once() {
     const auth = this.auth
-    if (!auth) return
+    if (!auth || Date.now() < this.throttledUntil) return
     if (!isOnline()) {
       this.update({ status: 'offline' })
       return
@@ -242,7 +244,9 @@ export class SyncController {
       }
       const status = error instanceof NetworkError ? (isOnline() ? 'unreachable' : 'offline') : 'error'
       this.update({ status, lastError: error instanceof Error ? error.message : String(error) })
-      this.scheduleRetry(error instanceof HttpError ? error.retryAfterMs : null)
+      const retryAfterMs = error instanceof HttpError ? error.retryAfterMs : null
+      if (retryAfterMs !== null) this.throttledUntil = Date.now() + retryAfterMs
+      this.scheduleRetry(retryAfterMs)
     }
   }
 

@@ -13,6 +13,8 @@ export const CLIENT_GRACE_MS = 24 * 60 * 60_000
 /** Grants (approved MCP clients) per user; approving another revokes the oldest. */
 export const MAX_GRANTS = 20
 
+export class ClientLimitError extends Error {}
+
 export type ClientAuthMethod = 'none' | 'client_secret_post' | 'client_secret_basic'
 export type GrantType = 'authorization_code' | 'refresh_token'
 
@@ -100,6 +102,8 @@ const toGrant = (row: GrantRow): Grant => ({
 
 const secretValue = (prefix: string) => `${prefix}${randomBytes(32).toString('base64url')}`
 const GRANT_COLUMNS = 'id, user_id, client_id, scope, resource, created_at, refreshed_at, expires_at'
+/** No grant and no pending code (expired codes are deleted before pruning). */
+const UNUSED_CLIENT = 'id NOT IN (SELECT client_id FROM oauth_grants) AND id NOT IN (SELECT client_id FROM oauth_codes)'
 
 /**
  * Registered clients, authorization codes and grants. A grant is one approval on the consent
@@ -148,16 +152,15 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
       revokeGrant(id)
     }
     const count = () => db.query<{ n: number }, []>('SELECT COUNT(*) AS n FROM oauth_clients').get()!.n
-    if (count() < MAX_CLIENTS) return
-    db.query('DELETE FROM oauth_clients WHERE id NOT IN (SELECT client_id FROM oauth_grants) AND created_at <= ?').run(
-      now() - CLIENT_GRACE_MS,
-    )
+    if (count() < MAX_CLIENTS) return count()
+    db.query(`DELETE FROM oauth_clients WHERE ${UNUSED_CLIENT} AND created_at <= ?`).run(now() - CLIENT_GRACE_MS)
     const excess = count() - MAX_CLIENTS + 1
-    if (excess <= 0) return
-    db.query(
-      `DELETE FROM oauth_clients WHERE id IN (
-         SELECT id FROM oauth_clients WHERE id NOT IN (SELECT client_id FROM oauth_grants) ORDER BY created_at LIMIT ?)`,
-    ).run(excess)
+    if (excess > 0) {
+      db.query(`DELETE FROM oauth_clients WHERE id IN (SELECT id FROM oauth_clients WHERE ${UNUSED_CLIENT} ORDER BY created_at LIMIT ?)`).run(
+        excess,
+      )
+    }
+    return count()
   }
 
   const capGrants = (userId: string) => {
@@ -172,11 +175,12 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
   return {
     getClient,
 
+    /** Throws ClientLimitError when every client slot is in use and none could be pruned. */
     registerClient(input: Pick<OAuthClient, 'name' | 'redirectUris' | 'authMethod' | 'grantTypes'>): {
       client: OAuthClient
       secret: string | null
     } {
-      pruneClients()
+      if (pruneClients() >= MAX_CLIENTS) throw new ClientLimitError()
       const secret = input.authMethod === 'none' ? null : secretValue('cdc_')
       const client: OAuthClient = {
         ...input,
@@ -320,6 +324,13 @@ export function createOAuthStore(db: Database, tokens: TokenStore, now: () => nu
 
     getGrant,
     revokeGrant,
+
+    /** Revokes every grant the user approved, with their access and refresh tokens. */
+    revokeUserGrants(userId: string): number {
+      const ids = db.query<{ id: string }, [string]>('SELECT id FROM oauth_grants WHERE user_id = ?').all(userId)
+      for (const { id } of ids) revokeGrant(id)
+      return ids.length
+    },
 
     /** Revokes a grant only if it belongs to the user; another user's grant id is treated as unknown. */
     revokeUserGrant(userId: string, id: string): boolean {

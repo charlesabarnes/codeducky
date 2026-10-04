@@ -21,6 +21,8 @@ describe('parseRetryAfter', () => {
     expect(parseRetryAfter(null)).toBeNull()
     expect(parseRetryAfter('soon')).toBeNull()
     expect(parseRetryAfter('-3')).toBeNull()
+    expect(parseRetryAfter(new Date(1_000).toUTCString(), 61_000)).toBeNull()
+    expect(parseRetryAfter('86400')).toBeNull()
   })
 })
 
@@ -37,6 +39,8 @@ describe('sync on 429', () => {
     const controller = new SyncController(db, { fetch, listenToBrowser: false, retryMs: 3_600_000, intervalMs: 3_600_000 })
     opened.push({ db, controller })
     await controller.start()
+    await controller.sync()
+    expect(calls).toBe(1)
     await vi.waitFor(() => expect(calls).toBe(2), { timeout: 3000 })
     await vi.waitFor(() => expect(controller.getSnapshot().status).toBe('idle'))
   })

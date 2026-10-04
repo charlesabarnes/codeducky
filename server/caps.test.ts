@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'bun:test'
-import { CLIENT_GRACE_MS, createOAuthStore, MAX_CLIENTS, MAX_GRANTS, type OAuthClient } from './auth/oauth/store'
+import { CLIENT_GRACE_MS, ClientLimitError, createOAuthStore, MAX_CLIENTS, MAX_GRANTS, type OAuthClient } from './auth/oauth/store'
 import { createTokenStore, MAX_API_TOKENS, MAX_SESSIONS } from './auth/tokens'
 import { createUserSession, makeApp, request } from './testing'
 
@@ -9,13 +9,13 @@ afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
 function setup() {
   const made = makeApp()
   cleanups.push(made.cleanup)
+  const alice = createUserSession(made.db, 'alice')
+  const bob = createUserSession(made.db, 'bob')
   const start = Date.now()
   let at = start
   const now = () => at
   const tokens = createTokenStore(made.db, now)
   const oauth = createOAuthStore(made.db, tokens, now)
-  const alice = createUserSession(made.db, 'alice')
-  const bob = createUserSession(made.db, 'bob')
   return { ...made, tokens, oauth, alice, bob, start, advance: (ms: number) => (at += ms) }
 }
 
@@ -83,6 +83,26 @@ describe('OAuth grants', () => {
   })
 })
 
+describe('revokeUserGrants', () => {
+  it('revokes every grant of the user, and only theirs', () => {
+    const { oauth, tokens, alice, bob } = setup()
+    const { client } = oauth.registerClient({ name: 'MCP', redirectUris: ['http://localhost/cb'], authMethod: 'none', grantTypes: ['authorization_code'] })
+    const grant = (userId: string) =>
+      oauth.createGrant(
+        client,
+        oauth.consumeCode(
+          oauth.createCode({ userId, clientId: client.id, redirectUri: 'http://localhost/cb', codeChallenge: 'x', scope: 'codeducky', resource: 'r' }),
+        )!,
+      )
+    const alices = grant(alice.user.id)
+    const bobs = grant(bob.user.id)
+    expect(oauth.revokeUserGrants(alice.user.id)).toBe(1)
+    expect(tokens.verify(alices.accessToken)).toBeNull()
+    expect(oauth.refresh(alices.refreshToken, client)).toEqual({ error: 'invalid' })
+    expect(tokens.verify(bobs.accessToken)).not.toBeNull()
+  })
+})
+
 describe('client registration', () => {
   const register = (oauth: ReturnType<typeof setup>['oauth'], name: string): OAuthClient =>
     oauth.registerClient({ name, redirectUris: ['http://localhost/cb'], authMethod: 'none', grantTypes: ['authorization_code'] }).client
@@ -115,5 +135,35 @@ describe('client registration', () => {
     const kept = register(oauth, 'new')
     expect(db.query<{ n: number }, []>('SELECT COUNT(*) AS n FROM oauth_clients').get()!.n).toBe(MAX_CLIENTS)
     expect(oauth.getClient(kept.id)).not.toBeNull()
+  })
+
+  it('keeps clients with a pending authorization code', () => {
+    const { oauth, db, start, advance } = setup()
+    const pending = register(oauth, 'mid sign-in')
+    fill(db, MAX_CLIENTS - 1, start + 1)
+    advance(CLIENT_GRACE_MS + 10)
+    oauth.createCode({ userId: 'admin', clientId: pending.id, redirectUri: 'http://localhost/cb', codeChallenge: 'x', scope: 'codeducky', resource: 'r' })
+    register(oauth, 'new')
+    expect(oauth.getClient(pending.id)).not.toBeNull()
+  })
+
+  it('refuses registration with 503 when no client can be pruned', async () => {
+    const { app, oauth, db, alice } = setup()
+    const used = register(oauth, 'used')
+    oauth.createGrant(
+      used,
+      oauth.consumeCode(
+        oauth.createCode({ userId: alice.user.id, clientId: used.id, redirectUri: 'http://localhost/cb', codeChallenge: 'x', scope: 'codeducky', resource: 'r' }),
+      )!,
+    )
+    fill(db, MAX_CLIENTS - 1, 1)
+    db.query("INSERT INTO oauth_grants (id, user_id, client_id, refresh_hash, scope, resource, created_at, refreshed_at, expires_at) SELECT 'g-' || id, ?, id, 'h-' || id, 'codeducky', 'r', 1, 1, ? FROM oauth_clients WHERE name = 'bulk'").run(
+      alice.user.id,
+      Date.now() + 86_400_000,
+    )
+    expect(() => register(oauth, 'one more')).toThrow(ClientLimitError)
+    const res = await request(app, 'POST', '/oauth/register', { redirect_uris: ['http://localhost/cb'], token_endpoint_auth_method: 'none' })
+    expect(res.status).toBe(503)
+    expect(res.headers.get('Retry-After')).toBe('3600')
   })
 })

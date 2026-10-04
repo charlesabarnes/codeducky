@@ -60,6 +60,11 @@ export function getUsage(db: Database, userId: string): Usage {
   }
 }
 
+export function hasRoomFor(db: Database, userId: string, rows: number): boolean {
+  const { usage, quota } = getUsage(db, userId)
+  return usage.records + rows <= quota.records
+}
+
 /** Throws QuotaError if a write that grows usage would take the user past a limit; shrinking always passes. */
 export function checkQuota(db: Database, userId: string, rows: number, bytes: number): void {
   if (rows <= 0 && bytes <= 0) return

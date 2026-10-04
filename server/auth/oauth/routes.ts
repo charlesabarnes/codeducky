@@ -6,7 +6,7 @@ import { ADMIN_USER_ID } from '../../users/store'
 import { clientIp } from '../middleware'
 import { createFailureLimiter, passphraseMatches, type FailureLimiter } from '../passphrase'
 import { consentPage, errorPage, PAGE_HEADERS } from './consent'
-import type { ClientAuthMethod, GrantType, OAuthClient, OAuthStore } from './store'
+import { ClientLimitError, type ClientAuthMethod, type GrantType, type OAuthClient, type OAuthStore } from './store'
 
 export const OAUTH_SCOPE = 'codeducky'
 const AUTH_METHODS: readonly ClientAuthMethod[] = ['none', 'client_secret_post', 'client_secret_basic']
@@ -207,7 +207,15 @@ export function oauthRoutes({
     const name = rawName.slice(0, MAX_CLIENT_NAME) || 'Unnamed MCP client'
 
     registrationLimiter.fail(ip)
-    const { client, secret } = store.registerClient({ name, redirectUris: uris as string[], authMethod, grantTypes: [...new Set(grantTypes)] })
+    let registered: ReturnType<OAuthStore['registerClient']>
+    try {
+      registered = store.registerClient({ name, redirectUris: uris as string[], authMethod, grantTypes: [...new Set(grantTypes)] })
+    } catch (error) {
+      if (!(error instanceof ClientLimitError)) throw error
+      c.header('Retry-After', '3600')
+      return c.json({ error: 'temporarily_unavailable', error_description: 'Too many registered clients; try again later' }, 503)
+    }
+    const { client, secret } = registered
     c.header('Cache-Control', 'no-store')
     return c.json(
       {
