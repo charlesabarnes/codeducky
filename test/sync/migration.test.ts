@@ -61,9 +61,9 @@ describe('migration to string ids', () => {
 
     const db = new CodeDuckyDb('migrate-full')
     await db.open()
-    expect(db.verno).toBe(7)
+    expect(db.verno).toBe(8)
     expect(db.tables.map((t) => t.name).sort()).toEqual(
-      ['checklistState', 'checklists', 'fileViews', 'githubBlobs', 'inbox', 'notes', 'outbox', 'rejected', 'repoHandles', 'repos', 'reviewSnapshots', 'sessions', 'settings', 'syncMeta'].sort(),
+      ['checklistState', 'checklists', 'fileViews', 'githubBlobs', 'inbox', 'notes', 'outbox', 'patches', 'rejected', 'repoHandles', 'repos', 'reviewSnapshots', 'sessions', 'settings', 'syncMeta'].sort(),
     )
 
     const repos = await db.repos.orderBy('lastOpenedAt').reverse().toArray()
@@ -135,7 +135,7 @@ describe('migration to string ids', () => {
     names.push('migrate-fresh')
     const db = new CodeDuckyDb('migrate-fresh')
     await db.open()
-    expect(db.verno).toBe(7)
+    expect(db.verno).toBe(8)
     expect(await db.repos.count()).toBe(0)
     db.close()
   })
@@ -190,7 +190,7 @@ describe('migration away from the in-app Claude pass', () => {
 
     const db = new CodeDuckyDb('migrate-v5')
     await db.open()
-    expect(db.verno).toBe(7)
+    expect(db.verno).toBe(8)
     expect(await db.settings.get('app')).toEqual({ id: 'app', githubPat: 'ghp' })
 
     const renamed = (await db.repos.get('gh:o/r'))!

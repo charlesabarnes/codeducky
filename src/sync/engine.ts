@@ -3,7 +3,7 @@ import { SYNC_KINDS, wins, type ServerChange, type SyncRequest, type SyncRespons
 import type { CodeDuckyDb } from '../db/db'
 import { META_CURSOR, META_LAST_SYNCED_AT, getMeta, setMeta } from './meta'
 import { markRemote } from './middleware'
-import { RECORD_SPECS, fromWire, toWire } from './records'
+import { RECORD_SPECS, fromWire, isLocalOnly, toWire } from './records'
 import { outboxKey, type OutboxEntry } from './types'
 
 export type SyncSend = (request: SyncRequest) => Promise<SyncResponse>
@@ -134,7 +134,7 @@ export async function enqueueAll(db: CodeDuckyDb): Promise<number> {
   await db.transaction('rw', [...SYNC_KINDS.map((kind) => db.table(kind)), db.outbox], async () => {
     for (const kind of SYNC_KINDS) {
       const rows = await db.table(kind).toArray()
-      const entries = rows.map((row) => {
+      const entries = rows.filter((row) => !isLocalOnly(kind, row)).map((row) => {
         const { id, changedAt } = toWire(kind, row)
         return { key: outboxKey(kind, id), kind, id, changedAt, deleted: false }
       })

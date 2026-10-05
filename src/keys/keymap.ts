@@ -73,6 +73,7 @@ export const KEYMAP = [
   { id: 'tab.files', keys: ['g f'], label: 'Files tab', group: 'View' },
   { id: 'tab.notes', keys: ['g n'], label: 'Notes tab', group: 'View' },
   { id: 'tab.checklists', keys: ['g c'], label: 'Checklists tab', group: 'View' },
+  { id: 'file.window', keys: ['O'], label: 'Open the file in a new window', group: 'View' },
 
   { id: 'editor.save', keys: ['mod+Enter'], label: 'Save the note', group: 'Note editor', docOnly: true, shownWith: 'note.comment' },
   { id: 'editor.cancel', keys: ['Escape'], label: 'Cancel the note, or leave a text field', group: 'Note editor', docOnly: true, shownWith: 'note.comment' },

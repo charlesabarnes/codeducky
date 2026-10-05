@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto'
 import { matchRoutes } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { isServerPath, NAVIGATE_DENYLIST } from '../../shared/serverPaths'
+import { fileWindowPath } from '../../src/app/paths'
 import { routes } from '../../src/app/routes'
 
 const leaf = (path: string) => matchRoutes(routes, path)?.at(-1)?.route.id ?? null
@@ -25,6 +26,20 @@ describe('routes', () => {
     expect(leaf('/signin/callback')).toBe('signin-callback')
     expect(leaf('/repos/x/pull/1')).toBe('pr-mirror')
     expect(leaf('/charlesabarnes/codeducky')).toBeNull()
+  })
+
+  it('opens a session file in a window of its own, outside the app layout with its sidebar', () => {
+    const path = new URL(fileWindowPath('patch-1', 'src/a.ts'), 'https://x').pathname
+    expect(leaf(path)).toBe('file-window')
+    const [shell] = matchRoutes(routes, path)!
+    expect(shell!.route).toBe(routes[1])
+    expect(matchRoutes(routes, '/sessions/abc')![0]!.route).toBe(routes[0])
+  })
+
+  it('handles the share target in the app, not the server or the service worker fallback denylist', () => {
+    expect(leaf('/share')).toBe('share')
+    expect(isServerPath('/share')).toBe(false)
+    expect(NAVIGATE_DENYLIST.some((pattern) => pattern.test('/share?url=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fpull%2F1'))).toBe(false)
   })
 
   it('leaves pull request paths to the app in the service worker and the server', () => {

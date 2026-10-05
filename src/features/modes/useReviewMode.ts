@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import type { Session } from '../../db/schema'
+import { isPatchSession, type Session } from '../../db/schema'
 import type { BranchCommit, FileChange } from '../../git/types'
 import type { GitHubClient } from '../../github/client'
 import type { PrSnapshot } from '../../github/prDiff'
@@ -76,10 +76,12 @@ export function useReviewMode({ session, source, scan, dirHandle, pr, generation
   const head = pr?.snapshot.pull.headSha ?? null
   const number = pr?.snapshot.pull.number ?? 0
 
-  const lastLook = useLastLook(session, scan.files, gh && ref && head ? { kind: 'pr', gh, ref, head } : { kind: 'local' })
+  // A patch is one fixed diff: no commits, and no earlier look to compare with.
+  const fixed = isPatchSession(session)
+  const lastLook = useLastLook(session, fixed ? null : scan.files, gh && ref && head ? { kind: 'pr', gh, ref, head } : { kind: 'local' })
   const commits = useBranchCommits(
     gh && ref && head ? { kind: 'pr', gh, ref, number, head } : { kind: 'local', baseSha: session.baseSha },
-    scan.files !== null,
+    !fixed && scan.files !== null,
     String(generation),
   )
   const list = useMemo<readonly BranchCommit[]>(() => (commits.status === 'ready' ? commits.commits : []), [commits])

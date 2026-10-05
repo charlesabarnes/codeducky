@@ -22,7 +22,7 @@ import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { db } from '../../db/db'
 import { repoLabel } from '../../db/repos'
-import type { Note, Repo, Session } from '../../db/schema'
+import { isPatchSession, type Note, type Repo, type Session } from '../../db/schema'
 import type { ViewMode } from '../../diff/DiffTable'
 import type { MoveTarget } from '../../diff/moved'
 import type { FileChange, FileStats } from '../../git/types'
@@ -73,6 +73,7 @@ import { useReviewMode, type ReviewMode } from '../modes/useReviewMode'
 import { describeRange } from '../../review/commitRange'
 import type { EditSource } from '../editor/editSource'
 import { useLeaveGuard } from '../editor/useLeaveGuard'
+import { openFileWindow, shareNoteFocus, useDirtyElsewhere, usePublishDirty } from '../window/windowSync'
 
 const EditorPane = lazy(async () => ({ default: (await import('../editor/EditorPane')).EditorPane }))
 
@@ -147,6 +148,7 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
   const filterRef = useRef<HTMLInputElement>(null)
   const { announce } = useKeys()
   const isLocal = dirHandle !== null
+  const isPatch = isPatchSession(session)
   const modes = useReviewMode({ session, source, scan, dirHandle, pr: pr && { gh: pr.gh, snapshot: pr.snapshot }, generation })
   const display = modes.display
   const branchWide = modes.mode.kind === 'all'
@@ -194,7 +196,9 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
   )
   const editBlockedFor = (change: FileChange | null) =>
     !editSource
-      ? 'Editing needs the local checkout or a pull request'
+      ? isPatch
+        ? 'A patch is read-only'
+        : 'Editing needs the local checkout or a pull request'
       : !change
         ? 'Only files changed on the branch can be edited'
         : change.status === 'deleted'
@@ -212,6 +216,8 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
       : null
   const showEditor = editing && editorChange !== null && editorChange.path === editPath
   useLeaveGuard(dirtyPath)
+  usePublishDirty(sessionId, dirtyPath)
+  const dirtyElsewhere = useDirtyElsewhere(sessionId)
   const fileNotes = useMemo(
     () => notes.filter((note) => currentPath(note.path, renamed) === selectedPath),
     [notes, selectedPath, renamed],
@@ -297,7 +303,7 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
   const toggleViewed = (file: FileChange) => {
     const change = modes.branchChange(file.path)
     if (!change) return
-    recordViewed(sessionId, change, !viewed.has(change.path), pr ? pr.snapshot.pull.headSha : null).catch((error: unknown) =>
+    recordViewed(sessionId, change, !viewed.has(change.path), pr ? pr.snapshot.pull.headSha : isPatch ? session.headSha : null).catch((error: unknown) =>
       console.error('Could not record the review', error),
     )
   }
@@ -307,10 +313,13 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
     if (message) announce(message, { visible: true })
   }
   const toggleSince = () =>
-    modes.mode.kind === 'since'
+    isPatch
+      ? announce('A patch has no earlier looks to compare with', { visible: true })
+      : modes.mode.kind === 'since'
       ? switchMode({ kind: 'all' }, 'All changes')
       : switchMode({ kind: 'since' }, 'Since last look: only what changed since you viewed each file')
   const stepCommits = (delta: 1 | -1) => {
+    if (isPatch) return announce('A patch has no commits to step through', { visible: true })
     if (modes.commits.status !== 'ready') return announce(modes.commits.status === 'loading' ? 'Commits are still loading' : 'Could not list the commits', { visible: true })
     if (modes.commits.commits.length === 0) return announce('No commits on this branch yet', { visible: true })
     const next = modes.stepCommits(delta)
@@ -322,6 +331,10 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
   const jumpTo = (note: Note) => {
     selectFile(note.path)
     setFocus({ id: note.id!, at: Date.now() })
+    shareNoteFocus(sessionId, currentPath(note.path, renamed), note.id!)
+  }
+  const openWindow = (path: string) => {
+    if (!openFileWindow(sessionId, path)) announce('The browser blocked the new window', { visible: true })
   }
   const exportReport = async () => {
     setExportError(null)
@@ -404,6 +417,7 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
     'tab.notes': () => switchTab('notes'),
     'tab.checklists': () => switchTab('checklists'),
     'file.edit': toggleEditor,
+    'file.window': () => (selected ? openWindow(selected.path) : false),
     'mode.since': toggleSince,
     'mode.all': () => switchMode({ kind: 'all' }, 'All changes'),
     'commit.next': () => stepCommits(1),
@@ -432,9 +446,11 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
   return (
     <div className="session-layout">
       <Crumbs>
-        <Link to={repoPath(repo.id!)}>{repoLabel(repo)}</Link>
+        {isPatch ? <Link to="/">patch</Link> : <Link to={repoPath(repo.id!)}>{repoLabel(repo)}</Link>}
         <span>/</span>
-        {pr ? (
+        {isPatch ? (
+          <strong>{session.branch}</strong>
+        ) : pr ? (
           <>
             <strong>#{pr.snapshot.pull.number}</strong>
             <span>{pr.snapshot.pull.headRef}</span>
@@ -449,7 +465,7 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
           </>
         )}
       </Crumbs>
-      <StatusBar mode={showEditor ? 'edit' : pr ? 'pr review' : 'review'} hints={showEditor ? EDIT_HINTS : SESSION_HINTS}>
+      <StatusBar mode={showEditor ? 'edit' : pr ? 'pr review' : isPatch ? 'patch review' : 'review'} hints={showEditor ? EDIT_HINTS : SESSION_HINTS}>
         {selected && <span className="strong">{selected.path.slice(selected.path.lastIndexOf('/') + 1)}</span>}
         {dirtyPath && <span>unsaved</span>}
         {modes.mode.kind !== 'all' && <span>{modes.mode.kind === 'since' ? 'since last look' : 'commits'}</span>}
@@ -469,7 +485,12 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
             </Link>
           )}
           <dl className="meta-grid">
-            {pr ? (
+            {isPatch ? (
+              <>
+                <MetaLabel icon={FileDiff} label="patch" />
+                <dd>{session.branch}</dd>
+              </>
+            ) : pr ? (
               <>
                 <MetaLabel icon={GitPullRequest} label="pr" />
                 <dd>
@@ -538,18 +559,22 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
             )}
           </dl>
           <div className="row">
-            <button type="button" className="secondary" onClick={rescan} disabled={scan.scanning || pr?.refreshing}>
-              <RefreshCw size={12} aria-hidden />
-              {pr ? (pr.refreshing ? 'refreshing…' : 'refresh') : scan.scanning ? 'scanning…' : 'rescan'}
-            </button>
+            {!isPatch && (
+              <button type="button" className="secondary" onClick={rescan} disabled={scan.scanning || pr?.refreshing}>
+                <RefreshCw size={12} aria-hidden />
+                {pr ? (pr.refreshing ? 'refreshing…' : 'refresh') : scan.scanning ? 'scanning…' : 'rescan'}
+              </button>
+            )}
             <button type="button" className="secondary" onClick={exportReport} disabled={!scan.files}>
               <Download size={12} aria-hidden />
               export
             </button>
-            <button type="button" className="secondary" onClick={() => setPushOpen(true)} disabled={!repo.owner} title="Push open notes as a pending review">
-              <GitPullRequestArrow size={12} aria-hidden />
-              push
-            </button>
+            {!isPatch && (
+              <button type="button" className="secondary" onClick={() => setPushOpen(true)} disabled={!repo.owner} title="Push open notes as a pending review">
+                <GitPullRequestArrow size={12} aria-hidden />
+                push
+              </button>
+            )}
             {pr && (
               <button type="button" onClick={() => setSubmitOpen(true)} title="Approve, request changes or comment">
                 <Send size={12} aria-hidden />
@@ -557,7 +582,11 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
               </button>
             )}
           </div>
-          <ClaudeActions session={session} repo={repo} pr={pr && { number: pr.snapshot.pull.number, headRef: pr.snapshot.pull.headRef }} notes={notes} />
+          {isPatch ? (
+            <p className="muted">Read-only. Lines outside the patch’s hunks are not in the file, so they show blank. Notes stay on this device.</p>
+          ) : (
+            <ClaudeActions session={session} repo={repo} pr={pr && { number: pr.snapshot.pull.number, headRef: pr.snapshot.pull.headRef }} notes={notes} />
+          )}
           {scan.renamesLimited && (
             <p className="muted" title="Too many added and deleted files to compare their contents">
               Only identical renames were detected.
@@ -606,6 +635,7 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
             risks={risks}
             badges={modes.badges}
             canView={branchWide ? undefined : (path) => modes.branchChange(path) !== null}
+            onOpenWindow={openWindow}
           />
         )}
         {tab === 'notes' && <NotesPanel notes={notes} selectedId={focus?.id ?? null} onSelect={jumpTo} />}
@@ -621,6 +651,7 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
               source={editSource}
               hidden={!showEditor}
               dirty={dirtyPath === editorChange.path}
+              dirtyElsewhere={dirtyElsewhere.has(editorChange.path)}
               onDirtyChange={(dirty) => setDirtyPath((current) => (dirty ? editorChange.path : current === editorChange.path ? null : current))}
               onSaved={onSaved}
               onShowDiff={() => setEditing(false)}
@@ -641,7 +672,7 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
                 onDismiss={() => setBannerDismissed(true)}
               />
             )}
-            {scan.files && scan.files.length > 0 && (
+            {!isPatch && scan.files && scan.files.length > 0 && (
               <ModeBar
                 mode={modes.mode}
                 onModeChange={(next) => switchMode(next)}
@@ -685,6 +716,7 @@ export function SessionView({ session, repo, source, dirHandle, pr }: SessionVie
                 viewedDisabled={!branchWide && modes.branchChange(selected.path) === null}
                 onNoteRefused={(message) => announce(message, { visible: true })}
                 edit={{ onEdit: () => setEditing(true), blocked: editBlocked, dirty: dirtyPath === selected.path }}
+                onOpenWindow={() => openWindow(selected.path)}
               />
             ) : branchWide && selectedPath && fileNotes.length > 0 && scan.files ? (
               <OrphanPane path={selectedPath} notes={fileNotes} focus={focus} />
