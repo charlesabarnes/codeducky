@@ -102,11 +102,13 @@ const wanted = (prefs: PresencePrefs, signedIn: boolean) => prefs.notifications 
 /**
  * This device's "even when Code Ducky is closed" option. Turning it on subscribes and registers with the
  * server; while it is on, changed per-type choices and each sign-in register again, which also repairs a
- * subscription the server dropped. Turning it off, or signing out, unsubscribes.
+ * subscription the server dropped. Turning it off, or signing out, unsubscribes. Each change waits for the
+ * one before it, so a registration still in flight cannot land after an opt-out.
  */
 export class PushController {
   /** The per-type choices last registered, so one change registers once. */
   private registered: string | null = null
+  private queue: Promise<unknown> = Promise.resolve()
   private readonly deps: PushDeps
   private readonly prefs: PrefsStore
   private readonly signedIn: Store<boolean>
@@ -117,17 +119,25 @@ export class PushController {
     this.signedIn = signedIn
   }
 
-  async enable(): Promise<void> {
-    const types = pushTypesOf(this.prefs.getSnapshot())
-    await subscribePush(this.deps, types)
-    this.registered = JSON.stringify(types)
-    this.prefs.update({ push: true })
+  private serially<T>(step: () => Promise<T>): Promise<T> {
+    const next = this.queue.then(step)
+    this.queue = next.catch(() => undefined)
+    return next
   }
 
-  async disable(): Promise<void> {
+  enable(): Promise<void> {
+    return this.serially(async () => {
+      const types = pushTypesOf(this.prefs.getSnapshot())
+      await subscribePush(this.deps, types)
+      this.registered = JSON.stringify(types)
+      this.prefs.update({ push: true })
+    })
+  }
+
+  disable(): Promise<void> {
     this.registered = null
     this.prefs.update({ push: false })
-    await unsubscribePush(this.deps)
+    return this.serially(() => unsubscribePush(this.deps))
   }
 
   /** Follows the prefs and the sign-in until the returned stop is called. */
@@ -137,7 +147,12 @@ export class PushController {
       const key = wanted(current, this.signedIn.getSnapshot()) ? JSON.stringify(pushTypesOf(current)) : null
       if (key === this.registered) return
       this.registered = key
-      if (key) subscribePush(this.deps, pushTypesOf(current)).catch(onError)
+      if (!key) return
+      this.serially(async () => {
+        // Turned off or signed out while waiting its turn.
+        if (!wanted(this.prefs.getSnapshot(), this.signedIn.getSnapshot())) return
+        await subscribePush(this.deps, pushTypesOf(this.prefs.getSnapshot()))
+      }).catch(onError)
     }
     const stops = [this.prefs.subscribe(apply), this.signedIn.subscribe(apply)]
     apply()

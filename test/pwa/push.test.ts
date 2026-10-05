@@ -201,6 +201,38 @@ describe('PushController', () => {
     stop()
   })
 
+  it('lets an opt-out finish after a registration still in flight, so nothing is left subscribed', async () => {
+    const { deps, calls, manager } = setup()
+    let release = () => undefined as void
+    const slowKey = new Promise<string>((resolve) => (release = () => resolve(KEY)))
+    const prefs = prefsStore({ push: true })
+    const controller = new PushController({ ...deps, serverKey: () => slowKey }, prefs, flag(true))
+    const stop = controller.follow(() => undefined)
+    const disabled = controller.disable()
+    release()
+    await disabled
+    await settle()
+    expect(manager!.current()).toBeNull()
+    expect(posts(calls)).toEqual([])
+    stop()
+  })
+
+  it('unsubscribes after a registration that was already running', async () => {
+    const { deps, calls, manager } = setup()
+    let release = () => undefined as void
+    const slowKey = new Promise<string>((resolve) => (release = () => resolve(KEY)))
+    const prefs = prefsStore({ push: true })
+    const controller = new PushController({ ...deps, serverKey: () => slowKey }, prefs, flag(true))
+    const stop = controller.follow(() => undefined)
+    await settle()
+    const disabled = controller.disable()
+    release()
+    await disabled
+    expect(calls.map((call) => call.method)).toEqual(['POST', 'DELETE'])
+    expect(manager!.current()).toBeNull()
+    stop()
+  })
+
   it('reports a failed registration', async () => {
     const onError = vi.fn()
     const stop = new PushController(setup({ manager: null }).deps, prefsStore({ push: true }), flag(true)).follow(onError)
