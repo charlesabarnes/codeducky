@@ -39,6 +39,7 @@ export default defineConfig({
     env: {
       PORT: String(E2E_PORT),
       DATA_DIR: process.env.CODEDUCKY_E2E_DATA,
+      CODEDUCKY_DB: join(process.env.CODEDUCKY_E2E_DATA, 'codeducky.db'),
       CODEDUCKY_GITHUB_FAKE: '1',
       CODEDUCKY_ADMIN_PASSPHRASE: E2E_ADMIN_PASSPHRASE,
       CODEDUCKY_PUBLIC_URL: E2E_BASE,
