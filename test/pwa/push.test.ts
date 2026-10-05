@@ -233,6 +233,21 @@ describe('PushController', () => {
     stop()
   })
 
+  it('keeps an opt-out made while turning on was still registering', async () => {
+    const { deps, manager } = setup()
+    let release = () => undefined as void
+    const slowKey = new Promise<string>((resolve) => (release = () => resolve(KEY)))
+    const prefs = prefsStore()
+    const controller = new PushController({ ...deps, serverKey: () => slowKey }, prefs, flag(true))
+    const enabled = controller.enable()
+    await settle()
+    const disabled = controller.disable()
+    release()
+    await Promise.all([enabled, disabled])
+    expect(prefs.getSnapshot().push).toBe(false)
+    expect(manager!.current()).toBeNull()
+  })
+
   it('reports a failed registration', async () => {
     const onError = vi.fn()
     const stop = new PushController(setup({ manager: null }).deps, prefsStore({ push: true }), flag(true)).follow(onError)

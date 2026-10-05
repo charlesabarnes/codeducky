@@ -109,6 +109,8 @@ export class PushController {
   /** The per-type choices last registered, so one change registers once. */
   private registered: string | null = null
   private queue: Promise<unknown> = Promise.resolve()
+  /** Bumped by each opt-out, so an opt-in that started earlier does not turn the option back on. */
+  private generation = 0
   private readonly deps: PushDeps
   private readonly prefs: PrefsStore
   private readonly signedIn: Store<boolean>
@@ -126,15 +128,19 @@ export class PushController {
   }
 
   enable(): Promise<void> {
+    const generation = this.generation
     return this.serially(async () => {
+      if (generation !== this.generation) return
       const types = pushTypesOf(this.prefs.getSnapshot())
       await subscribePush(this.deps, types)
+      if (generation !== this.generation) return
       this.registered = JSON.stringify(types)
       this.prefs.update({ push: true })
     })
   }
 
   disable(): Promise<void> {
+    this.generation++
     this.registered = null
     this.prefs.update({ push: false })
     return this.serially(() => unsubscribePush(this.deps))
