@@ -54,8 +54,8 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // Store screenshots are for the install dialog, not the offline app.
         globIgnores: ['screenshots/**'],
-        // Opens the app on a click on a notification the service worker shows.
-        importScripts: ['notification-click.js'],
+        // Shows Web Push messages, and opens the app on a click on a notification the service worker shows.
+        importScripts: ['push.js', 'notification-click.js'],
         navigateFallback: 'index.html',
         // Server-rendered routes (API, MCP, OAuth consent) must reach the network; PR deep links stay in the app.
         navigateFallbackDenylist: NAVIGATE_DENYLIST,

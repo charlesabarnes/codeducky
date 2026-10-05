@@ -1,12 +1,13 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { AppWindow, Bell, BellOff, BellRing, Download } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { db } from '../../db/db'
 import { badgeApi, badgeCount } from '../../pwa/badge'
 import { useInstallPrompt } from '../../pwa/installPrompt'
 import { notificationPermission, showBrowserNotification } from '../../pwa/notifications'
 import { presencePrefs, usePresencePrefs, type BadgeSource } from '../../pwa/presencePrefs'
+import { pushController, pushServerKey, pushSupported } from '../../pwa/pushClient'
 import { useSyncState } from '../../sync/client'
 import { Panel } from '../../ui/Panel'
 import './pwa.css'
@@ -119,6 +120,11 @@ function NotificationsPanel() {
     }
   }
 
+  const turnOff = async () => {
+    presencePrefs.update({ notifications: false })
+    await pushController.disable().catch((error: unknown) => console.warn('Could not unsubscribe from push', error))
+  }
+
   return (
     <Panel icon={Bell} title="notifications" id="notifications">
       <p>
@@ -157,8 +163,9 @@ function NotificationsPanel() {
               </span>
             </label>
           </div>
+          <PushOption signedIn={auth === 'signedIn'} />
           <div className="row">
-            <button type="button" className="secondary" onClick={() => presencePrefs.update({ notifications: false })}>
+            <button type="button" className="secondary" onClick={() => void turnOff()}>
               <BellOff size={13} aria-hidden />
               turn off
             </button>
@@ -166,5 +173,69 @@ function NotificationsPanel() {
         </>
       )}
     </Panel>
+  )
+}
+
+/** Whether the server has Web Push on: unknown until its key arrives. */
+function useServerPush(): boolean | null {
+  const [enabled, setEnabled] = useState<boolean | null>(null)
+  useEffect(() => {
+    let live = true
+    void pushServerKey().then((key) => live && setEnabled(key !== null))
+    return () => {
+      live = false
+    }
+  }, [])
+  return enabled
+}
+
+/** Web Push for this device, so the choices above also arrive while Code Ducky is closed. */
+function PushOption({ signedIn }: { signedIn: boolean }) {
+  const { push } = usePresencePrefs()
+  const serverPush = useServerPush()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const unavailable = !pushSupported()
+    ? 'This browser cannot receive push messages here; in Safari, install the app first.'
+    : !signedIn
+      ? 'Needs a signed-in Code Ducky server.'
+      : serverPush === false
+        ? 'The Code Ducky server has push turned off.'
+        : null
+
+  const toggle = async (on: boolean) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await (on ? pushController.enable() : pushController.disable())
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not change push.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="check-list">
+      <label className="check-row">
+        <input
+          type="checkbox"
+          checked={push && !unavailable}
+          disabled={busy || unavailable !== null || serverPush === null}
+          onChange={(event) => void toggle(event.target.checked)}
+        />
+        <span>
+          even when Code Ducky is closed <small className="muted">(this device)</small>
+        </span>
+      </label>
+      {unavailable ? (
+        <p className="muted">{unavailable}</p>
+      ) : (
+        <p className="muted">
+          Push goes through your browser's push service. A request only arrives once a device with Code Ducky open refreshes the inbox.
+        </p>
+      )}
+      {error && <p className="warn-text">{error}</p>}
+    </div>
   )
 }

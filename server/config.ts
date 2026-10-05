@@ -1,5 +1,7 @@
+import { createECDH } from 'node:crypto'
 import { resolve } from 'node:path'
 import { loadRateLimits, positiveInt, type RateLimits } from './limits'
+import type { VapidKeys } from './push/webPush'
 import { loadQuotas, type Quotas } from './records/quota'
 
 export const DEV_ADMIN_PASSPHRASE = 'codeducky'
@@ -27,6 +29,8 @@ export interface Config {
   signups: SignupPolicy
   limits: RateLimits
   quotas: Quotas
+  /** Unset disables Web Push. */
+  vapid?: VapidKeys
 }
 
 type Env = Record<string, string | undefined>
@@ -73,6 +77,34 @@ function adminPassphrase(env: Env, production: boolean): string | undefined {
   return DEV_ADMIN_PASSPHRASE
 }
 
+/** The public key the private key derives, or null when the private key is not a P-256 scalar. */
+function derivedPublicKey(privateKey: string): string | null {
+  try {
+    const ecdh = createECDH('prime256v1')
+    ecdh.setPrivateKey(Buffer.from(privateKey, 'base64url'))
+    return ecdh.getPublicKey('base64url')
+  } catch {
+    return null
+  }
+}
+
+function vapid(env: Env): VapidKeys | undefined {
+  const publicKey = env.CODEDUCKY_VAPID_PUBLIC_KEY?.trim() || undefined
+  const privateKey = env.CODEDUCKY_VAPID_PRIVATE_KEY?.trim() || undefined
+  const subject = env.CODEDUCKY_VAPID_SUBJECT?.trim() || undefined
+  if (!publicKey && !privateKey && !subject) return undefined
+  if (!publicKey || !privateKey || !subject) {
+    throw new Error('Web Push needs CODEDUCKY_VAPID_PUBLIC_KEY, CODEDUCKY_VAPID_PRIVATE_KEY and CODEDUCKY_VAPID_SUBJECT together; run npm run vapid')
+  }
+  if (derivedPublicKey(privateKey) !== publicKey) {
+    throw new Error('CODEDUCKY_VAPID_PRIVATE_KEY does not belong to CODEDUCKY_VAPID_PUBLIC_KEY; set both from one npm run vapid')
+  }
+  if (!/^mailto:[^@\s]+@[^@\s]+$/.test(subject) && !/^https:\/\/[^\s]+$/.test(subject)) {
+    throw new Error('CODEDUCKY_VAPID_SUBJECT must be a mailto: address or an https: URL')
+  }
+  return { publicKey, privateKey, subject }
+}
+
 function signups(env: Env): SignupPolicy {
   const mode = env.CODEDUCKY_SIGNUPS || 'open'
   if (mode !== 'open' && mode !== 'closed') throw new Error('CODEDUCKY_SIGNUPS must be "open" or "closed"')
@@ -94,5 +126,6 @@ export function loadConfig(env: Env = process.env): Config {
     signups: signups(env),
     limits: loadRateLimits(env),
     quotas: loadQuotas(env),
+    vapid: vapid(env),
   }
 }

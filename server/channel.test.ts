@@ -114,6 +114,32 @@ describe('channel registry', () => {
     expect(registry.state(ALICE).permissions[0]!.state).toBe('expired')
   })
 
+  it('tells finished-task listeners once per task, whether Claude reported it or the session ended', () => {
+    const registry = createChannelRegistry({ now })
+    const finished: [string, string, string][] = []
+    const stop = registry.onTaskFinished((userId, task) => finished.push([userId, task.id, task.state]))
+    registry.connect(registration(), owner, recorder().sink)
+    const send = () => {
+      const task = registry.sendTask(ALICE, 'plugin-session-0001', { kind: 'fix', repo: 'acme/invoice-service', branch: 'b', pr: null, sessionId: null, content: 'Fix', meta: {} })
+      if (typeof task === 'string') throw new Error(task)
+      return task.id
+    }
+    const reported = send()
+    registry.report('plugin-session-0001', owner, reported, 'working', null)
+    registry.report('plugin-session-0001', owner, reported, 'done', 'ok')
+    registry.report('plugin-session-0001', owner, reported, 'failed', 'late')
+    const orphaned = send()
+    registry.remove('plugin-session-0001', owner)
+    expect(finished).toEqual([
+      [ALICE, reported, 'done'],
+      [ALICE, orphaned, 'failed'],
+    ])
+    stop()
+    registry.connect(registration(), owner, recorder().sink)
+    registry.report('plugin-session-0001', owner, send(), 'done', null)
+    expect(finished).toHaveLength(2)
+  })
+
   it('a stale stream closing does not disconnect the newer one', () => {
     const registry = createChannelRegistry({ now })
     const first = recorder()

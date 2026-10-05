@@ -133,6 +133,11 @@ export function createChannelRegistry({
   const tasks = new Map<string, TaskEntry>()
   const permissions = new Map<string, PermissionEntry>()
   const listeners = new Map<string, Set<(state: ChannelState) => void>>()
+  const finishedListeners = new Set<(userId: string, task: ChannelTaskView) => void>()
+
+  const finished = (userId: string, task: ChannelTaskView) => {
+    for (const listener of finishedListeners) listener(userId, { ...task })
+  }
 
   const permissionKey = (userId: string, channelId: string, requestId: string) => `${sessionKey(userId, channelId)}\u0000${requestId}`
 
@@ -198,6 +203,7 @@ export function createChannelRegistry({
       if (taskUser !== userId || task.channelId !== id || isFinished(task.state)) continue
       const delivered = STATE_ORDER[task.state] >= STATE_ORDER.delivered
       setTaskState(task, 'failed', delivered ? 'The Claude Code session ended before reporting done.' : 'The Claude Code session ended before the task was delivered.')
+      finished(userId, task)
     }
     for (const { userId: requestUser, view: request } of permissions.values()) {
       if (requestUser === userId && request.channelId === id && request.state === 'pending') {
@@ -345,7 +351,10 @@ export function createChannelRegistry({
       const task = taskOf(owner.userId, id, taskId)
       if (!entry || !task) return false
       entry.view.lastSeenAt = now()
-      if (setTaskState(task, state, message)) changed(owner.userId)
+      if (setTaskState(task, state, message)) {
+        changed(owner.userId)
+        if (isFinished(state)) finished(owner.userId, task)
+      }
       return true
     },
 
@@ -432,6 +441,12 @@ export function createChannelRegistry({
 
     /** One user's sessions, tasks and permission prompts. */
     state: snapshot,
+
+    /** Called once for each task that reaches done or failed, with the user it belongs to. */
+    onTaskFinished(listener: (userId: string, task: ChannelTaskView) => void): () => void {
+      finishedListeners.add(listener)
+      return () => finishedListeners.delete(listener)
+    },
 
     subscribe(userId: string, listener: (state: ChannelState) => void): () => void {
       const own = listeners.get(userId) ?? new Set()

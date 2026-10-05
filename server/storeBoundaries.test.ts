@@ -8,6 +8,7 @@ const OWNERS: Record<string, string> = {
   tokens: 'auth/tokens.ts',
   oauth_codes: 'auth/oauth/store.ts',
   oauth_grants: 'auth/oauth/store.ts',
+  push_subscriptions: 'push/store.ts',
 }
 
 const QUERY = new RegExp(`\\b(?:FROM|INTO|UPDATE|JOIN)\\s+(${Object.keys(OWNERS).join('|')})\\b`, 'g')

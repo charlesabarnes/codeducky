@@ -16,7 +16,7 @@ export const ADMIN_PASSPHRASE = 'correct horse battery'
 export function makeApp(overrides: Partial<AppDeps> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'codeducky-server-'))
   const db = openDatabase(join(dir, 'test.db'))
-  const { app, tokens, oauth, channel } = createApp({
+  const { app, tokens, oauth, channel, push } = createApp({
     db,
     provider: fakeGitHubProvider({ now: overrides.now }),
     adminPassphrase: ADMIN_PASSPHRASE,
@@ -29,6 +29,7 @@ export function makeApp(overrides: Partial<AppDeps> = {}) {
     tokens,
     oauth,
     channel,
+    push,
     cleanup: () => {
       db.close()
       rmSync(dir, { recursive: true, force: true })

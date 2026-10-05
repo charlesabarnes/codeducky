@@ -17,12 +17,14 @@ const { app } = createApp({
   publicUrl: config.publicUrl,
   limits: config.limits,
   quotas: config.quotas,
+  vapid: config.vapid,
   webDist: existsSync(config.webDist) ? config.webDist : undefined,
 })
 
 // Channel streams send a heartbeat every 15 seconds; Bun's default idle timeout is 10.
 const server = Bun.serve({ port: config.port, fetch: app.fetch, idleTimeout: 60 })
 console.log(`codeducky listening on http://localhost:${server.port}`)
+if (!config.vapid) console.log('Web Push is off; set the CODEDUCKY_VAPID_* variables (npm run vapid) to turn it on')
 
 const shutdown = () => {
   void server.stop()

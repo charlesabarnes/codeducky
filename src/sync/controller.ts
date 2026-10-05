@@ -153,6 +153,7 @@ export class SyncController {
   private throttledUntil = 0
   private inFlight: Promise<void> | null = null
   private rerun = false
+  private readonly signOutHooks = new Set<() => Promise<void>>()
 
   private readonly db: CodeDuckyDb
 
@@ -177,6 +178,19 @@ export class SyncController {
   private update(changes: Partial<SyncSnapshot>) {
     this.snapshot = { ...this.snapshot, ...changes }
     this.listeners.forEach((listener) => listener())
+  }
+
+  /**
+   * Runs `hook` when this device stops being signed in on purpose: sign-out, account deletion, or a
+   * switch that removes this browser's data. Hooks run while the token still works where possible.
+   */
+  onSignOut(hook: () => Promise<void>): () => void {
+    this.signOutHooks.add(hook)
+    return () => this.signOutHooks.delete(hook)
+  }
+
+  private async runSignOutHooks() {
+    await Promise.all([...this.signOutHooks].map((hook) => hook().catch((error: unknown) => console.warn('Sign-out cleanup failed', error))))
   }
 
   start(): Promise<void> {
@@ -308,6 +322,7 @@ export class SyncController {
   async confirmSwitch(): Promise<void> {
     const auth = this.pendingSwitch
     if (!auth?.user) return
+    await this.runSignOutHooks()
     this.stop()
     await this.inFlight?.catch(() => undefined)
     try {
@@ -359,6 +374,7 @@ export class SyncController {
 
   /** Revokes this device's token (best effort) and stops syncing. Local data and unsent changes stay. */
   async signOut(): Promise<void> {
+    await this.runSignOutHooks()
     const auth = await this.halt()
     this.throttledUntil = 0
     await this.db.syncMeta.bulkDelete([META_AUTH, META_CURSOR, META_LAST_SYNCED_AT])
@@ -376,6 +392,7 @@ export class SyncController {
   async deleteAccount(confirm: string): Promise<void> {
     await this.request<{ ok: true }>('DELETE', '/api/account', { confirm })
     await this.halt()
+    await this.runSignOutHooks()
     await wipeAccountData(this.db)
     this.update({ ...SIGNED_OUT, auth: 'signedOut', lastSyncedAt: null })
   }

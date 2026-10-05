@@ -5,6 +5,7 @@ import type { OAuthStore } from '../auth/oauth/store'
 import type { TokenStore } from '../auth/tokens'
 import type { ChannelRegistry } from '../channel/registry'
 import { DEFAULT_SIGNUPS, type SignupPolicy } from '../config'
+import { deleteUserSubscriptions } from '../push/store'
 import { deleteUser, getUser, type User } from '../users/store'
 import { forgetPendingSignIns, listAccounts, setQuotaOverride, setStatus, stats, type QuotaOverride } from './store'
 
@@ -63,7 +64,7 @@ export function adminRoutes({ db, tokens, oauth, registry, signups = DEFAULT_SIG
 
   routes.get('/stats', (c) => c.json({ ...stats(db, now()), signupsOpen: signups.open, maxUsers: signups.maxUsers }))
 
-  /** Signs the user out everywhere and drops anything mid-flight; plugin and PWA streams end at their next heartbeat. */
+  /** Signs the user out everywhere, stops their pushes and drops anything mid-flight; plugin and PWA streams end at their next heartbeat. */
   routes.post('/users/:id/disable', (c) => {
     const user = target(c)
     if (user instanceof Response) return user
@@ -73,6 +74,7 @@ export function adminRoutes({ db, tokens, oauth, registry, signups = DEFAULT_SIG
       oauth.deleteUserCodes(user.id)
       tokens.revokeAllForUser(user.id)
       forgetPendingSignIns(db, user.id)
+      deleteUserSubscriptions(db, user.id)
     })()
     registry.removeUser(user.id)
     return c.json({ user: summaryOf(user.id) })

@@ -10,6 +10,8 @@ import { decideConsent, fakeConsent, type SignedIn } from '../test/support/fakeS
 import { createChannelRegistry, type Registration } from './channel/registry'
 import { pkceChallenge } from './auth/pkce'
 import { checklist, note, record, repo, REPO, REPO_ID, session, ticked } from './fixtures'
+import { listSubscriptions } from './push/store'
+import { decryptPush, fakeTransport, receiverKeys, TEST_VAPID, type Receiver } from './push/testing'
 import { readRecord } from './records/store'
 import { adminLogin, appSend, makeApp, mcpClient, request, signInAs, sseReader, TEST_ORIGIN } from './testing'
 import { getUser } from './users/store'
@@ -53,6 +55,7 @@ const ROUTES: Record<string, RouteClass> = {
   'POST /oauth/register': 'public',
   'GET /oauth/authorize': 'public',
   'GET /gate/:script': 'public',
+  'GET /api/push/key': 'public',
 
   'GET /api/auth/session': 'cross-user',
   'POST /api/auth/logout': 'cross-user',
@@ -69,6 +72,8 @@ const ROUTES: Record<string, RouteClass> = {
   'POST /api/channel/sessions/:id/tasks': 'cross-user',
   'POST /api/channel/sessions/:id/permissions/:requestId': 'cross-user',
   'DELETE /api/account': 'cross-user',
+  'POST /api/push/subscriptions': 'cross-user',
+  'DELETE /api/push/subscriptions': 'cross-user',
   'ALL /mcp': 'cross-user',
   'POST /oauth/authorize': 'cross-user',
   'POST /oauth/token': 'cross-user',
@@ -120,7 +125,8 @@ const registration = (id: string, label: string): Registration => ({
 })
 
 const webDist = mkdtempSync(join(tmpdir(), 'codeducky-isolation-web-'))
-const ctx = makeApp({ channel: createChannelRegistry({ heartbeatMs: 50 }), webDist })
+const pushes = fakeTransport()
+const ctx = makeApp({ channel: createChannelRegistry({ heartbeatMs: 50 }), webDist, vapid: TEST_VAPID, pushTransport: pushes.transport })
 const send = (method: string, path: string, token?: string, body?: unknown) => request(ctx.app, method, path, body, token)
 const json = async <T = Record<string, unknown>>(res: Response | Promise<Response>) => (await (await res).json()) as T
 const streams: { close: () => Promise<void> }[] = []
@@ -175,6 +181,18 @@ async function callTool(client: Client, name: string, args: Record<string, unkno
   return result.isError ? { error: text } : (JSON.parse(text) as Record<string, unknown>)
 }
 
+const pushBody = ({ target }: Receiver, prefs = { tasks: true, requests: true }) => ({
+  subscription: { endpoint: target.endpoint, keys: { p256dh: target.p256dh, auth: target.auth } },
+  prefs,
+})
+
+/** What each of the user's devices received, decrypted. */
+async function pushedTo(device: Receiver) {
+  await ctx.push!.idle()
+  const sent = pushes.sent.filter((request) => request.endpoint === device.target.endpoint)
+  return Promise.all(sent.map(async (request) => JSON.parse(await decryptPush(device, request.body)) as { title: string; url: string }))
+}
+
 const pull = (token: string) => json<SyncResponse>(send('POST', '/api/sync', token, { cursor: 0, changes: [] }))
 const mint = (session: string, name: string) => json<{ token: string; info: { id: string } }>(send('POST', '/api/auth/tokens', session, { name }))
 const tokenIds = async (session: string) => (await json<{ tokens: { id: string }[] }>(send('GET', '/api/auth/tokens', session))).tokens.map((t) => t.id)
@@ -188,8 +206,8 @@ interface Account {
   apiId: string
 }
 
-let alice: Account & { oauthClient: string; access: string; refresh: string; grantId: string; taskId: string; mcpNoteId: string }
-let bob: Account & { oauthClient: string; access: string; plugin: ReturnType<typeof sseReader> }
+let alice: Account & { oauthClient: string; access: string; refresh: string; grantId: string; taskId: string; mcpNoteId: string; device: Receiver }
+let bob: Account & { oauthClient: string; access: string; plugin: ReturnType<typeof sseReader>; device: Receiver }
 let baseline: unknown
 
 async function account(login: string): Promise<Account> {
@@ -206,7 +224,9 @@ async function aliceView() {
     ({ id, kind, name, expiresAt }) => ({ id, kind, name, expiresAt }),
   )
   const channel = await json<ChannelState>(send('GET', '/api/channel/sessions', alice.session))
+  const push = listSubscriptions(ctx.db, alice.signedIn.user.id).map(({ endpoint, p256dh, auth, prefs }) => ({ endpoint, p256dh, auth, prefs }))
   return {
+    push,
     records,
     user: me.user.login,
     usage: me.usage,
@@ -246,7 +266,10 @@ beforeAll(async () => {
   const prompt = { type: 'permission_request', requestId: 'abcde', toolName: 'Bash', description: 'Run tests', inputPreview: '{}' }
   expect((await send('POST', `/api/channel/sessions/${ALICE_PRIVATE}/events`, a.api, prompt)).status).toBe(200)
 
-  alice = { ...a, oauthClient, access: issued.body.access_token, refresh: issued.body.refresh_token, grantId, taskId: task.task.id, mcpNoteId: added.added.id }
+  const aliceDevice = await receiverKeys()
+  expect((await send('POST', '/api/push/subscriptions', a.session, pushBody(aliceDevice))).status).toBe(201)
+
+  alice = { ...a, oauthClient, access: issued.body.access_token, refresh: issued.body.refresh_token, grantId, taskId: task.task.id, mcpNoteId: added.added.id, device: aliceDevice }
 
   const b = await account('bob')
   const bobClient = await registerClient('Bob Claude')
@@ -254,7 +277,9 @@ beforeAll(async () => {
   const plugin = sseReader(await send('POST', '/api/channel/stream', b.api, registration('bob-own-session-01', 'bob laptop')))
   streams.push(plugin)
   expect((await plugin.next()).event).toBe('ready')
-  bob = { ...b, oauthClient: bobClient, access: bobIssued.body.access_token, plugin }
+  const bobDevice = await receiverKeys()
+  expect((await send('POST', '/api/push/subscriptions', b.session, pushBody(bobDevice))).status).toBe(201)
+  bob = { ...b, oauthClient: bobClient, access: bobIssued.body.access_token, plugin, device: bobDevice }
 
   baseline = await aliceView()
 })
@@ -384,6 +409,18 @@ const CROSS_USER: Record<string, () => Promise<void>> = {
     expect(getUser(ctx.db, bob.signedIn.user.id)).not.toBeNull()
   },
 
+  async 'POST /api/push/subscriptions'() {
+    const taken = await send('POST', '/api/push/subscriptions', bob.session, pushBody(alice.device, { tasks: false, requests: false }))
+    expect(taken.status).toBe(409)
+    expect((await send('POST', '/api/push/subscriptions', bob.session, pushBody(bob.device, { tasks: true, requests: false }))).status).toBe(200)
+    expect(listSubscriptions(ctx.db, bob.signedIn.user.id).map((s) => s.endpoint)).toEqual([bob.device.target.endpoint])
+  },
+
+  async 'DELETE /api/push/subscriptions'() {
+    expect((await send('DELETE', '/api/push/subscriptions', bob.session, { endpoint: alice.device.target.endpoint })).status).toBe(404)
+    expect((await send('DELETE', '/api/push/subscriptions', bob.api, { endpoint: alice.device.target.endpoint })).status).toBe(403)
+  },
+
   async 'ALL /mcp'() {
     const client = await mcpClient(ctx.app, bob.access)
     clients.push(client)
@@ -460,6 +497,23 @@ describe('admin routes', () => {
   })
 })
 
+describe('pushes', () => {
+  it('alice\'s finished tasks and new review requests push to her device, never to bob\'s', async () => {
+    const report = { type: 'status', taskId: alice.taskId, state: 'done', message: 'Alice private finding' }
+    expect((await send('POST', `/api/channel/sessions/${ALICE_PRIVATE}/events`, alice.api, report)).status).toBe(200)
+    const inbox = record('inbox', 'inbox', {
+      fetchedAt: 3,
+      items: [{ repo: REPO, number: 43, title: 'Alice second', author: 'octo', url: 'u43', updatedAt: 'y', section: 'requested' }],
+    }, 300)
+    expect((await send('POST', '/api/sync', alice.api, { cursor: 0, changes: [inbox] })).status).toBe(200)
+    const received = await pushedTo(alice.device)
+    expect(received.map((push) => push.title)).toEqual(['Claude finished the review', `Review requested: ${REPO}#43`])
+    expect(JSON.stringify(received)).not.toContain('Alice private finding')
+    expect(await pushedTo(bob.device)).toEqual([])
+    baseline = await aliceView()
+  })
+})
+
 describe('disable and delete cascades', () => {
   it('disabling bob ends his sessions, tokens, grants and channel streams, and leaves alice alone', async () => {
     const admin = await adminLogin(ctx.app)
@@ -475,6 +529,7 @@ describe('disable and delete cascades', () => {
       })(),
     ).rejects.toThrow('stream ended')
     expect(ctx.channel.state(bob.signedIn.user.id)).toEqual({ sessions: [], tasks: [], permissions: [] })
+    expect(listSubscriptions(ctx.db, bob.signedIn.user.id)).toEqual([])
     expect(await aliceView()).toEqual(baseline as Awaited<ReturnType<typeof aliceView>>)
   })
 

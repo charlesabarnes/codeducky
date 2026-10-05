@@ -29,6 +29,7 @@ sign in as any login.
 | `npm run test:e2e` | Playwright, below |
 | `npm run build` | Type-checks and builds the PWA into `dist/` |
 | `npm start` | The production server, serving `dist/` |
+| `npm run vapid` | Prints a new VAPID key pair for Web Push |
 
 ### End-to-end tests
 
@@ -67,6 +68,10 @@ browser's private file system. The run is not part of `npm test`.
 | `CODEDUCKY_RATE_CHANNEL_TASKS` | `30` per minute | Tasks sent to Claude Code per user. |
 | `CODEDUCKY_RATE_GITHUB_START` | `20` per 10 minutes | GitHub sign-in starts per client address. |
 | `CODEDUCKY_RATE_NEW_ACCOUNTS` | `30` per hour | New accounts, across everyone. |
+| `CODEDUCKY_RATE_PUSH` | `60` per hour | Web Push messages per user; one message to all of a user's devices counts once. |
+| `CODEDUCKY_VAPID_PUBLIC_KEY` | | Web Push public key (`npm run vapid`). Unset turns push off. |
+| `CODEDUCKY_VAPID_PRIVATE_KEY` | | Web Push private key; must belong to the public key. |
+| `CODEDUCKY_VAPID_SUBJECT` | | Contact for the push services: `mailto:you@example.com` or an `https:` URL. |
 | `CODEDUCKY_SERVER_PORT` | `8787` | Dev only: where Vite proxies the server paths. |
 
 `CODEDUCKY_PASSPHRASE` was renamed to `CODEDUCKY_ADMIN_PASSPHRASE`; the server refuses to start while
@@ -80,8 +85,8 @@ it is set. Rate variables set the limit per window; bursts scale with them.
 - `CODEDUCKY_GITHUB_CLIENT_ID` and `CODEDUCKY_GITHUB_CLIENT_SECRET`
 - `CODEDUCKY_ADMIN_PASSPHRASE`, long and random, to use the admin panel
 
-Optional: `CODEDUCKY_SIGNUPS`, `CODEDUCKY_MAX_USERS`, the quota and rate variables. The health check is
-`GET /api/health`.
+Optional: `CODEDUCKY_SIGNUPS`, `CODEDUCKY_MAX_USERS`, the quota and rate variables, and the three
+`CODEDUCKY_VAPID_*` secrets for Web Push (below). The health check is `GET /api/health`.
 
 ### GitHub OAuth App
 
@@ -95,12 +100,47 @@ An OAuth App has one callback host, so use a second app for real GitHub sign-in 
 (`http://localhost:5173/api/auth/github/callback`), or the fake GitHub. Code Ducky asks for no scopes,
 reads only the GitHub id and login, and revokes the GitHub token straight away.
 
+## Web Push
+
+Notifications reach a device even when Code Ducky is closed there once the server has a VAPID key pair.
+Without one, push is off and the PWA hides the option; notifications still work while the app is open.
+
+1. Run `npm run vapid` once. It prints `CODEDUCKY_VAPID_PUBLIC_KEY` and `CODEDUCKY_VAPID_PRIVATE_KEY`.
+2. Set both as secrets, plus `CODEDUCKY_VAPID_SUBJECT`: a `mailto:` address or `https:` URL the browsers'
+   push services can contact about your traffic. The server refuses to start with only some of the three,
+   or with a private key that does not belong to the public key.
+3. Keep the pair. A new pair ends every subscription; each device subscribes again the next time Code Ducky
+   opens there.
+
+In the PWA, Settings, notifications, tick "even when Code Ducky is closed" on each device that should get
+pushes. The per-type choices ("send to Claude" tasks, review requests) are stored with that device's
+subscription on the server. Signing the device out, or turning notifications off, unsubscribes it.
+
+- **Tasks.** A "send to Claude" task that reaches done or failed is pushed to every device that wants tasks.
+- **Review requests.** The server never calls GitHub; it sees requests when a device syncs the inbox it
+  fetched. When a sync adds requested pull requests that were not in the stored inbox, they are pushed to
+  the user's other devices, not to the device that synced, whose open app shows its own notification. The
+  first inbox an account syncs only sets the baseline. So a request arrives once any device with Code Ducky
+  open (it refreshes the inbox every few minutes) picks it up.
+- **No double notifications.** A push carries the same tag as the in-app notification for the event, so the
+  two replace each other, and the service worker shows nothing while a window of the app has focus. Safari
+  may end a subscription after several pushes shown no notification; the server then drops it on the next
+  410, and the PWA subscribes again the next time it opens.
+
+A push holds only a title, a short body (repo, branch or pull request) and the link to open: never note
+contents or Claude's messages. Messages are encrypted for the device (RFC 8291) and signed with the VAPID
+key (RFC 8292). An account keeps up to 10 subscriptions; registering another drops the least recently used.
+The server only sends to the browsers' push services (Google, Mozilla, Apple, Microsoft), drops a
+subscription the service reports gone (404 or 410) or after 5 failures in a row, and logs failures with
+the push service's host only.
+
 ## Admin
 
 Sign in under Settings, "admin sign-in", with `CODEDUCKY_ADMIN_PASSPHRASE`. The admin session lasts 12
 hours and cannot mint API tokens or approve MCP clients. The admin panel in Settings lists accounts with
 their usage, tokens, approved apps and live channel sessions, and can disable, enable or delete an account
-or set its quota. Disabling signs the user out everywhere and revokes their tokens and apps. Users can
+or set its quota. Disabling signs the user out everywhere, revokes their tokens and apps, and removes their
+push subscriptions. Users can
 delete their own account under Settings.
 
 ## Quotas

@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test'
 import { DEV_ADMIN_PASSPHRASE, loadConfig } from './config'
 import { DEFAULT_RATE_LIMITS } from './limits'
+import { TEST_VAPID } from './push/testing'
 import { DEFAULT_QUOTAS } from './records/quota'
+
+const VAPID = {
+  CODEDUCKY_VAPID_PUBLIC_KEY: TEST_VAPID.publicKey,
+  CODEDUCKY_VAPID_PRIVATE_KEY: TEST_VAPID.privateKey,
+  CODEDUCKY_VAPID_SUBJECT: TEST_VAPID.subject,
+}
 
 const PROD = {
   NODE_ENV: 'production',
@@ -68,5 +75,25 @@ describe('config', () => {
     expect(() => loadConfig({ CODEDUCKY_SIGNUPS: 'maybe' })).toThrow('CODEDUCKY_SIGNUPS')
     expect(() => loadConfig({ CODEDUCKY_MAX_USERS: '0' })).toThrow('CODEDUCKY_MAX_USERS')
     expect(() => loadConfig({ CODEDUCKY_QUOTA_BYTES: '1.5' })).toThrow('CODEDUCKY_QUOTA_BYTES')
+  })
+
+  it('turns Web Push on with a matching VAPID pair and a contact, and off without them', () => {
+    expect(loadConfig({}).vapid).toBeUndefined()
+    expect(loadConfig(VAPID).vapid).toEqual({
+      publicKey: VAPID.CODEDUCKY_VAPID_PUBLIC_KEY,
+      privateKey: VAPID.CODEDUCKY_VAPID_PRIVATE_KEY,
+      subject: 'mailto:ops@ducky.example',
+    })
+    expect(loadConfig({ ...VAPID, CODEDUCKY_VAPID_SUBJECT: 'https://ducky.example' }).vapid?.subject).toBe('https://ducky.example')
+  })
+
+  it('refuses a partial, mismatched or uncontactable VAPID config', () => {
+    expect(() => loadConfig({ ...VAPID, CODEDUCKY_VAPID_SUBJECT: '' })).toThrow('together')
+    expect(() => loadConfig({ CODEDUCKY_VAPID_PRIVATE_KEY: VAPID.CODEDUCKY_VAPID_PRIVATE_KEY })).toThrow('together')
+    const other = 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4'
+    expect(() => loadConfig({ ...VAPID, CODEDUCKY_VAPID_PUBLIC_KEY: other })).toThrow('does not belong')
+    expect(() => loadConfig({ ...VAPID, CODEDUCKY_VAPID_PRIVATE_KEY: 'short' })).toThrow('does not belong')
+    expect(() => loadConfig({ ...VAPID, CODEDUCKY_VAPID_SUBJECT: 'ops@ducky.example' })).toThrow('mailto:')
+    expect(() => loadConfig({ ...VAPID, CODEDUCKY_VAPID_SUBJECT: 'http://ducky.example' })).toThrow('mailto:')
   })
 })

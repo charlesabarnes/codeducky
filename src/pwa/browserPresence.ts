@@ -4,8 +4,9 @@ import { fetchAndStoreInbox, inboxIsStale } from '../features/inbox/useInbox'
 import { browserView, isAppPath, NAVIGATE_MESSAGE, notificationPermission, showBrowserNotification } from './notifications'
 import { startPresence } from './presence'
 import { presencePrefs } from './presencePrefs'
+import { startPush } from './pushClient'
 
-/** Starts the badge and notifications for this window; `navigate` moves the app's router. */
+/** Starts the badge, notifications and push for this window; `navigate` moves the app's router. */
 export function startBrowserPresence(navigate: (path: string) => void): () => void {
   const onMessage = (event: MessageEvent) => {
     const data = event.data as { type?: unknown; path?: unknown } | null
@@ -21,8 +22,10 @@ export function startBrowserPresence(navigate: (path: string) => void): () => vo
       if (inboxIsStale()) await fetchAndStoreInbox()
     },
   })
+  const stopPush = startPush()
   return () => {
     navigator.serviceWorker?.removeEventListener('message', onMessage)
     stop()
+    stopPush()
   }
 }
