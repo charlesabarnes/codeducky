@@ -3,7 +3,7 @@ import { remoteTransaction } from '../sync/engine'
 import type { CodeDuckyDb } from './db'
 
 /** Tables holding one account's data: review records, sync state and caches of repo content. */
-export const ACCOUNT_TABLES = [...SYNC_KINDS, 'outbox', 'rejected', 'syncMeta', 'repoHandles', 'githubBlobs', 'reviewSnapshots'] as const
+export const ACCOUNT_TABLES = [...SYNC_KINDS, 'outbox', 'rejected', 'syncMeta', 'repoHandles', 'githubBlobs', 'reviewSnapshots', 'patches'] as const
 
 /** Tables that belong to the browser rather than an account; `settings` still loses the GitHub token on a wipe. */
 export const DEVICE_TABLES = ['settings'] as const

@@ -1,7 +1,7 @@
 import type { DBCore, DBCoreMutateRequest, DBCoreMutateResponse, DBCoreTable, DBCoreTransaction, Middleware } from 'dexie'
 import type { SyncKind } from '../../shared/sync'
 import { uuidv7 } from './ids'
-import { HAS_GENERATED_ID, isSyncedTable, RECORD_SPECS } from './records'
+import { HAS_GENERATED_ID, isLocalOnly, isSyncedTable, RECORD_SPECS } from './records'
 import { outboxKey, type OutboxEntry } from './types'
 
 export const OUTBOX = 'outbox'
@@ -45,7 +45,7 @@ function syncedTable(kind: SyncKind, table: DBCoreTable, outbox: () => DBCoreTab
         stampValues(kind, req)
         const res = await table.mutate(req)
         const entries = (req.values as Row[])
-          .filter((_, index) => !res.failures[index])
+          .filter((value, index) => !res.failures[index] && !isLocalOnly(kind, value))
           .map((value) => {
             const id = spec.idOf(value)
             return { key: outboxKey(kind, id), kind, id, changedAt: value.changedAt as number, deleted: false }
@@ -58,7 +58,7 @@ function syncedTable(kind: SyncKind, table: DBCoreTable, outbox: () => DBCoreTab
         const res = await table.mutate(req)
         const entries = req.keys.flatMap((key, index) => {
           const before = previous[index]
-          if (!before || res.failures[index]) return []
+          if (!before || res.failures[index] || isLocalOnly(kind, before)) return []
           const id = spec.idOfKey(key)
           const changedAt = nextStamp(before.changedAt as number | undefined)
           return [{ key: outboxKey(kind, id), kind, id, changedAt, deleted: true }]

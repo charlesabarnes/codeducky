@@ -1,4 +1,4 @@
-import { CircleAlert, Lock, RotateCcw, Save, Unlock } from 'lucide-react'
+import { AppWindow, CircleAlert, Lock, RotateCcw, Save, Unlock } from 'lucide-react'
 import { lazy, Suspense, useEffect, useRef } from 'react'
 import type { EditorController } from '../../editor/controller'
 import { languageFor } from '../../diff/highlight'
@@ -23,12 +23,14 @@ interface EditorPaneProps {
   /** Kept mounted (with its unsaved edits) while the diff is shown instead. */
   hidden: boolean
   dirty: boolean
+  /** Another window of the app has unsaved edits to the same file. */
+  dirtyElsewhere?: boolean
   onDirtyChange: (dirty: boolean) => void
   onSaved: (message: string) => void
   onShowDiff: () => void
 }
 
-export function EditorPane({ change, source, hidden, dirty, onDirtyChange, onSaved, onShowDiff }: EditorPaneProps) {
+export function EditorPane({ change, source, hidden, dirty, dirtyElsewhere = false, onDirtyChange, onSaved, onShowDiff }: EditorPaneProps) {
   const path = change.path
   const controller = useRef<EditorController | null>(null)
   const editor = useFileEditor({ source, change, controller, onSaved })
@@ -73,6 +75,13 @@ export function EditorPane({ change, source, hidden, dirty, onDirtyChange, onSav
         <p className="editor-notice warn">
           <Lock size={13} aria-hidden />
           {editor.access.reason}
+        </p>
+      )}
+      {dirtyElsewhere && (
+        <p className="editor-notice warn" role="alert">
+          <AppWindow size={13} aria-hidden />
+          {path} has unsaved edits in another Code Ducky window. Save or revert them there first: whichever window saves second is told the file
+          changed{local ? ' on disk' : ''}.
         </p>
       )}
       <StatusNotice status={editor.status} local={local} folder={local ? source.root.name : ''} actions={editor} />

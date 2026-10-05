@@ -46,6 +46,19 @@ describe('handleLaunches', () => {
     expect(navigate).not.toHaveBeenCalled()
   })
 
+  it('hands launched files to openFiles instead of navigating to the handler URL', () => {
+    let consumer: ((params: LaunchParams) => void) | undefined
+    const navigate = vi.fn()
+    const openFiles = vi.fn()
+    handleLaunches({ launchQueue: { setConsumer: (fn) => (consumer = fn) }, location: { origin: ORIGIN, href: `${ORIGIN}/inbox` }, navigate, openServerPage: vi.fn(), openFiles })
+    const files = [{ kind: 'file', name: 'fix.patch' }] as unknown as FileSystemHandle[]
+    consumer!({ targetURL: `${ORIGIN}/`, files })
+    expect(openFiles).toHaveBeenCalledWith(files)
+    expect(navigate).not.toHaveBeenCalled()
+    consumer!({ targetURL: `${ORIGIN}/`, files: [] })
+    expect(navigate).toHaveBeenCalledWith('/')
+  })
+
   it('does nothing without launchQueue', () => {
     expect(handleLaunches({ launchQueue: undefined, location: { origin: ORIGIN, href: ORIGIN }, navigate: vi.fn(), openServerPage: vi.fn() })).toBe(false)
   })

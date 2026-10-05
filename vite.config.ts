@@ -30,6 +30,10 @@ export default defineConfig({
         scope: '/',
         launch_handler: { client_mode: 'focus-existing' },
         handle_links: 'preferred',
+        // Opened files arrive through launchQueue (src/pwa/launchQueue.ts) and become patch sessions (PATCH_ACCEPT).
+        file_handlers: [{ action: '/', accept: { 'text/x-diff': ['.diff'], 'text/x-patch': ['.patch'] } }],
+        // GET, so a share is a plain navigation the SPA routes; /share is not a server path (shared/serverPaths.ts).
+        share_target: { action: '/share', method: 'GET', params: { title: 'title', text: 'text', url: 'url' } },
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },

@@ -1,0 +1,11 @@
+.share-received {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 2px solid var(--line);
+  color: var(--fg-2);
+  overflow-wrap: anywhere;
+}
+
+.share-received p {
+  margin: 0;
+}

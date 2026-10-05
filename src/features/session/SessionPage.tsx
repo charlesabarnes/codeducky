@@ -3,9 +3,10 @@ import { useEffect, useMemo } from 'react'
 import { useParams } from 'react-router'
 import { rememberSession } from '../../app/lastSession'
 import { db } from '../../db/db'
-import { isPrSession, type OpenedRepo, type Session } from '../../db/schema'
+import { isPatchSession, isPrSession, type OpenedRepo, type Session } from '../../db/schema'
 import { repoRef } from '../../github/connect'
 import { SessionReport } from '../history/SessionReport'
+import { PatchSession } from '../patch/PatchSession'
 import { PrSession } from '../pr/PrSession'
 import { RepoFolderGate } from '../repos/RepoFolderGate'
 import { localSource } from './source'
@@ -25,6 +26,7 @@ export function SessionPage() {
 
   if (!data) return <p className="page muted">Loading…</p>
   const { session, repo } = data
+  if (session && isPatchSession(session)) return <PatchSession session={session} />
   if (!session || !repo) return <p className="page error">Session not found.</p>
   if (session.status === 'archived') return <SessionReport session={session} repo={repo} />
   if (isPrSession(session) && session.pr) return <PrSession session={session} repo={{ ...repo, id: session.repoId }} />

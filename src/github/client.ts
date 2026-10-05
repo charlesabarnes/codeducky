@@ -466,9 +466,10 @@ export function createGitHubClient({ token, fetch: fetchImpl = globalThis.fetch,
 
     blob,
 
-    async openPullForBranch(repo: RepoRef, branch: string): Promise<PullRequest | null> {
+    /** The open pull request from `branch`, which lives in the repo itself or, with `headOwner`, in that owner's fork. */
+    async openPullForBranch(repo: RepoRef, branch: string, headOwner = repo.owner): Promise<PullRequest | null> {
       const { data } = await request<RawPull[]>(`${repoPath(repo)}/pulls`, {
-        query: { head: `${repo.owner}:${branch}`, state: 'open', per_page: 10 },
+        query: { head: `${headOwner}:${branch}`, state: 'open', per_page: 10 },
       })
       return data[0] ? toPull(data[0]) : null
     },
