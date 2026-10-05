@@ -4,8 +4,12 @@ import { join } from 'node:path'
 import { defineConfig, devices } from '@playwright/test'
 import { E2E_ADMIN_PASSPHRASE, E2E_BASE, E2E_PORT } from './e2e/support/env'
 
-// Made once by the runner; workers inherit the variable. globalTeardown removes it.
-process.env.CODEDUCKY_E2E_DATA ??= mkdtempSync(join(tmpdir(), 'codeducky-e2e-'))
+// Made once by the runner; workers inherit the variable. globalTeardown removes it only if this run made it.
+delete process.env.CODEDUCKY_E2E_DATA_CREATED
+if (!process.env.CODEDUCKY_E2E_DATA) {
+  process.env.CODEDUCKY_E2E_DATA = mkdtempSync(join(tmpdir(), 'codeducky-e2e-'))
+  process.env.CODEDUCKY_E2E_DATA_CREATED = '1'
+}
 
 /** The built PWA and the API on one origin, signing in through the server's fake GitHub. */
 export default defineConfig({
@@ -25,7 +29,8 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: 'npm run build && bun server/index.ts',
+    // The server never runs in production mode here, whatever NODE_ENV the shell has.
+    command: 'npm run build && NODE_ENV=test bun server/index.ts',
     url: `${E2E_BASE}/api/health`,
     reuseExistingServer: false,
     timeout: 180_000,
