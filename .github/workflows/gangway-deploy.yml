@@ -34,8 +34,11 @@ jobs:
       - run: |
           set -euo pipefail
           oidc=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$GANGWAY_API" | jq -r .value)
+          echo "got an OIDC token"
           git archive --format=tar.gz -o source.tar.gz HEAD
           code=$(curl -sS -o result.json -w '%{http_code}' -X PUT "$GANGWAY_API/v1/projects/$GANGWAY_PROJECT/branch?sha=$GITHUB_SHA&wait=true" \
             -H "Authorization: Bearer $oidc" -H 'content-type: application/gzip' --data-binary @source.tar.gz)
-          jq '{state: .preview.state, url: .preview.urls[0].url, error: .preview.error, detail: .detail}' result.json
+          echo "gangway answered HTTP $code"
+          # A reply that is not JSON (from a proxy, say) is printed as is rather than failing in jq.
+          jq '{state: .preview.state, url: .preview.urls[0].url, error: .preview.error, detail: .detail}' result.json || cat result.json
           test "$code" -lt 300
