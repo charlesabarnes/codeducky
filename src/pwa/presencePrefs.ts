@@ -11,17 +11,19 @@ export interface PresencePrefs {
   notifications: boolean
   notifyTasks: boolean
   notifyRequests: boolean
+  /** Also notified by Web Push while the app is closed; the subscription itself lives in the browser and on the server. */
+  push: boolean
 }
 
 type StoredPrefs = Partial<Record<keyof PresencePrefs, unknown>> | null
 
-export const DEFAULT_PREFS: PresencePrefs = { badge: 'notes', notifications: false, notifyTasks: true, notifyRequests: true }
+export const DEFAULT_PREFS: PresencePrefs = { badge: 'notes', notifications: false, notifyTasks: true, notifyRequests: true, push: false }
 
 export const PREFS_KEY = 'codeducky.presence'
 
 /** Keeps the known values and falls back to the default for anything missing or unknown. */
 export function prefsOf(stored: StoredPrefs): PresencePrefs {
-  const flag = (key: 'notifications' | 'notifyTasks' | 'notifyRequests') => {
+  const flag = (key: 'notifications' | 'notifyTasks' | 'notifyRequests' | 'push') => {
     const value = stored?.[key]
     return typeof value === 'boolean' ? value : DEFAULT_PREFS[key]
   }
@@ -30,6 +32,7 @@ export function prefsOf(stored: StoredPrefs): PresencePrefs {
     notifications: flag('notifications'),
     notifyTasks: flag('notifyTasks'),
     notifyRequests: flag('notifyRequests'),
+    push: flag('push'),
   }
 }
 

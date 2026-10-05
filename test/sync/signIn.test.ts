@@ -193,6 +193,31 @@ describe('session', () => {
   })
 })
 
+describe('sign-out hooks', () => {
+  it('run on sign-out while the token still works, and after an account deletion, but not when the sign-in expires', async () => {
+    const server = new FakeSyncServer()
+    const a = tab('hooks', server)
+    const ran: string[] = []
+    a.controller.onSignOut(async () => {
+      const ok = await a.controller.request('GET', '/api/auth/session').then(() => 'authed', () => 'unauthed')
+      ran.push(ok)
+    })
+    await a.signIn('alice')
+    await a.controller.signOut()
+    expect(ran).toEqual(['authed'])
+
+    await a.signIn('alice')
+    server.revokeAll()
+    await a.controller.refreshSession()
+    expect(a.controller.getSnapshot().auth).toBe('expired')
+    expect(ran).toEqual(['authed'])
+
+    await a.signIn('alice')
+    await a.controller.deleteAccount('alice')
+    expect(ran).toEqual(['authed', 'unauthed'])
+  })
+})
+
 describe('return paths', () => {
   it('only allows same-origin paths', () => {
     expect(safeReturnTo('/inbox')).toBe('/inbox')
