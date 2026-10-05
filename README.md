@@ -123,7 +123,9 @@ subscription on the server. Signing the device out, or turning notifications off
   first inbox an account syncs only sets the baseline. So a request arrives once any device with Code Ducky
   open (it refreshes the inbox every few minutes) picks it up.
 - **No double notifications.** A push carries the same tag as the in-app notification for the event, so the
-  two replace each other, and the service worker shows nothing while a window of the app has focus.
+  two replace each other, and the service worker shows nothing while a window of the app has focus. Safari
+  may end a subscription after several pushes shown no notification; the server then drops it on the next
+  410, and the PWA subscribes again the next time it opens.
 
 A push holds only a title, a short body (repo, branch or pull request) and the link to open: never note
 contents or Claude's messages. Messages are encrypted for the device (RFC 8291) and signed with the VAPID

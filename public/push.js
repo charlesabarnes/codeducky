@@ -2,6 +2,7 @@
 // from the Code Ducky server ({title, body, url, tag}) while the app is closed or in the background. A focused
 // window already shows its own notification for the same event, so nothing is shown then; the tag matches
 // the in-app one, so a background window's notification and the push replace each other instead of stacking.
+// Safari may end a subscription after pushes that showed nothing; the PWA subscribes again when it next opens.
 // Clicks are handled in notification-click.js.
 function pushMessage(data) {
   try {
