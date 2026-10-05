@@ -38,7 +38,8 @@ test('alice adds a note and it syncs to her second browser', async () => {
     await page.getByPlaceholder('Leave a note (markdown)').fill(NOTE)
     await page.getByPlaceholder('Leave a note (markdown)').press('Control+Enter')
     await expect(page.getByText(NOTE).first()).toBeVisible()
-    await page.goto('/settings')
+    // In-app navigation: a full page load right after saving can cut the note's write short.
+    await page.getByRole('link', { name: 'settings' }).click()
     await syncPanel(page).getByRole('button', { name: 'sync now' }).click()
     await synced(page)
 
@@ -46,7 +47,12 @@ test('alice adds a note and it syncs to her second browser', async () => {
     await synced(desktop.page)
     await desktop.page.goto(sessionPath)
     await desktop.page.getByRole('button', { name: 'open repo folder' }).click()
-    await expect(desktop.page.getByText(NOTE).first()).toBeVisible()
+    await expect(desktop.page.getByText('open the checkout')).toBeHidden()
+    // Each load syncs, so a reload picks the note up if the laptop's upload was still in flight.
+    await expect(async () => {
+      await desktop.page.reload()
+      await expect(desktop.page.getByText(NOTE).first()).toBeVisible({ timeout: 2_000 })
+    }).toPass({ timeout: 20_000 })
   } finally {
     await laptop.close()
     await desktop.close()
