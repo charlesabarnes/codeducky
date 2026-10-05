@@ -14,7 +14,11 @@ export interface PatchFile {
   deletions: number
 }
 
-const HUNK = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/
+const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/
+/** Sides are rebuilt line by line, so a hunk past this line would allocate that many blank lines. */
+export const MAX_PATCH_LINE = 1_000_000
+
+const tooFar = (line: number) => new Error(`The patch has a hunk at line ${line}; Code Ducky reads patches up to line ${MAX_PATCH_LINE.toLocaleString('en-US')}.`)
 const NULL_PATH = '/dev/null'
 
 /** A path from a `---`/`+++` line: no a/ or b/ prefix, no timestamp, unquoted. */
@@ -115,8 +119,10 @@ export function parsePatchSet(text: string): PatchFile[] {
     if (!current) continue
     const hunk = HUNK.exec(line)
     if (hunk) {
-      oldLeft = hunk[1] === undefined ? 1 : Number(hunk[1])
-      newLeft = hunk[2] === undefined ? 1 : Number(hunk[2])
+      oldLeft = hunk[2] === undefined ? 1 : Number(hunk[2])
+      newLeft = hunk[4] === undefined ? 1 : Number(hunk[4])
+      const end = Math.max(Number(hunk[1]) + oldLeft, Number(hunk[3]) + newLeft)
+      if (end > MAX_PATCH_LINE) throw tooFar(end)
       current.hunks.push(line)
       continue
     }
@@ -154,6 +160,8 @@ export function patchSides(file: Pick<PatchFile, 'hunks' | 'status'>): { old: st
   const oldLines: string[] = []
   const newLines: string[] = []
   for (const line of patchDiffLines(file.hunks)) {
+    const far = Math.max(line.oldNo ?? 0, line.newNo ?? 0)
+    if (far > MAX_PATCH_LINE) throw tooFar(far)
     if (line.oldNo !== null) oldLines[line.oldNo - 1] = line.text
     if (line.newNo !== null) newLines[line.newNo - 1] = line.text
   }

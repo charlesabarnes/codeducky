@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildLines } from '../../src/diff/hunks'
-import { parsePatchSet, patchSides } from '../../src/review/patchSet'
+import { MAX_PATCH_LINE, parsePatchSet, patchSides } from '../../src/review/patchSet'
 
 const gitDiff = [
   'diff --git a/src/app.ts b/src/app.ts',
@@ -109,6 +109,12 @@ describe('parsePatchSet', () => {
       ['(2) a.ts', 1, 1],
     ])
     expect(files[0]!.hunks).not.toContain('2.45.0')
+  })
+
+  it('refuses hunks past the line limit instead of allocating them', () => {
+    const far = MAX_PATCH_LINE + 1
+    expect(() => parsePatchSet(`--- a/x\n+++ b/x\n@@ -${far} +${far} @@\n-a\n+b\n`)).toThrow('up to line 1,000,000')
+    expect(() => patchSides({ status: 'modified', hunks: `@@ -1 +${far} @@\n+b` })).toThrow('up to line')
   })
 
   it('handles CRLF patches and finds nothing in other text', () => {

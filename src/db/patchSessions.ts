@@ -17,7 +17,13 @@ export interface PatchInput {
  * its notes are kept, else a new one. The session's branch is the file name and its head the patch's hash.
  */
 export async function openPatchSession(db: CodeDuckyDb, { name, text }: PatchInput, now = Date.now()): Promise<string> {
-  if (parsePatchSet(text).length === 0) throw new Error(`${name} has no file changes to review. Is it a .diff or .patch file?`)
+  let files: number
+  try {
+    files = parsePatchSet(text).length
+  } catch (error) {
+    throw new Error(`${name}: ${error instanceof Error ? error.message : String(error)}`, { cause: error })
+  }
+  if (files === 0) throw new Error(`${name} has no file changes to review. Is it a .diff or .patch file?`)
   const digest = await hashBlob(new TextEncoder().encode(text))
   return db.transaction('rw', db.sessions, db.patches, async () => {
     const existing = await db.sessions
