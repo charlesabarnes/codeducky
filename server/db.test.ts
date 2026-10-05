@@ -45,6 +45,7 @@ describe('migrations', () => {
       'oauth_clients',
       'oauth_codes',
       'oauth_grants',
+      'push_subscriptions',
       'records',
       'schema_migrations',
       'tokens',
@@ -60,7 +61,7 @@ describe('migrations', () => {
 
   it('starts fresh from 0002, dropping single-user data but keeping registered clients', () => {
     const db = databaseAt0002()
-    expect(migrate(db)).toEqual(['0003_multi_user'])
+    expect(migrate(db)).toEqual(['0003_multi_user', '0004_push_subscriptions'])
     expect(tables(db)).not.toContain('meta')
     for (const table of ['records', 'tokens', 'oauth_codes', 'oauth_grants', 'users']) {
       expect(db.query<{ n: number }, []>(`SELECT COUNT(*) AS n FROM ${table}`).get()!.n).toBe(0)
@@ -75,13 +76,27 @@ describe('migrations', () => {
       INSERT INTO records (user_id, kind, id, changed_at, rev, data) VALUES ('admin', 'repos', 'r1', 1, 1, '{}');
       INSERT INTO tokens (id, token_hash, user_id, name, kind, created_at) VALUES ('t1', 'h1', 'admin', 'Laptop', 'session', 1);
       INSERT INTO auth_handoffs (code_hash, user_id, challenge, expires_at) VALUES ('c', 'admin', 'x', 1);
+      INSERT INTO push_subscriptions (user_id, token_id, endpoint, p256dh, auth, created_at) VALUES ('admin', 't1', 'https://push.example/1', 'k', 'a', 1);
     `)
     expect(() =>
       db.exec("INSERT INTO records (user_id, kind, id, changed_at, rev) VALUES ('nobody', 'repos', 'r1', 1, 1)"),
     ).toThrow(/FOREIGN KEY/)
     db.exec("DELETE FROM users WHERE id = 'admin'")
-    for (const table of ['records', 'tokens', 'auth_handoffs']) {
+    for (const table of ['records', 'tokens', 'auth_handoffs', 'push_subscriptions']) {
       expect(db.query<{ n: number }, []>(`SELECT COUNT(*) AS n FROM ${table}`).get()!.n).toBe(0)
     }
+  })
+
+  it('drops a push subscription with the device session that registered it', () => {
+    const db = openMemoryDatabase()
+    ensureAdmin(db)
+    db.exec(`
+      INSERT INTO tokens (id, token_hash, user_id, name, kind, created_at) VALUES ('t1', 'h1', 'admin', 'Laptop', 'session', 1);
+      INSERT INTO tokens (id, token_hash, user_id, name, kind, created_at) VALUES ('t2', 'h2', 'admin', 'Phone', 'session', 1);
+      INSERT INTO push_subscriptions (user_id, token_id, endpoint, p256dh, auth, created_at) VALUES ('admin', 't1', 'https://push.example/1', 'k', 'a', 1);
+      INSERT INTO push_subscriptions (user_id, token_id, endpoint, p256dh, auth, created_at) VALUES ('admin', 't2', 'https://push.example/2', 'k', 'a', 1);
+    `)
+    db.exec("DELETE FROM tokens WHERE id = 't1'")
+    expect(db.query<{ endpoint: string }, []>('SELECT endpoint FROM push_subscriptions').all()).toEqual([{ endpoint: 'https://push.example/2' }])
   })
 })

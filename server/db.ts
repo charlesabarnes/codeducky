@@ -176,6 +176,26 @@ export const MIGRATIONS: { name: string; sql: string }[] = [
       );
     `,
   },
+  {
+    name: '0004_push_subscriptions',
+    sql: `
+      CREATE TABLE push_subscriptions (
+        id INTEGER PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_id TEXT NOT NULL REFERENCES tokens(id) ON DELETE CASCADE,
+        endpoint TEXT NOT NULL UNIQUE,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        notify_tasks INTEGER NOT NULL DEFAULT 1,
+        notify_requests INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        last_used_at INTEGER,
+        failures INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX push_subscriptions_user ON push_subscriptions (user_id);
+      CREATE INDEX push_subscriptions_token ON push_subscriptions (token_id);
+    `,
+  },
 ]
 
 export function openDatabase(path: string): Database {

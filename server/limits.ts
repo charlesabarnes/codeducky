@@ -79,7 +79,7 @@ export interface RateSpec {
   burst: number
 }
 
-export type RateLimitName = 'sync' | 'mcp' | 'gate' | 'channelTasks' | 'githubStart' | 'newAccounts'
+export type RateLimitName = 'sync' | 'mcp' | 'gate' | 'channelTasks' | 'githubStart' | 'newAccounts' | 'push'
 export type RateLimits = Record<RateLimitName, RateSpec>
 
 export const DEFAULT_RATE_LIMITS: RateLimits = {
@@ -89,6 +89,7 @@ export const DEFAULT_RATE_LIMITS: RateLimits = {
   channelTasks: { limit: 30, windowSec: 60, burst: 30 },
   githubStart: { limit: 20, windowSec: 600, burst: 20 },
   newAccounts: { limit: 30, windowSec: 3600, burst: 30 },
+  push: { limit: 60, windowSec: 3600, burst: 20 },
 }
 
 const RATE_ENV: Record<RateLimitName, string> = {
@@ -98,6 +99,7 @@ const RATE_ENV: Record<RateLimitName, string> = {
   channelTasks: 'CODEDUCKY_RATE_CHANNEL_TASKS',
   githubStart: 'CODEDUCKY_RATE_GITHUB_START',
   newAccounts: 'CODEDUCKY_RATE_NEW_ACCOUNTS',
+  push: 'CODEDUCKY_RATE_PUSH',
 }
 
 /** Reads an optional positive integer from the environment. */

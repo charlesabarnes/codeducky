@@ -22,6 +22,11 @@ import { gateApi, gateScripts } from './gate/routes'
 import { createRateLimiters, perUser, rateLimit, type RateLimits } from './limits'
 import { logErrors, requestLog, stdoutSink, type LogSink } from './log'
 import { mcpRoutes } from './mcp/route'
+import { inboxPushes } from './push/inbox'
+import { taskMessage } from './push/messages'
+import { pushRoutes } from './push/routes'
+import { createPushSender, type PushTransport } from './push/sender'
+import type { VapidKeys } from './push/webPush'
 import { setDefaultQuotas, type Quotas } from './records/quota'
 import { sync } from './records/store'
 import { serveWeb } from './static'
@@ -50,6 +55,10 @@ export interface AppDeps {
   quotas?: Quotas
   /** The oldest PWA build the API serves; defaults to MIN_CLIENT_BUILD. */
   minClientBuild?: string
+  /** Web Push keys; unset turns push off. */
+  vapid?: VapidKeys
+  /** Delivers pushes; tests pass a fake. */
+  pushTransport?: PushTransport
 }
 
 const MAX_SYNC_BODY = 8 * 1024 * 1024
@@ -72,6 +81,8 @@ export function createApp({
   limits,
   quotas,
   minClientBuild,
+  vapid,
+  pushTransport,
 }: AppDeps) {
   ensureAdmin(db)
   if (quotas) setDefaultQuotas(db, quotas)
@@ -92,6 +103,10 @@ export function createApp({
   })
   const registry = channel ?? createChannelRegistry({ now })
   if (!channel) setInterval(() => registry.sweep(), 15_000).unref()
+  // Push links are absolute with CODEDUCKY_PUBLIC_URL, and relative to the app otherwise.
+  const push = vapid ? createPushSender({ db, vapid, limiter: limiters.push, log, transport: pushTransport, now }) : null
+  if (push) registry.onTaskFinished((userId, task) => push.send(userId, taskMessage(task, publicUrl ?? '')))
+  const withPushes = push ? inboxPushes(db, push, publicUrl ?? '') : null
 
   api.use('*', requestLog(log))
   api.onError(logErrors(log))
@@ -109,13 +124,16 @@ export function createApp({
     async (c) => {
       const parsed = parseSyncRequest(await c.req.json().catch(() => null))
       if ('error' in parsed) return c.json({ error: parsed.error }, 400)
-      return c.json(sync(db, c.get('principal').userId, parsed.cursor, parsed.changes, parsed.rejected))
+      const { userId, id } = c.get('principal')
+      const apply = () => sync(db, userId, parsed.cursor, parsed.changes, parsed.rejected)
+      return c.json(withPushes ? withPushes(userId, id, parsed.changes, apply) : apply())
     },
   )
 
   api.route('/gate', gateApi({ db, tokens, publicUrl, limiter: limiters.gate }))
   api.route('/channel', channelRoutes({ db, tokens, registry, publicUrl, taskLimiter: limiters.channelTasks }))
   api.route('/account', accountRoutes({ db, tokens, registry }))
+  api.route('/push', pushRoutes({ db, tokens, publicKey: vapid?.publicKey }))
   api.route('/admin', adminRoutes({ db, tokens, oauth, registry, signups, now }))
 
   api.all('*', (c) => c.json({ error: 'not_found' }, 404))
@@ -131,5 +149,5 @@ export function createApp({
   app.route('/api', api)
   app.route('/', server)
   if (webDist) app.use('*', serveWeb(webDist))
-  return { app, tokens, oauth, channel: registry, limiters }
+  return { app, tokens, oauth, channel: registry, limiters, push }
 }

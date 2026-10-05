@@ -15,7 +15,8 @@
     "dev:server": "bun --watch server/index.ts",
     "start": "NODE_ENV=production bun server/index.ts",
     "test:server": "bun test ./server/ ./plugin/",
-    "icons": "node scripts/icons.mjs"
+    "icons": "node scripts/icons.mjs",
+    "vapid": "bun scripts/vapid.ts"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

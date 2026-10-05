@@ -18,6 +18,6 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["server", "shared", "plugin"],
+  "include": ["server", "shared", "plugin", "scripts/vapid.ts"],
   "exclude": ["plugin/node_modules"]
 }
