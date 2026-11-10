@@ -8,6 +8,8 @@ mod blob_cache;
 pub mod ci;
 mod client;
 mod error;
+#[cfg(feature = "test-support")]
+pub mod fake;
 pub mod freshness;
 pub mod inbox;
 pub mod placement;

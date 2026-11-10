@@ -31,6 +31,7 @@ pub struct Client {
     base_url: String,
     token: Token,
     retry_wait: Duration,
+    read_only: bool,
 }
 
 impl std::fmt::Debug for Client {
@@ -80,6 +81,7 @@ impl Client {
             base_url: base_url.into().trim_end_matches('/').to_owned(),
             token,
             retry_wait: DEFAULT_RETRY_WAIT,
+            read_only: false,
         }
     }
 
@@ -87,6 +89,16 @@ impl Client {
     pub fn with_retry_wait(mut self, wait: Duration) -> Self {
         self.retry_wait = wait;
         self
+    }
+
+    /// Refuses every write (REST calls other than GET, GraphQL mutations) before it is sent.
+    pub fn read_only(mut self) -> Self {
+        self.read_only = true;
+        self
+    }
+
+    pub fn is_read_only(&self) -> bool {
+        self.read_only
     }
 
     pub fn base_url(&self) -> &str {
@@ -119,6 +131,13 @@ impl Client {
         body: Option<&Value>,
         accept: Option<&str>,
     ) -> Result<Response> {
+        if self.read_only && is_write(&method, path, body) {
+            return Err(GitHubError::new(
+                ErrorKind::Forbidden,
+                0,
+                "This connection to GitHub is read-only: the write was not sent.",
+            ));
+        }
         let url = self.url(path)?;
         let body = body
             .map(serde_json::to_vec)
@@ -248,6 +267,16 @@ impl Client {
         }
         let data = data.ok_or_else(|| GitHubError::missing("any data"))?;
         serde_json::from_value(data).map_err(|e| GitHubError::decode("GraphQL data", e))
+    }
+}
+
+fn is_write(method: &Method, path: &str, body: Option<&Value>) -> bool {
+    match *method {
+        Method::GET => false,
+        Method::POST if path == "/graphql" => !body
+            .and_then(|b| b["query"].as_str())
+            .is_some_and(|query| query.trim_start().starts_with("query")),
+        _ => true,
     }
 }
 

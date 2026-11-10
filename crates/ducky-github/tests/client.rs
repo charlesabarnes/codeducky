@@ -448,3 +448,33 @@ fn reads_graphql_errors_and_partial_data() {
         .unwrap_err();
     assert!(error.message.contains("fine-grained token must include"));
 }
+
+#[test]
+fn a_read_only_client_never_sends_writes() {
+    let server = FakeGitHub::start(|call, _| {
+        Some(Reply::json(if call.path == "/graphql" {
+            json!({ "data": { "ok": true } })
+        } else {
+            json!({ "id": 1, "state": "PENDING", "html_url": "" })
+        }))
+    });
+    let client = server.client().read_only();
+    assert!(client.is_read_only());
+    client
+        .graphql::<serde_json::Value>("query Ok { ok }", json!({}))
+        .unwrap();
+    let mutation = client.graphql::<serde_json::Value>(
+        "mutation Resolve($thread: ID!) { resolveReviewThread(input: { threadId: $thread }) { thread { id } } }",
+        json!({ "thread": "x" }),
+    );
+    assert_eq!(mutation.unwrap_err().kind, ErrorKind::Forbidden);
+    let review = ReviewInput {
+        commit_id: "abc".into(),
+        body: "x".into(),
+        comments: Vec::new(),
+        event: None,
+    };
+    let created = client.create_review(&RepoRef::new("o", "r"), 1, &review);
+    assert_eq!(created.unwrap_err().kind, ErrorKind::Forbidden);
+    assert_eq!(server.calls().len(), 1, "only the query reached the server");
+}
