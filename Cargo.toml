@@ -19,8 +19,15 @@ ducky-review = { path = "crates/ducky-review" }
 ducky-terminal = { path = "crates/ducky-terminal" }
 
 anyhow = "1"
+base64 = "0.22"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+similar = "2.7"
+flume = "0.12"
 gpui-kit = "=0.9.1"
 image = { version = "0.25", default-features = false, features = ["png"] }
+portable-pty = "0.9"
+regex = "1"
 tempfile = "3"
 thiserror = "2"
 libghostty-vt = { git = "https://github.com/Uzaaft/libghostty-rs", rev = "768add9", features = ["pkg-config"] }
