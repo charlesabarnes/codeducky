@@ -1513,6 +1513,11 @@ checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 [[package]]
 name = "ducky-git"
 version = "0.1.0"
+dependencies = [
+ "ducky-host",
+ "tempfile",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "ducky-github"
