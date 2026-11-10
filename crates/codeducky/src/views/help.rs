@@ -29,7 +29,7 @@ pub fn render(cx: &App) -> impl IntoElement {
                     .gap_3()
                     .child(
                         div()
-                            .w(px(150.))
+                            .w(px(130.))
                             .flex_none()
                             .whitespace_nowrap()
                             .font_family(theme.mono_font_family.clone())
@@ -51,7 +51,9 @@ pub fn render(cx: &App) -> impl IntoElement {
         .child(
             v_flex()
                 .id("help-panel")
-                .max_w(px(980.))
+                .max_w(px(1220.))
+                .max_h(relative(0.94))
+                .overflow_y_scroll()
                 .p_5()
                 .gap_3()
                 .bg(theme.popover)

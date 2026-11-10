@@ -17,7 +17,10 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
         .selected
         .as_deref()
         .map(|p| p.rsplit('/').next().unwrap_or(p).to_owned());
-    let open_notes = model.file_notes().iter().filter(|n| n.is_open()).count();
+    let open_notes = match (&model.review, &model.selected) {
+        (Some(review), Some(path)) => review.notes_on(path).filter(|n| n.is_open()).count(),
+        _ => 0,
+    };
     let message = match (&model.busy, &model.status) {
         (Some(busy), _) => Some((format!("{busy}…"), theme.muted_foreground)),
         (None, Some(status)) if status.error => Some((status.text.clone(), code.del)),
