@@ -16,6 +16,7 @@ ducky-hc = { path = "crates/ducky-hc" }
 ducky-host = { path = "crates/ducky-host" }
 ducky-notes = { path = "crates/ducky-notes" }
 ducky-review = { path = "crates/ducky-review" }
+ducky-session = { path = "crates/ducky-session" }
 ducky-terminal = { path = "crates/ducky-terminal" }
 
 anyhow = "1"

@@ -1568,6 +1568,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ducky-session"
+version = "0.1.0"
+dependencies = [
+ "ducky-git",
+ "ducky-hc",
+ "ducky-host",
+ "ducky-notes",
+ "ducky-review",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "ducky-terminal"
 version = "0.1.0"
 dependencies = [

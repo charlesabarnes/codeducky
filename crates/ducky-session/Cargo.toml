@@ -1,0 +1,21 @@
+[package]
+name = "ducky-session"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ducky-git.workspace = true
+ducky-hc.workspace = true
+ducky-host.workspace = true
+ducky-notes.workspace = true
+ducky-review.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
