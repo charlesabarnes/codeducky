@@ -19,7 +19,10 @@ cargo run -p codeducky --features screenshot -- --screenshot /tmp/codeducky.png
 feature scripts the app into a state first (`--open <repo> --select <file> --mode split
 --compose 10-12 --keys "n c" ...`); the full flag list is in `crates/codeducky/src/dev/mod.rs`. Use it to see the
 UI when the screen is locked or there is no Screen Recording permission. It is dev only, behind the
-`screenshot` feature.
+`screenshot` feature. Agents and machines: `--scratch` starts a throwaway herdr-core for the run
+(`--scratch-machine lab` adds a second one as a machine through `machine.add --via`); terminal
+work in dev runs is refused without `--scratch` or `--hc-socket`, so it never reaches the live
+core. Use the fake agent (`crates/ducky-agents/tests/support/fake_agent.py`), never a real one.
 
 ## Crates
 
@@ -34,6 +37,7 @@ UI when the screen is locked or there is no Screen Recording permission. It is d
 | `crates/ducky-session` | What the UI talks to: connection (hc or local only), review, file diffs, notes, file tree |
 | `crates/ducky-github` | GitHub inbox, PR diffs, threads, CI |
 | `crates/ducky-terminal` | hc attach stream, libghostty-vt, GPUI cell renderer |
+| `crates/ducky-agents` | hc terminal source, agent directory, review/fix tasks and their delivery |
 | `xtask` | `cargo xtask fetch-ghostty` |
 
 Pins: `gpui-kit =0.9.1` (GPUI as `gpui-pre =0.3.12`); `libghostty-vt` from git
