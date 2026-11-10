@@ -48,6 +48,13 @@ impl NotesRepo {
         Ok(Self::in_git_dir(&layout::git_common_dir(host, repo)?))
     }
 
+    /// Never writes the agents' README: for a folder that is not a repository's, such as the
+    /// app's own global checklists.
+    pub fn without_readme(self) -> Self {
+        self.readme_checked.store(true, Ordering::Relaxed);
+        self
+    }
+
     /// Replaces the clock that stamps `created_at`, `updated_at` and review times.
     pub fn with_clock(mut self, clock: fn() -> Timestamp) -> Self {
         self.clock = clock;

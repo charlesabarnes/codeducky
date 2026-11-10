@@ -614,3 +614,19 @@ fn keeps_pull_request_reviews_apart_from_branches() {
     assert!(pull.notes_path().ends_with("codeducky/pulls/12/notes.json"));
     assert!(review(&repo).notes(&LocalHost).unwrap().is_empty());
 }
+
+#[test]
+fn keeps_global_checklists_without_a_readme() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().to_str().unwrap().to_owned();
+    let global = NotesRepo::at(root.clone()).without_readme();
+    let draft = ChecklistDraft {
+        title: "Every repo".into(),
+        items: vec!["Read the diff".into()],
+        required: false,
+    };
+    global.add_checklists(&LocalHost, vec![draft]).unwrap();
+    assert_eq!(global.checklists(&LocalHost).unwrap().len(), 1);
+    assert!(dir.path().join("checklists.json").exists());
+    assert!(!dir.path().join("README.md").exists());
+}
