@@ -251,6 +251,51 @@ fn machines_and_templates() {
     ));
 }
 
+#[test]
+#[ignore = "starts a scratch herdr-core"]
+fn git_through_the_core() {
+    let core = ScratchCore::start("g");
+    let repo_dir = core.dir.path().join("repo");
+    std::fs::create_dir_all(&repo_dir).unwrap();
+    let git = |args: &[&str]| {
+        let status = Command::new("git")
+            .args([
+                "-c",
+                "user.name=T",
+                "-c",
+                "user.email=t@x",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .current_dir(&repo_dir)
+            .output()
+            .unwrap();
+        assert!(status.status.success(), "{status:?}");
+    };
+    git(&["init", "-q", "-b", "main"]);
+    std::fs::write(repo_dir.join("a file.txt"), "one\n").unwrap();
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "base"]);
+    std::fs::write(repo_dir.join("a file.txt"), "one\ntwo\n").unwrap();
+    std::fs::write(repo_dir.join("new.bin"), [0u8, 1, 2]).unwrap();
+
+    let host = std::sync::Arc::new(HcHost::new(core.client(), None));
+    let repo = ducky_git::Repo::open(host, repo_dir.to_str().unwrap()).unwrap();
+    assert_eq!(repo.head().unwrap().branch.as_deref(), Some("main"));
+    let changes = repo.working_changes("HEAD").unwrap();
+    let paths: Vec<&str> = changes.iter().map(|c| c.path.as_str()).collect();
+    assert_eq!(paths, ["a file.txt", "new.bin"]);
+    let spec = ducky_git::DiffSpec::WorkingTree {
+        base: "HEAD".into(),
+    };
+    let patches = repo.patches(&spec, &changes).unwrap();
+    let text = patches[0].diff.as_ref().unwrap();
+    assert_eq!(text.hunks[0].lines.last().unwrap().text, "two");
+    assert!(patches[1].diff.as_ref().unwrap().binary);
+    assert_eq!(repo.read_worktree("new.bin").unwrap().unwrap(), [0, 1, 2]);
+}
+
 fn contains(haystack: &[u8], needle: &[u8]) -> bool {
     haystack.windows(needle.len()).any(|w| w == needle)
 }
