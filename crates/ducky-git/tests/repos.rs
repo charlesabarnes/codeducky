@@ -473,3 +473,34 @@ fn submodules_are_opaque() {
     let lines = &patch.diff.unwrap().hunks[0].lines;
     assert!(lines[0].text.starts_with("Subproject commit "));
 }
+
+#[test]
+fn stores_worktree_blobs_and_counts_each_commit() {
+    let repo = TestRepo::new();
+    repo.write("a.txt", "a\n");
+    let root = repo.commit_all("root");
+    repo.write("a.txt", "a\nb\nc\n");
+    repo.write("n.txt", "new\n");
+    let tip = repo.commit_all("two files");
+    repo.write("a.txt", "uncommitted\n");
+
+    let opened = repo.open();
+    let hashed = opened.working_changes("HEAD").unwrap()[0]
+        .new_oid
+        .clone()
+        .unwrap();
+    assert!(opened.existing_objects(&[&hashed]).unwrap().is_empty());
+    let stored = opened.store_worktree_blobs(&["a.txt"]).unwrap();
+    assert_eq!(stored, [hashed.clone()]);
+    assert_eq!(opened.read_blob(&hashed).unwrap(), b"uncommitted\n");
+    let present = opened.existing_objects(&[&hashed, "0123456789"]).unwrap();
+    assert_eq!(present.len(), 1);
+
+    let stats = opened.commit_stats(&root, "HEAD").unwrap();
+    assert_eq!(stats.len(), 1);
+    let tip_stats = stats[&tip];
+    assert_eq!(
+        (tip_stats.files, tip_stats.additions, tip_stats.deletions),
+        (2, 3, 0)
+    );
+}
