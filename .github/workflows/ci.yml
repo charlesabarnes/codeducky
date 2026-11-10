@@ -66,7 +66,8 @@ jobs:
           curl -fsSL -o hc.tgz "https://releases.herdr.dev/core/${HC_VERSION}/herdr-core-linux-x86_64.tar.gz"
           echo "${HC_SHA256}  hc.tgz" | sha256sum -c
           mkdir -p "$HOME/.local/bin" hc && tar -xzf hc.tgz -C hc
-          install -m755 hc/herdr-core "$HOME/.local/bin/hc"
+          install -m755 hc/herdr-core "$HOME/.local/bin/herdr-core"
+          ln -s herdr-core "$HOME/.local/bin/hc"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Tests against a scratch herdr-core
