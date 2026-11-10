@@ -31,6 +31,7 @@ portable-pty = "0.9"
 regex = "1"
 tempfile = "3"
 thiserror = "2"
+ureq = "3"
 libghostty-vt = { git = "https://github.com/Uzaaft/libghostty-rs", rev = "768add9", features = ["pkg-config"] }
 
 [workspace.lints.rust]

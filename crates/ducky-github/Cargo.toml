@@ -5,5 +5,16 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[dependencies]
+base64.workspace = true
+ducky-git.workspace = true
+ducky-host.workspace = true
+ducky-review.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+ureq.workspace = true
+
 [lints]
 workspace = true

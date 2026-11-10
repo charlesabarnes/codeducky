@@ -1,0 +1,60 @@
+{
+  "sha": "cc550430fddb0cdc88d38a7fd88b06ba043eee90",
+  "tree": [
+    {
+      "mode": "100644",
+      "path": "compose.yaml",
+      "sha": "219c28abe8f9158b223cce6bc143751997c319e5",
+      "size": 9092,
+      "type": "blob",
+      "url": "https://api.github.com/repos/charlesabarnes/gangway/git/blobs/219c28abe8f9158b223cce6bc143751997c319e5"
+    },
+    {
+      "mode": "100755",
+      "path": "install.sh",
+      "sha": "a01274375d7708fb11a6ecb5f93aa5039b74dcbb",
+      "size": 31979,
+      "type": "blob",
+      "url": "https://api.github.com/repos/charlesabarnes/gangway/git/blobs/a01274375d7708fb11a6ecb5f93aa5039b74dcbb"
+    },
+    {
+      "mode": "100644",
+      "path": "server/src/config.ts",
+      "sha": "a9d8de4dd15006281c49b11bd3800599aaa999e4",
+      "size": 6992,
+      "type": "blob",
+      "url": "https://api.github.com/repos/charlesabarnes/gangway/git/blobs/a9d8de4dd15006281c49b11bd3800599aaa999e4"
+    },
+    {
+      "mode": "100644",
+      "path": "server/src/settings.ts",
+      "sha": "56b67b7e498ae21edf0ce35d335082e307784c10",
+      "size": 10522,
+      "type": "blob",
+      "url": "https://api.github.com/repos/charlesabarnes/gangway/git/blobs/56b67b7e498ae21edf0ce35d335082e307784c10"
+    },
+    {
+      "mode": "040000",
+      "path": "server/src/tls",
+      "sha": "fb74d24071e14a315539460ab5eea852a2bc2eb3",
+      "type": "tree",
+      "url": "https://api.github.com/repos/charlesabarnes/gangway/git/trees/fb74d24071e14a315539460ab5eea852a2bc2eb3"
+    },
+    {
+      "mode": "040000",
+      "path": "server/src/tls/dns",
+      "sha": "61bee3fa7530fe93b791c826b2134772ebf6af2f",
+      "type": "tree",
+      "url": "https://api.github.com/repos/charlesabarnes/gangway/git/trees/61bee3fa7530fe93b791c826b2134772ebf6af2f"
+    },
+    {
+      "mode": "100644",
+      "path": "server/src/tls/dns/provider.ts",
+      "sha": "7d1a73edf189fd77bbeaf09fde878bd5a1544fcd",
+      "size": 4488,
+      "type": "blob",
+      "url": "https://api.github.com/repos/charlesabarnes/gangway/git/blobs/7d1a73edf189fd77bbeaf09fde878bd5a1544fcd"
+    }
+  ],
+  "truncated": false
+}

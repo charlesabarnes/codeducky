@@ -1522,6 +1522,17 @@ dependencies = [
 [[package]]
 name = "ducky-github"
 version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "ducky-git",
+ "ducky-host",
+ "ducky-review",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "ureq",
+]
 
 [[package]]
 name = "ducky-hc"
