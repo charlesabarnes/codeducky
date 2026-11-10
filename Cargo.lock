@@ -999,6 +999,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ducky-agents",
+ "ducky-git",
  "ducky-hc",
  "ducky-host",
  "ducky-review",

@@ -30,6 +30,33 @@ fn commands() -> Vec<(&'static str, Box<dyn Action>)> {
         ("Order files by folder or risk", Box::new(ToggleOrder)),
         ("Expand all collapsed lines", Box::new(ExpandAll)),
         ("Change the base", Box::new(ChangeBase)),
+        (
+            "Since last look: only what changed since you viewed each file",
+            Box::new(ToggleSince),
+        ),
+        ("All changes on the branch", Box::new(AllChanges)),
+        ("Commits: pick a commit or a range", Box::new(CommitPicker)),
+        ("Commits: next commit", Box::new(NextCommit)),
+        ("Commits: previous commit", Box::new(PrevCommit)),
+        (
+            "Since last look: show or hide unchanged files",
+            Box::new(ToggleUnchanged),
+        ),
+        (
+            "Mark the review reviewed (since last look starts here)",
+            Box::new(MarkReviewed),
+        ),
+        ("Checklists tab", Box::new(ChecksTab)),
+        (
+            "Checklists: manage, import, export",
+            Box::new(ManageChecklists),
+        ),
+        (
+            "Editor: switch between the diff and the editor",
+            Box::new(ToggleEditor),
+        ),
+        ("Editor: save the file", Box::new(SaveFile)),
+        ("Editor: revert unsaved changes", Box::new(RevertFile)),
         ("Files tab", Box::new(FilesTab)),
         ("Notes tab", Box::new(NotesTab)),
         ("Refresh the review", Box::new(Refresh)),

@@ -27,6 +27,24 @@ pub fn positions(text: &TextDiff) -> Vec<LinePos> {
         .collect()
 }
 
+/// The working-tree line for a focused line: itself on the new side; for a removed line, the
+/// next line that is still there (or the last one).
+pub fn new_side_line(text: &TextDiff, at: LinePos) -> u32 {
+    if at.side == Side::New {
+        return at.line;
+    }
+    let from = text
+        .lines
+        .iter()
+        .position(|line| line.old_no == Some(at.line))
+        .unwrap_or(0);
+    text.lines[from..]
+        .iter()
+        .find_map(|line| line.new_no)
+        .or_else(|| text.lines.iter().rev().find_map(|line| line.new_no))
+        .unwrap_or(1)
+}
+
 /// Indexes where a run of changed lines begins.
 pub fn change_starts(text: &TextDiff) -> Vec<usize> {
     let changed: Vec<bool> = text
@@ -96,5 +114,23 @@ mod tests {
         assert_eq!(step_to(&starts, Some(5), true), None);
         assert_eq!(step_to(&starts, None, false), Some(5));
         assert_eq!(step_to(&starts, Some(5), false), Some(1));
+    }
+
+    #[test]
+    fn maps_removed_lines_to_the_next_line_still_there() {
+        let diff = text("a\nb\nc\n", "a\nc\n");
+        let old = |line| LinePos {
+            side: Side::Old,
+            line,
+        };
+        assert_eq!(new_side_line(&diff, old(2)), 2);
+        assert_eq!(new_side_line(&diff, old(1)), 1);
+        let new = LinePos {
+            side: Side::New,
+            line: 2,
+        };
+        assert_eq!(new_side_line(&diff, new), 2);
+        let gone_at_end = text("a\nb\n", "a\n");
+        assert_eq!(new_side_line(&gone_at_end, old(2)), 1);
     }
 }

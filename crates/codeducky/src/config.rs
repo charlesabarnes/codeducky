@@ -18,6 +18,23 @@ pub enum DiffMode {
     Split,
 }
 
+/// The mode a repository's review opens in. Commit picks are not kept: commits come and go.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SavedMode {
+    #[default]
+    All,
+    Since,
+}
+
+/// `machine:path`, or the path alone on this machine.
+pub fn repo_key(machine: Option<&str>, path: &str) -> String {
+    match machine {
+        Some(machine) => format!("{machine}:{path}"),
+        None => path.to_owned(),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RecentRepo {
     pub path: String,
@@ -62,6 +79,8 @@ pub struct Prefs {
     pub agent_command: String,
     /// The machine the start screen had picked; `None` for this one.
     pub machine: Option<String>,
+    /// The last mode per repository ([`repo_key`]).
+    pub modes: std::collections::BTreeMap<String, SavedMode>,
 }
 
 impl Prefs {
@@ -101,6 +120,17 @@ impl Prefs {
             }
             None => self.recent.retain(|r| r.machine.as_deref() != Some(from)),
         }
+    }
+
+    pub fn mode_for(&self, repo: &str) -> SavedMode {
+        self.modes.get(repo).copied().unwrap_or_default()
+    }
+
+    pub fn set_mode(&mut self, repo: String, mode: SavedMode) {
+        match mode {
+            SavedMode::All => self.modes.remove(&repo),
+            SavedMode::Since => self.modes.insert(repo, mode),
+        };
     }
 
     pub fn agent_command(&self) -> &str {
@@ -182,6 +212,18 @@ mod tests {
         prefs.rename_machine("lab", None);
         assert_eq!(prefs.recent_on(Some("lab")).count(), 0);
         assert_eq!(prefs.machine, None);
+    }
+
+    #[test]
+    fn remembers_since_mode_per_repo() {
+        let mut prefs = Prefs::default();
+        let key = repo_key(Some("lab"), "/srv/app");
+        assert_eq!(key, "lab:/srv/app");
+        prefs.set_mode(key.clone(), SavedMode::Since);
+        assert_eq!(prefs.mode_for(&key), SavedMode::Since);
+        assert_eq!(prefs.mode_for("/srv/app"), SavedMode::All);
+        prefs.set_mode(key.clone(), SavedMode::All);
+        assert!(prefs.modes.is_empty());
     }
 
     #[test]

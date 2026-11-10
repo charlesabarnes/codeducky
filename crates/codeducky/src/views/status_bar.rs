@@ -45,10 +45,12 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
                 .bg(code.accent)
                 .text_color(code.accent_fg)
                 .font_weight(FontWeight::BOLD)
-                .child(if model.review.is_some() {
-                    "REVIEW"
-                } else {
-                    "OPEN"
+                .child(match (&model.review, model.pane, &model.mode) {
+                    (None, _, _) => "OPEN",
+                    (Some(_), crate::state::Pane::Edit, _) => "EDIT",
+                    (Some(_), _, ducky_session::ReviewMode::Since) => "SINCE",
+                    (Some(_), _, ducky_session::ReviewMode::Commits { .. }) => "COMMITS",
+                    (Some(_), _, ducky_session::ReviewMode::All) => "REVIEW",
                 }),
         )
         .children(file_name)
@@ -67,12 +69,22 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
                 .text_ellipsis()
                 .children(message.map(|(text, color)| div().text_color(color).child(text))),
         )
-        .when(model.review.is_some(), |this| {
-            this.child(hint("j/k", "line"))
-                .child(hint("n/p", "change"))
-                .child(hint("]/[", "file"))
-                .child(hint("c", "comment"))
+        .when(model.unsaved.is_some(), |this| {
+            this.child(div().text_color(code.modified).child("unsaved"))
         })
+        .when(model.pane == crate::state::Pane::Edit, |this| {
+            this.child(hint(crate::keymap::SAVE_FILE_KEYS, "save"))
+                .child(hint(crate::keymap::LEAVE_EDITOR_KEYS, "diff"))
+        })
+        .when(
+            model.review.is_some() && model.pane == crate::state::Pane::Diff,
+            |this| {
+                this.child(hint("j/k", "line"))
+                    .child(hint("n/p", "change"))
+                    .child(hint("]/[", "file"))
+                    .child(hint("c", "comment"))
+            },
+        )
         .child(hint("?", "help"))
         .child(look_switch(
             "look-palette",

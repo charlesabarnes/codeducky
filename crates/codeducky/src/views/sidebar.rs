@@ -11,7 +11,7 @@ use crate::state::SidebarTab;
 use crate::theme::ActiveCode;
 use crate::views::widgets::{counts, progress, short_rev, short_sha};
 use crate::views::workspace::Workspace;
-use crate::views::{files, notes_panel};
+use crate::views::{checklists, files, modes, notes_panel};
 
 pub fn render(
     ws: &mut Workspace,
@@ -33,7 +33,9 @@ pub fn render(
     let open = note_counts.status(NoteStatus::Open);
     let viewed = review.viewed_count();
     let total = review.files.len();
+    let listed = model.visible.len();
     let tab = model.tab;
+    let checks = model.checklists.progress(&review.state);
 
     let row = |label: &'static str, value: AnyElement| {
         h_flex()
@@ -89,9 +91,25 @@ pub fn render(
                 .child(progress(viewed, total, cx))
                 .child(format!("{viewed}/{total}"))
                 .into_any_element(),
-        ));
-    // Mount point: since-last-look and the commit picker (phase 5) and checklists (phase 3b) go
-    // below the summary.
+        ))
+        .when(checks.total > 0, |this| {
+            this.child(row(
+                "checks",
+                h_flex()
+                    .gap_2()
+                    .child(progress(checks.ticked, checks.total, cx))
+                    .child(format!("{}/{}", checks.ticked, checks.total))
+                    .when(checks.required_open > 0, |this| {
+                        this.child(
+                            div()
+                                .text_color(code.del)
+                                .child(format!("{} required open", checks.required_open)),
+                        )
+                    })
+                    .into_any_element(),
+            ))
+        });
+    let modes = modes::render(ws, cx);
     let agents = ws.agents.read(cx);
     let live = agents.agents.iter().filter(|a| a.is_live()).count();
     let working = agents
@@ -180,7 +198,7 @@ pub fn render(
         .border_color(theme.border)
         .child(tab_button(
             "tab-files",
-            format!("files {total}"),
+            format!("files {listed}"),
             SidebarTab::Files,
         ))
         .child(div().w(px(1.)).h_full().bg(theme.border))
@@ -188,11 +206,22 @@ pub fn render(
             "tab-notes",
             format!("notes {open}"),
             SidebarTab::Notes,
+        ))
+        .child(div().w(px(1.)).h_full().bg(theme.border))
+        .child(tab_button(
+            "tab-checks",
+            if checks.total > 0 {
+                format!("checks {}/{}", checks.ticked, checks.total)
+            } else {
+                "checks".to_owned()
+            },
+            SidebarTab::Checks,
         ));
 
     let content = match tab {
         SidebarTab::Files => files::render(ws, window, cx).into_any_element(),
         SidebarTab::Notes => notes_panel::render(ws, window, cx).into_any_element(),
+        SidebarTab::Checks => checklists::render(ws, window, cx).into_any_element(),
     };
 
     v_flex()
@@ -204,6 +233,7 @@ pub fn render(
         .border_r_1()
         .border_color(theme.sidebar_border)
         .child(summary)
+        .child(modes)
         .child(agent_bar)
         .child(tabs)
         .child(div().flex_1().min_h_0().flex().flex_col().child(content))

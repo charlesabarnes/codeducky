@@ -56,6 +56,18 @@ actions!(
         PickMachine,
         CloseDialog,
         SubmitDialog,
+        ToggleSince,
+        AllChanges,
+        NextCommit,
+        PrevCommit,
+        CommitPicker,
+        ToggleUnchanged,
+        MarkReviewed,
+        ChecksTab,
+        ManageChecklists,
+        ToggleEditor,
+        SaveFile,
+        RevertFile,
     ]
 );
 
@@ -63,6 +75,7 @@ actions!(
 pub const REVIEW: &str = "Review && !Input && !Terminal && !Dialog";
 pub const NOTE_EDITOR: &str = "NoteEditor";
 pub const DIALOG: &str = "Dialog";
+pub const FILE_EDITOR: &str = "FileEditor";
 
 #[cfg(target_os = "macos")]
 macro_rules! secondary {
@@ -86,6 +99,9 @@ pub const AGENTS_KEYS: &str = "cmd-j";
 #[cfg(not(target_os = "macos"))]
 pub const AGENTS_KEYS: &str = "ctrl-shift-j";
 pub const SAVE_KEYS: &str = secondary!("enter");
+pub const SAVE_FILE_KEYS: &str = secondary!("s");
+/// Leaves the editor from inside it, where single keys type.
+pub const LEAVE_EDITOR_KEYS: &str = secondary!("shift-e");
 
 pub struct Shortcut {
     pub keys: &'static str,
@@ -115,6 +131,16 @@ pub const HELP: &[Shortcut] = &[
     s("N / P", "Next / previous note in this file", "Navigation"),
     s("x", "Expand all collapsed lines", "Navigation"),
     s(
+        "}",
+        "Next commit (from All changes, the first one)",
+        "Navigation",
+    ),
+    s(
+        "{",
+        "Previous commit (before the first, All changes)",
+        "Navigation",
+    ),
+    s(
         "c",
         "Comment on the focused line or the selected lines",
         "Notes",
@@ -140,6 +166,42 @@ pub const HELP: &[Shortcut] = &[
     s("/", "Filter files", "View"),
     s("g f / g n", "Files tab / notes tab", "View"),
     s("b", "Change the base", "View"),
+    s(
+        "L",
+        "Since last look: only what changed since you viewed each file",
+        "View",
+    ),
+    s("g a", "All changes on the branch", "View"),
+    s("g k", "Pick a commit or a range", "View"),
+    s(
+        "g u",
+        "Show or hide files unchanged since your last look",
+        "View",
+    ),
+    s(
+        "V",
+        "Mark the review reviewed: since last look starts here",
+        "View",
+    ),
+    s("g c", "Checklists tab", "View"),
+    s(
+        "E",
+        "Switch between the diff and the file editor",
+        "File editor",
+    ),
+    s(SAVE_FILE_KEYS, "Save the file", "File editor"),
+    s(
+        LEAVE_EDITOR_KEYS,
+        "Back to the diff, at the editor's line",
+        "File editor",
+    ),
+    s(
+        secondary!("f"),
+        "Find and replace in the file",
+        "File editor",
+    ),
+    s(secondary!("z"), "Undo", "File editor"),
+    s(secondary!("shift-z"), "Redo", "File editor"),
     s(AGENTS_KEYS, "Show or hide the agents panel", "Agents"),
     s(
         FOCUS_TERMINAL_KEYS,
@@ -215,5 +277,16 @@ pub fn bind(cx: &mut App) {
         KeyBinding::new("escape", CancelNote, Some(NOTE_EDITOR)),
         KeyBinding::new("escape", CloseDialog, Some(DIALOG)),
         KeyBinding::new(secondary!("enter"), SubmitDialog, Some(DIALOG)),
+        KeyBinding::new("shift-l", ToggleSince, review),
+        KeyBinding::new("g a", AllChanges, review),
+        KeyBinding::new("}", NextCommit, review),
+        KeyBinding::new("{", PrevCommit, review),
+        KeyBinding::new("g k", CommitPicker, review),
+        KeyBinding::new("g u", ToggleUnchanged, review),
+        KeyBinding::new("shift-v", MarkReviewed, review),
+        KeyBinding::new("g c", ChecksTab, review),
+        KeyBinding::new("shift-e", ToggleEditor, review),
+        KeyBinding::new(LEAVE_EDITOR_KEYS, ToggleEditor, Some(FILE_EDITOR)),
+        KeyBinding::new(SAVE_FILE_KEYS, SaveFile, Some(FILE_EDITOR)),
     ]);
 }

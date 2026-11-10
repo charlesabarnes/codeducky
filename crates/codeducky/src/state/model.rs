@@ -5,10 +5,12 @@ use std::collections::{BTreeSet, HashSet};
 
 use ducky_review::order::FileOrder;
 use ducky_review::summary::StatusFilter;
+use ducky_review::view_notes::{NoteView, PlacedNotes, ShownLines, place_notes};
 use ducky_review::{Note, NoteId, NumberedLine, ReviewState, Severity, Side};
 use ducky_session::{
-    Connection, CoreTarget, DiffOptions, FileDiff, NoteDraft, Review, ReviewRequest, TreeRow,
-    build_tree, changed_notes, matches_filter, order,
+    ChangedFile, Checklists, Connection, CoreTarget, DiffOptions, FileDiff, NoteDraft, Review,
+    ReviewMode, ReviewRequest, ReviewView, TreeRow, build_tree, changed_notes, matches_filter,
+    order,
 };
 use gpui_kit::component::diff::DiffFile;
 use gpui_kit::*;
@@ -22,6 +24,15 @@ pub enum SidebarTab {
     #[default]
     Files,
     Notes,
+    Checks,
+}
+
+/// What the main pane shows for the selected file.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Pane {
+    #[default]
+    Diff,
+    Edit,
 }
 
 pub struct LoadedDiff {
@@ -69,6 +80,8 @@ pub enum ModelEvent {
     Connected,
     /// A review was opened, refreshed or re-based: agents follow it.
     ReviewOpened,
+    /// Move the editor's cursor to this (1-based) line.
+    EditorGoto(u32),
 }
 
 impl EventEmitter<ModelEvent> for ReviewModel {}
@@ -101,11 +114,23 @@ pub struct ReviewModel {
     pub core_target: CoreTarget,
     /// Bumped with every new connection, so agents know to subscribe again.
     pub connection_generation: u64,
+    pub mode: ReviewMode,
+    /// What the mode shows; rebuilt when the mode or the review changes.
+    pub view: Option<ReviewView>,
+    /// The view's files as listed (since mode hides unchanged ones unless shown).
+    pub visible: Vec<ChangedFile>,
+    pub show_unchanged: bool,
+    pub show_commit_picker: bool,
+    pub since_banner_dismissed: bool,
+    pub pane: Pane,
+    /// The file the editor holds unsaved changes to.
+    pub unsaved: Option<String>,
+    pub checklists: Checklists,
     diff_generation: u64,
     pending_open: Option<ReviewRequest>,
 }
 
-type Work<T> = Box<dyn FnOnce() -> Result<T, String> + Send>;
+pub(super) type Work<T> = Box<dyn FnOnce() -> Result<T, String> + Send>;
 
 impl ReviewModel {
     pub fn new(prefs: Prefs) -> Self {
@@ -132,12 +157,21 @@ impl ReviewModel {
             fix_selection: BTreeSet::new(),
             core_target: CoreTarget::Default,
             connection_generation: 0,
+            mode: ReviewMode::All,
+            view: None,
+            visible: Vec::new(),
+            show_unchanged: false,
+            show_commit_picker: false,
+            since_banner_dismissed: false,
+            pane: Pane::Diff,
+            unsaved: None,
+            checklists: Checklists::default(),
             diff_generation: 0,
             pending_open: None,
         }
     }
 
-    fn run<T: Send + 'static>(
+    pub(super) fn run<T: Send + 'static>(
         &mut self,
         label: impl Into<String>,
         cx: &mut Context<Self>,
@@ -246,38 +280,33 @@ impl ReviewModel {
         } else {
             self.status = None;
         }
-        let keep = self
-            .selected
-            .clone()
-            .filter(|path| review.file_index(path).is_some());
         let same_review = self.review.as_ref().is_some_and(|old| {
             old.toplevel() == review.toplevel() && old.request.machine == review.request.machine
         });
         if !same_review {
             self.changed_notes.clear();
             self.fix_selection.clear();
+            self.since_banner_dismissed = false;
+            self.show_unchanged = false;
         }
         self.review = Some(review);
+        if !same_review {
+            self.mode = self.initial_mode();
+            self.selected = None;
+        }
         self.composer = None;
         cx.emit(ModelEvent::ReviewOpened);
-        match keep.or_else(|| self.first_file()) {
-            Some(path) => self.load_diff(path, cx),
-            None => {
-                self.selected = None;
-                self.diff = None;
-                cx.emit(ModelEvent::DiffReady);
-            }
-        }
+        self.load_checklists(cx);
+        self.rebuild_view(cx);
     }
 
-    fn first_file(&self) -> Option<String> {
-        let review = self.review.as_ref()?;
+    pub(super) fn first_file(&self) -> Option<String> {
         let ordered = self.ordered();
         ordered
             .iter()
-            .find(|&&i| !review.is_viewed(&review.files[i]))
+            .find(|&&i| !self.is_viewed(self.visible[i].path()))
             .or(ordered.first())
-            .map(|&i| review.files[i].path().to_owned())
+            .map(|&i| self.visible[i].path().to_owned())
     }
 
     pub fn refresh(&mut self, cx: &mut Context<Self>) {
@@ -372,10 +401,17 @@ impl ReviewModel {
         if self.selected.as_deref() == Some(&path) && self.diff.is_some() {
             return;
         }
+        if let Some(unsaved) = self.unsaved.clone().filter(|p| *p != path) {
+            self.fail(
+                format!("{unsaved} has unsaved changes: save them (cmd-s) or revert them first"),
+                cx,
+            );
+            return;
+        }
         self.load_diff(path, cx);
     }
 
-    fn load_diff(&mut self, path: String, cx: &mut Context<Self>) {
+    pub(super) fn load_diff(&mut self, path: String, cx: &mut Context<Self>) {
         let Some(review) = self.review.clone() else {
             return;
         };
@@ -388,13 +424,16 @@ impl ReviewModel {
         self.diff_generation += 1;
         let generation = self.diff_generation;
         let options = self.diff_options();
+        let entry = self.entry(&path).cloned();
         self.run(
             format!("loading {path}"),
             cx,
             Box::new(move || {
-                let diff = review
-                    .load_diff(&path, options)
-                    .map_err(|e| e.to_string())?;
+                let diff = match &entry {
+                    Some(entry) => review.load_entry_diff(entry, options),
+                    None => review.load_diff(&path, options),
+                }
+                .map_err(|e| e.to_string())?;
                 let file = unified_patch(&diff)
                     .and_then(|patch| DiffFile::parse(&patch).ok())
                     .and_then(|mut files| files.pop());
@@ -425,22 +464,20 @@ impl ReviewModel {
         }
     }
 
+    /// Indexes into [`Self::visible`] in review order, filtered.
     pub fn ordered(&self) -> Vec<usize> {
         let Some(review) = &self.review else {
             return Vec::new();
         };
-        order(&review.files, self.order, &review.notes)
+        order(&self.visible, self.order, &review.notes)
             .into_iter()
-            .filter(|&i| matches_filter(review.files[i].path(), &self.filter))
+            .filter(|&i| matches_filter(self.visible[i].path(), &self.filter))
             .collect()
     }
 
     pub fn tree(&self) -> Vec<TreeRow> {
-        let Some(review) = &self.review else {
-            return Vec::new();
-        };
         let nested = self.order == FileOrder::Folders;
-        build_tree(&review.files, &self.ordered(), nested, &self.collapsed)
+        build_tree(&self.visible, &self.ordered(), nested, &self.collapsed)
     }
 
     pub fn toggle_folder(&mut self, path: String, cx: &mut Context<Self>) {
@@ -457,16 +494,13 @@ impl ReviewModel {
         only_unviewed: bool,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(review) = &self.review else {
-            return false;
-        };
         let ordered = self.ordered();
         let at = self
             .selected
             .as_deref()
-            .and_then(|path| ordered.iter().position(|&i| review.files[i].path() == path));
+            .and_then(|path| ordered.iter().position(|&i| self.visible[i].path() == path));
         let candidates: Vec<usize> = (0..ordered.len())
-            .filter(|&k| !only_unviewed || !review.is_viewed(&review.files[ordered[k]]))
+            .filter(|&k| !only_unviewed || !self.is_viewed(self.visible[ordered[k]].path()))
             .collect();
         let next = match (at, forward) {
             (None, _) => candidates.first().copied(),
@@ -475,7 +509,7 @@ impl ReviewModel {
         };
         match next {
             Some(k) => {
-                let path = review.files[ordered[k]].path().to_owned();
+                let path = self.visible[ordered[k]].path().to_owned();
                 self.select(path, cx);
                 true
             }
@@ -488,17 +522,21 @@ impl ReviewModel {
             return;
         };
         let Some(file) = review.files.iter().find(|f| f.path() == path) else {
+            self.say(
+                "not in the final diff of the branch, so there is nothing to mark viewed",
+                cx,
+            );
             return;
         };
         let viewed = !review.is_viewed(file);
-        let change = file.change.clone();
+        let file = file.clone();
         let service = review.notes_service().clone();
         self.run(
             "saving",
             cx,
             Box::new(move || {
                 service
-                    .mark_viewed(&change, viewed)
+                    .mark_viewed(&file, viewed)
                     .map_err(|e| e.to_string())
             }),
             move |this, state, cx| {
@@ -538,11 +576,28 @@ impl ReviewModel {
         cx.notify();
     }
 
-    pub fn file_notes(&self) -> Vec<&Note> {
-        match (&self.review, &self.selected) {
-            (Some(review), Some(path)) => review.notes_on(path).collect(),
-            _ => Vec::new(),
-        }
+    /// How notes are placed on the diff on screen.
+    pub fn note_view(&self) -> NoteView {
+        self.current_entry()
+            .map_or(NoteView::All, |entry| entry.note_view.clone())
+    }
+
+    /// The selected file's notes, split into those drawn on this diff (with their lines moved
+    /// onto it) and those it does not show.
+    pub fn placed_notes(&self) -> PlacedNotes {
+        let (Some(review), Some(path)) = (&self.review, &self.selected) else {
+            return PlacedNotes::default();
+        };
+        let notes: Vec<Note> = review.notes_on(path).cloned().collect();
+        let new_lines = self
+            .diff
+            .as_ref()
+            .and_then(|loaded| loaded.diff.side_lines(Side::New));
+        place_notes(&notes, new_lines, &self.note_view())
+    }
+
+    pub fn file_notes(&self) -> Vec<Note> {
+        self.placed_notes().placed
     }
 
     fn side_lines(&self, side: Side) -> Option<Vec<NumberedLine>> {
@@ -561,6 +616,15 @@ impl ReviewModel {
         };
         if self.side_lines(side).is_none() {
             self.fail("this side has no text lines to comment on".into(), cx);
+            return;
+        }
+        if side == Side::Old && self.note_view() != NoteView::All {
+            self.fail(
+                "In this view, comment on the new (right-hand) side. Base lines take notes in \
+                 All changes."
+                    .into(),
+                cx,
+            );
             return;
         }
         let (line, end_line) = match end_line {
@@ -634,12 +698,17 @@ impl ReviewModel {
             return;
         }
         let service = review.notes_service().clone();
-        let lines = self.side_lines(composer.side);
+        let old_lines = self.side_lines(Side::Old);
+        let new_lines = self.side_lines(Side::New);
+        let view = self.note_view();
         let work: Work<(Vec<Note>, ReviewState)> = Box::new(move || {
             let result = match &composer.editing {
                 Some(id) => service.edit(id, body, composer.severity).map(drop),
                 None => {
-                    let lines = lines.ok_or("this side has no text lines")?;
+                    let shown = ShownLines {
+                        old: old_lines.as_deref(),
+                        new: new_lines.as_deref(),
+                    };
                     let draft = NoteDraft {
                         path: composer.path,
                         side: composer.side,
@@ -648,7 +717,7 @@ impl ReviewModel {
                         body,
                         severity: composer.severity,
                     };
-                    service.add(draft, &lines).map(drop)
+                    service.add_in_view(draft, &view, shown).map(drop)
                 }
             };
             result.map_err(|e| e.to_string())?;
@@ -858,13 +927,47 @@ impl ReviewModel {
             line: note.anchor.line,
         };
         let path = note.path.clone();
+        let commit = note.commit.clone();
         self.changed_notes.remove(id);
+        if let Some(mode) = self.mode_showing(&path, commit.as_deref()) {
+            self.cursor = Some(at);
+            self.selected = Some(path);
+            self.set_review_mode(mode, cx);
+            return;
+        }
+        if self.pane == Pane::Edit && self.selected.as_deref() == Some(&path) {
+            if at.side == Side::New {
+                cx.emit(ModelEvent::EditorGoto(at.line));
+                return;
+            }
+            self.pane = Pane::Diff;
+        }
         if self.selected.as_deref() == Some(&path) {
             self.focus_line(at, false, cx);
         } else {
             self.cursor = Some(at);
             self.load_diff(path, cx);
         }
+    }
+}
+
+impl ReviewModel {
+    /// A mode that shows the note: its commit for a pinned one, All changes when this view
+    /// leaves the file out. `None` when the current view already shows it.
+    fn mode_showing(&self, path: &str, commit: Option<&str>) -> Option<ReviewMode> {
+        let review = self.review.as_ref()?;
+        if let Some(sha) = commit {
+            if matches!(&self.mode, ReviewMode::Commits { to, .. } if to == sha) {
+                return None;
+            }
+            let index = review.commits.iter().position(|c| c.sha == sha)?;
+            return ReviewMode::commits(
+                ducky_review::commit_range::CommitRange::single(index),
+                &review.commits,
+            );
+        }
+        let listed = self.visible.iter().any(|f| f.path() == path);
+        (!listed).then_some(ReviewMode::All)
     }
 }
 

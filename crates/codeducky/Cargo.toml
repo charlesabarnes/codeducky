@@ -14,6 +14,7 @@ screenshot = ["gpui-kit/test-support", "dep:anyhow", "dep:image", "ducky-hc/scra
 [dependencies]
 anyhow = { workspace = true, optional = true }
 ducky-agents.workspace = true
+ducky-git.workspace = true
 ducky-hc.workspace = true
 ducky-host.workspace = true
 ducky-review.workspace = true

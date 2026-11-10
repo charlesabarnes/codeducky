@@ -16,9 +16,9 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::config::DiffMode;
-use crate::keymap::{ToggleMode, ToggleViewed, ToggleWhitespace, ToggleWrap};
+use crate::keymap::{ToggleEditor, ToggleMode, ToggleViewed, ToggleWhitespace, ToggleWrap};
 use crate::state::cursor::LinePos;
-use crate::state::{Composer, ReviewModel};
+use crate::state::{Composer, Pane, ReviewModel};
 use crate::theme::ActiveCode;
 use crate::views::note_card;
 use crate::views::widgets::{badge_color, counts, muted, toggle};
@@ -45,10 +45,16 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
             ))
             .into_any_element();
     };
-    let review = model.review.as_ref();
-    let file = review.and_then(|r| r.files.iter().find(|f| f.path() == path));
-    let viewed = review.zip(file).is_some_and(|(r, f)| r.is_viewed(f));
+    let file = model.visible.iter().find(|f| f.path() == path);
+    let viewed = model.is_viewed(&path);
+    let in_final = model.final_file(&path).is_some();
     let prefs = model.prefs.clone();
+    let pane = model.pane;
+    let edit_blocked = model
+        .current_entry()
+        .map(|entry| ducky_session::editable(entry).err().map(|r| r.to_string()))
+        .unwrap_or(Some("loading".into()));
+    let unsaved = model.unsaved.as_deref() == Some(path.as_str());
 
     let (dir, name) = match path.rsplit_once('/') {
         Some((dir, name)) => (format!("{dir}/"), name.to_owned()),
@@ -95,7 +101,7 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
             toggle("wrap", "wrap", "z", prefs.wrap, cx)
                 .on_click(|_, w, cx| w.dispatch_action(Box::new(ToggleWrap), cx)),
         )
-        .child(
+        .child(if in_final {
             toggle(
                 "viewed",
                 if viewed { "[x] viewed" } else { "[ ] viewed" },
@@ -103,8 +109,12 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
                 viewed,
                 cx,
             )
-            .on_click(|_, w, cx| w.dispatch_action(Box::new(ToggleViewed), cx)),
-        )
+            .on_click(|_, w, cx| w.dispatch_action(Box::new(ToggleViewed), cx))
+            .into_any_element()
+        } else {
+            muted("not in the final diff", cx).into_any_element()
+        })
+        .child(edit_switch(pane, edit_blocked, unsaved, cx))
         .child(
             h_flex()
                 .child(
@@ -128,9 +138,8 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
                     .on_click(|_, w, cx| w.dispatch_action(Box::new(ToggleMode), cx)),
                 ),
         );
-    // Mount point: the diff / edit switch for the file editor (phase 6) goes in this header.
-
     let mut notices: Vec<AnyElement> = Vec::new();
+    notices.extend(crate::views::mode_notices::render(model, &path, cx));
     let mut lost: Vec<Note> = Vec::new();
     if let Some(loaded) = &model.diff {
         notices.extend(
@@ -144,9 +153,13 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
             .file_notes()
             .into_iter()
             .filter(|n| n.anchor_lost)
-            .cloned()
             .collect();
     }
+    let elsewhere = if model.diff.is_some() {
+        model.placed_notes().elsewhere
+    } else {
+        Vec::new()
+    };
     let weak_model = ws.model.downgrade();
     let changed = model.changed_notes.clone();
     let lost_cards = (!lost.is_empty()).then(|| {
@@ -165,6 +178,32 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
                 note_card::note_card(note, changed.contains(&note.id), weak_model.clone(), cx)
             }))
     });
+
+    let elsewhere_cards = (!elsewhere.is_empty()).then(|| {
+        let heading = if model.note_view() == ducky_review::view_notes::NoteView::All {
+            "Notes on earlier commits (pick the commit to see them in place)"
+        } else {
+            "Notes not on this diff: base lines, lines this view does not show, or another commit"
+        };
+        v_flex()
+            .border_b_1()
+            .border_color(theme.border)
+            .bg(code.bg_2)
+            .child(notice_row(format!("{heading} ({})", elsewhere.len()), cx))
+            .children(elsewhere.iter().map(|note| {
+                note_card::note_card(note, changed.contains(&note.id), weak_model.clone(), cx)
+            }))
+    });
+
+    if pane == Pane::Edit
+        && let Some(editor) = ws.editor.clone()
+    {
+        return v_flex()
+            .size_full()
+            .child(header)
+            .child(div().flex_1().min_h_0().child(editor))
+            .into_any_element();
+    }
 
     let body = match model.diff.as_ref().map(|d| &d.diff.content) {
         None => placeholder("loading…", cx),
@@ -199,6 +238,7 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
         .child(header)
         .children(notices)
         .children(lost_cards)
+        .children(elsewhere_cards)
         .child(div().flex_1().min_h_0().child(body))
         .into_any_element()
 }
@@ -212,7 +252,6 @@ fn diff_view(ws: &Workspace, path: &str, cx: &mut Context<Workspace>) -> AnyElem
         .file_notes()
         .into_iter()
         .filter(|n| !n.anchor_lost)
-        .cloned()
         .collect();
     let composer = model.composer.clone().filter(|c| c.path == path);
     let editing = composer.as_ref().and_then(|c| c.editing.clone());
@@ -425,6 +464,39 @@ impl AnnotationContext {
     }
 }
 
+/// `diff | edit`, with why editing is off when it is.
+fn edit_switch(pane: Pane, blocked: Option<String>, unsaved: bool, cx: &App) -> AnyElement {
+    let edit_label = if unsaved { "edit ●" } else { "edit" };
+    let switch = h_flex()
+        .id("edit-switch")
+        .child(
+            toggle("pane-diff", "diff", "", pane == Pane::Diff, cx).on_click(move |_, w, cx| {
+                if pane == Pane::Edit {
+                    w.dispatch_action(Box::new(ToggleEditor), cx)
+                }
+            }),
+        )
+        .child(
+            toggle("pane-edit", edit_label, "E", pane == Pane::Edit, cx)
+                .when(blocked.is_some(), |this| {
+                    this.text_color(cx.theme().muted_foreground)
+                })
+                .on_click(move |_, w, cx| {
+                    if pane == Pane::Diff {
+                        w.dispatch_action(Box::new(ToggleEditor), cx)
+                    }
+                }),
+        );
+    match blocked {
+        Some(reason) => switch
+            .tooltip(move |window, cx| {
+                gpui_kit::component::tooltip::Tooltip::new(reason.clone()).build(window, cx)
+            })
+            .into_any_element(),
+        None => switch.into_any_element(),
+    }
+}
+
 fn direction(side: ducky_review::Side) -> &'static str {
     match side {
         ducky_review::Side::Old => "to",
@@ -464,7 +536,7 @@ fn notice_text(notice: &FileNotice) -> Option<String> {
     })
 }
 
-fn notice_row(text: impl Into<SharedString>, cx: &App) -> AnyElement {
+pub fn notice_row(text: impl Into<SharedString>, cx: &App) -> AnyElement {
     let code = cx.code();
     div()
         .px(code.metrics.pad_x)

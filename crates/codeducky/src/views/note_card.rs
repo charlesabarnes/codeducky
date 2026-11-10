@@ -111,6 +111,11 @@ pub fn note_card(
                 .text_color(theme.muted_foreground)
                 .child(note.anchor.lines_label()),
         )
+        .children(note.commit.as_deref().map(|sha| {
+            div()
+                .text_color(theme.muted_foreground)
+                .child(format!("on commit {}", &sha[..sha.len().min(7)]))
+        }))
         .when(note.author.is_agent(), |this| {
             this.child(
                 div()

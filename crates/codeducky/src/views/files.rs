@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use ducky_review::last_look::SinceKind;
 use ducky_review::order::FileOrder;
 use ducky_session::{FileBadge, TreeEntry};
 use gpui_kit::component::input::Input;
@@ -31,7 +32,11 @@ enum Row {
         lines: Option<(u32, u32)>,
         notes: usize,
         viewed: bool,
+        /// Viewed marks are for the branch's final diff; other files have none.
+        markable: bool,
         selected: bool,
+        since: Option<SinceKind>,
+        unsaved: bool,
     },
 }
 
@@ -57,7 +62,7 @@ fn rows(ws: &Workspace, cx: &App) -> Vec<Row> {
                 files,
             },
             TreeEntry::File { index, name } => {
-                let file = &review.files[index];
+                let file = &model.visible[index];
                 let label = match (&file.change.old_path, file.badge()) {
                     (Some(old), FileBadge::Renamed | FileBadge::Copied) => {
                         rename_label(old, file.path(), &name)
@@ -71,8 +76,11 @@ fn rows(ws: &Workspace, cx: &App) -> Vec<Row> {
                     badge: file.badge(),
                     lines: file.line_counts(),
                     notes: review.notes_on(file.path()).filter(|n| n.is_open()).count(),
-                    viewed: review.is_viewed(file),
+                    viewed: model.is_viewed(file.path()),
+                    markable: model.final_file(file.path()).is_some(),
                     selected: model.selected.as_deref() == Some(file.path()),
+                    since: model.entry(file.path()).and_then(|e| e.since),
+                    unsaved: model.unsaved.as_deref() == Some(file.path()),
                 }
             }
         })
@@ -205,7 +213,10 @@ fn render_row(i: usize, row: &Row, cx: &mut Context<Workspace>) -> impl IntoElem
             lines,
             notes,
             viewed,
+            markable,
             selected,
+            since,
+            unsaved,
         } => {
             let toggle_path = path.clone();
             base.pl(indent(depth))
@@ -219,7 +230,11 @@ fn render_row(i: usize, row: &Row, cx: &mut Context<Workspace>) -> impl IntoElem
                         } else {
                             theme.muted_foreground
                         })
-                        .child(if viewed { "[x]" } else { "[ ]" })
+                        .child(match (markable, viewed) {
+                            (false, _) => "   ",
+                            (true, true) => "[x]",
+                            (true, false) => "[ ]",
+                        })
                         .on_click(cx.listener(move |ws, _, _, cx| {
                             cx.stop_propagation();
                             let path = toggle_path.clone();
@@ -245,10 +260,16 @@ fn render_row(i: usize, row: &Row, cx: &mut Context<Workspace>) -> impl IntoElem
                         })
                         .child(label),
                 )
+                .when(unsaved, |this| {
+                    this.child(div().text_color(code.modified).child("●"))
+                })
                 .when(notes > 0, |this| {
                     this.child(div().text_color(code.suggestion).child(format!("✎{notes}")))
                 })
-                .children(lines.map(|(a, d)| counts(a, d, cx)))
+                .children(since.map(|kind| since_tag(kind, cx)))
+                .when(since.is_none(), |this| {
+                    this.children(lines.map(|(a, d)| counts(a, d, cx)))
+                })
                 .on_click(cx.listener(move |ws, _, _, cx| {
                     let path = path.clone();
                     ws.model.update(cx, |m, cx| m.select(path, cx));
@@ -256,4 +277,20 @@ fn render_row(i: usize, row: &Row, cx: &mut Context<Workspace>) -> impl IntoElem
                 .into_any_element()
         }
     }
+}
+
+fn since_tag(kind: SinceKind, cx: &App) -> Div {
+    let code = cx.code();
+    let (label, color) = match kind {
+        SinceKind::New => ("new", code.add),
+        SinceKind::Changed => ("changed", code.modified),
+        SinceKind::Missing => ("full", code.del),
+        SinceKind::Unchanged => ("same", cx.theme().muted_foreground),
+    };
+    div()
+        .px_1()
+        .rounded(cx.theme().radius)
+        .bg(color.opacity(0.14))
+        .text_color(color)
+        .child(label)
 }

@@ -1,10 +1,17 @@
 pub mod agents;
 pub mod base_picker;
+pub mod checklist_manager;
+pub mod checklists;
+pub mod commit_picker;
 pub mod dialog;
 pub mod diff_pane;
+mod editing;
+pub mod editor_pane;
 pub mod files;
 pub mod help;
 pub mod machines;
+pub mod mode_notices;
+pub mod modes;
 pub mod note_card;
 pub mod notes_panel;
 pub mod palette;

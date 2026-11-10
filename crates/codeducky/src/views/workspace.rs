@@ -20,6 +20,8 @@ use crate::theme::{self, Look};
 use crate::views::agents::handoff_dialog::HandOffDialog;
 use crate::views::agents::start_dialog::StartAgentDialog;
 use crate::views::agents::{AgentsPanel, Ask};
+use crate::views::checklist_manager::ChecklistManager;
+use crate::views::editor_pane::EditorPane;
 use crate::views::machines::add_dialog::AddMachineDialog;
 use crate::views::machines::browser::FolderBrowser;
 use crate::views::machines::rename_dialog::RenameMachineDialog;
@@ -32,6 +34,7 @@ pub enum Dialog {
     AddMachine(Entity<AddMachineDialog>),
     RenameMachine(Entity<RenameMachineDialog>),
     Browse(Entity<FolderBrowser>),
+    Checklists(Entity<ChecklistManager>),
 }
 
 impl Dialog {
@@ -42,6 +45,7 @@ impl Dialog {
             Self::AddMachine(d) => d.clone().into(),
             Self::RenameMachine(d) => d.clone().into(),
             Self::Browse(d) => d.clone().into(),
+            Self::Checklists(d) => d.clone().into(),
         }
     }
 }
@@ -58,6 +62,8 @@ pub struct Workspace {
     pub filter_input: Entity<InputState>,
     pub path_input: Entity<InputState>,
     pub note_input: Option<Entity<TextareaState>>,
+    /// The file editor; kept while it holds unsaved edits, even on the diff.
+    pub editor: Option<Entity<EditorPane>>,
     pub palette: Option<Entity<palette::Palette>>,
     pub dialog: Option<Dialog>,
     pub show_machine_menu: bool,
@@ -144,6 +150,7 @@ impl Workspace {
             filter_input,
             path_input,
             note_input: None,
+            editor: None,
             palette: None,
             dialog: None,
             show_machine_menu: false,
@@ -177,7 +184,11 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         match event {
-            ModelEvent::DiffReady => self.show_diff(cx),
+            ModelEvent::DiffReady => {
+                self.show_diff(cx);
+                self.follow_selection_in_editor(window, cx);
+            }
+            ModelEvent::EditorGoto(line) => self.editor_goto(*line, window, cx),
             ModelEvent::ScrollTo(at) => self.scroll_to(*at, cx),
             ModelEvent::Select(selection) => self.select_lines(*selection, cx),
             ModelEvent::ComposerOpened => self.open_composer(window, cx),
@@ -537,6 +548,7 @@ impl Workspace {
                 this.model.update(cx, |m, cx| {
                     m.show_help = false;
                     m.show_base_picker = false;
+                    m.show_commit_picker = false;
                     m.clear_selection(cx)
                 })
             }))
@@ -712,6 +724,77 @@ impl Workspace {
             .on_action(cx.listener(|this, _: &CloseDialog, window, cx| {
                 this.close_dialog(window, cx);
             }))
+            .on_action(cx.listener(|this, _: &ToggleSince, _, cx| {
+                this.model.update(cx, |m, cx| m.toggle_since(cx))
+            }))
+            .on_action(cx.listener(|this, _: &AllChanges, _, cx| {
+                this.model.update(cx, |m, cx| {
+                    m.show_commit_picker = false;
+                    m.set_review_mode(ducky_session::ReviewMode::All, cx)
+                })
+            }))
+            .on_action(cx.listener(|this, _: &NextCommit, _, cx| {
+                this.model.update(cx, |m, cx| {
+                    m.step_commit(ducky_review::commit_range::Step::Forward, cx)
+                })
+            }))
+            .on_action(cx.listener(|this, _: &PrevCommit, _, cx| {
+                this.model.update(cx, |m, cx| {
+                    m.step_commit(ducky_review::commit_range::Step::Back, cx)
+                })
+            }))
+            .on_action(cx.listener(|this, _: &CommitPicker, _, cx| {
+                this.model.update(cx, |m, cx| {
+                    m.show_commit_picker = !m.show_commit_picker;
+                    cx.notify();
+                })
+            }))
+            .on_action(cx.listener(|this, _: &ToggleUnchanged, _, cx| {
+                this.model.update(cx, |m, cx| m.toggle_unchanged(cx))
+            }))
+            .on_action(cx.listener(|this, _: &MarkReviewed, _, cx| {
+                this.model.update(cx, |m, cx| m.mark_reviewed(cx))
+            }))
+            .on_action(cx.listener(|this, _: &ChecksTab, _, cx| {
+                this.model.update(cx, |m, cx| {
+                    m.tab = SidebarTab::Checks;
+                    cx.notify();
+                })
+            }))
+            .on_action(cx.listener(|this, _: &ManageChecklists, _, cx| {
+                this.open_checklist_manager(cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleEditor, window, cx| {
+                this.toggle_editor(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SaveFile, _, cx| {
+                if let Some(editor) = this.editor.clone() {
+                    editor.update(cx, |editor, cx| editor.save(false, cx));
+                }
+            }))
+            .on_action(cx.listener(|this, _: &RevertFile, window, cx| {
+                if let Some(editor) = this.editor.clone() {
+                    editor.update(cx, |editor, cx| editor.revert(window, cx));
+                }
+            }))
+    }
+
+    pub fn open_checklist_manager(&mut self, cx: &mut Context<Self>) {
+        if self.model.read(cx).review.is_none() {
+            return;
+        }
+        let workspace = cx.entity().downgrade();
+        let global = self.model.read(cx).has_global_checklists();
+        let manager = cx.new(|_| ChecklistManager::new(workspace, global));
+        cx.observe(&self.model, {
+            let manager = manager.downgrade();
+            move |_, _, cx| {
+                manager.update(cx, |_, cx| cx.notify()).ok();
+            }
+        })
+        .detach();
+        self.dialog = Some(Dialog::Checklists(manager));
+        cx.notify();
     }
 
     pub fn after_look_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -734,11 +817,26 @@ impl Workspace {
     }
 
     pub fn close_review(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(path) = self.model.read(cx).unsaved.clone() {
+            self.model.update(cx, |m, cx| {
+                m.fail(
+                    format!("{path} has unsaved changes: save them (cmd-s) or revert them first"),
+                    cx,
+                )
+            });
+            return;
+        }
+        self.editor = None;
         self.model.update(cx, |m, cx| {
             m.review = None;
             m.diff = None;
             m.selected = None;
             m.composer = None;
+            m.view = None;
+            m.visible.clear();
+            m.pane = crate::state::Pane::Diff;
+            m.mode = ducky_session::ReviewMode::All;
+            m.show_commit_picker = false;
             cx.notify();
         });
         self.follow_review(cx);
@@ -875,6 +973,11 @@ impl Render for Workspace {
             .child(status_bar::render(self, window, cx));
         let root = if show_base_picker && has_review {
             root.child(crate::views::base_picker::render(self, cx))
+        } else {
+            root
+        };
+        let root = if self.model.read(cx).show_commit_picker && has_review {
+            root.child(crate::views::commit_picker::render(self, cx))
         } else {
             root
         };
