@@ -255,6 +255,11 @@ mod tests {
             KeyRoute::Encode
         };
         assert_eq!(route(&k, flags, KeyOptions::default()), expected);
+        if !cfg!(target_os = "macos") {
+            // Only macOS composes alt-b into ∫; Linux reports the plain letter, which
+            // Ghostty's encoder (macos_option_as_alt is a no-op there) sends as typed.
+            k.key_char = Some("b".into());
+        }
         let t = terminal();
         let out = KeyEncoder::new().unwrap().encode(&t, &k, false, meta);
         assert_eq!(out, b"\x1bb");

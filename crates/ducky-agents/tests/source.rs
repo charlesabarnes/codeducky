@@ -211,5 +211,8 @@ fn a_kept_terminal_that_loses_its_program_asks_for_a_reattach() {
         },
     );
     let again = source.attach(&request(80, 24)).unwrap();
-    output_until(&again, "\x1b[?2004h");
+    // Not `\e[?2004h`: whether /bin/sh turns on bracketed paste depends on which shell it is
+    // (Debian and Ubuntu's dash never does). A command's echo proves a live program on any.
+    source.send(ViewerMessage::Input(b"echo again$((1+1))\r".to_vec()));
+    output_until(&again, "again2");
 }
