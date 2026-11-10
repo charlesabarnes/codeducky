@@ -1511,6 +1511,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 
 [[package]]
+name = "ducky-agents"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ducky-hc",
+ "ducky-host",
+ "ducky-notes",
+ "ducky-review",
+ "ducky-terminal",
+ "flume",
+ "gpui-kit",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "ducky-git"
 version = "0.1.0"
 dependencies = [
@@ -1540,6 +1557,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "ducky-git",
+ "ducky-hc",
  "ducky-host",
  "serde",
  "serde_json",

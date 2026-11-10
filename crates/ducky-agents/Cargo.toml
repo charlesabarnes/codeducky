@@ -1,0 +1,33 @@
+[package]
+name = "ducky-agents"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+# Dev only: the `attach` example (a scratch core, the control socket and screenshots).
+dev = ["ducky-hc/scratch", "ducky-terminal/screenshot"]
+
+[dependencies]
+ducky-hc.workspace = true
+ducky-notes.workspace = true
+ducky-review.workspace = true
+ducky-terminal.workspace = true
+flume.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+anyhow.workspace = true
+ducky-hc = { workspace = true, features = ["scratch"] }
+ducky-host.workspace = true
+gpui-kit.workspace = true
+
+[[example]]
+name = "attach"
+required-features = ["dev"]
+
+[lints]
+workspace = true
