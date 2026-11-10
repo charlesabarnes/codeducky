@@ -1,0 +1,18 @@
+[package]
+name = "codeducky"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+# Dev only: `--screenshot <path>` renders the window to a PNG and quits.
+screenshot = ["gpui-kit/test-support", "dep:anyhow", "dep:image"]
+
+[dependencies]
+anyhow = { workspace = true, optional = true }
+gpui-kit.workspace = true
+image = { workspace = true, optional = true }
+
+[lints]
+workspace = true
