@@ -1,0 +1,6 @@
+[alias]
+xtask = "run --quiet --package xtask --"
+
+# Written by `cargo xtask fetch-ghostty`; libghostty-vt-sys finds it through pkg-config.
+[env]
+PKG_CONFIG_PATH = { value = ".toolchain/libghostty-vt-1.0.0/lib/pkgconfig", relative = true }

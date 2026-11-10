@@ -1,0 +1,49 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "xtask"]
+default-members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+publish = false
+
+[workspace.dependencies]
+ducky-agents = { path = "crates/ducky-agents" }
+ducky-git = { path = "crates/ducky-git" }
+ducky-github = { path = "crates/ducky-github" }
+ducky-hc = { path = "crates/ducky-hc" }
+ducky-host = { path = "crates/ducky-host" }
+ducky-notes = { path = "crates/ducky-notes" }
+ducky-review = { path = "crates/ducky-review" }
+ducky-session = { path = "crates/ducky-session" }
+ducky-terminal = { path = "crates/ducky-terminal" }
+
+anyhow = "1"
+base64 = "0.22"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+similar = "2.7"
+flume = "0.12"
+gpui-kit = "=0.9.1"
+image = { version = "0.25", default-features = false, features = ["png"] }
+portable-pty = "0.9"
+regex = "1"
+tempfile = "3"
+thiserror = "2"
+ureq = "3"
+libghostty-vt = { git = "https://github.com/Uzaaft/libghostty-rs", rev = "768add9", features = ["pkg-config"] }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+
+# GPUI is unusably slow unoptimized; keep our crates debuggable.
+[profile.dev.package."*"]
+opt-level = 2

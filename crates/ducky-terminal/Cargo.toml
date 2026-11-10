@@ -1,0 +1,28 @@
+[package]
+name = "ducky-terminal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+# A local PTY source for the demo example and manual testing. The app attaches to hc terminals.
+pty = ["dep:portable-pty"]
+# Dev only: GPUI's test-support renderer, so the example's control socket can save screenshots.
+screenshot = ["gpui-kit/test-support", "dep:image", "dep:anyhow"]
+
+[dependencies]
+anyhow = { workspace = true, optional = true }
+flume.workspace = true
+gpui-kit.workspace = true
+image = { workspace = true, optional = true }
+libghostty-vt.workspace = true
+portable-pty = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[[example]]
+name = "shell"
+required-features = ["pty"]
+
+[lints]
+workspace = true

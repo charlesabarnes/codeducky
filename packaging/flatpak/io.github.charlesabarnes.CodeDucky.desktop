@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Code Ducky
+Comment=Review your branches and pull requests, with notes for your agents
+Exec=codeducky
+Icon=io.github.charlesabarnes.CodeDucky
+Terminal=false
+Categories=Development;RevisionControl;
+Keywords=git;diff;review;pull request;github;
+StartupWMClass=codeducky

@@ -1,0 +1,91 @@
+app-id: io.github.charlesabarnes.CodeDucky
+runtime: org.freedesktop.Platform
+runtime-version: '26.08'
+sdk: org.freedesktop.Sdk
+command: codeducky
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  # GitHub REST/GraphQL from the app itself.
+  - --share=network
+  # herdr-core's socket: $XDG_RUNTIME_DIR/herdr-core/<session>.sock, or beside the core's state
+  # when there is no runtime dir. config.toml may move it (`socket = "..."`).
+  - --filesystem=xdg-run/herdr-core
+  - --filesystem=~/.local/state/herdr-core
+  - --filesystem=~/.config/herdr-core:ro
+
+# The toolchains are pinned tarballs rather than SDK extensions: libghostty-vt 1.0 needs Zig 0.17
+# exactly, and rust-toolchain.toml pins a Rust newer than the rust-stable extension may carry.
+# Both are removed from the final app by their module's cleanup.
+modules:
+  - name: rust
+    buildsystem: simple
+    only-arches: [x86_64]
+    cleanup: ['*']
+    sources:
+      - type: archive
+        url: https://static.rust-lang.org/dist/rust-1.99.1-x86_64-unknown-linux-gnu.tar.xz
+        sha256: 231fcae47ee950621374725b5fc3b5441d2fbda2955ac45dd7dc816d8876cfe7
+    build-commands:
+      - ./install.sh --prefix=/app/toolchain/rust --components=rustc,cargo,rust-std-x86_64-unknown-linux-gnu --disable-ldconfig
+
+  - name: zig
+    buildsystem: simple
+    only-arches: [x86_64]
+    cleanup: ['*']
+    sources:
+      - type: archive
+        url: https://ziglang.org/download/0.17.1/zig-x86_64-linux-0.17.1.tar.xz
+        sha256: 3581863e3cbcfd0fce0efc682ce7e9e93da96668a977791d356a26d2a7e9b17a
+    build-commands:
+      - mkdir -p /app/toolchain/zig
+      - cp -a . /app/toolchain/zig/
+
+  # Same tarballs, checksums and flags as `cargo xtask fetch-ghostty` on Linux
+  # (xtask/src/ghostty/source.rs). Only the static library is kept, and only for the build.
+  - name: libghostty-vt
+    buildsystem: simple
+    cleanup: ['*']
+    sources:
+      - type: archive
+        url: https://release.files.ghostty.org/libghostty-vt/1.0.0/libghostty-vt-1.0.0.tar.gz
+        sha256: 4a6ef758be721923e1969e7b81b443dcc92d8dd3fb5a39600c03a8817a753676
+      - type: archive
+        url: https://release.files.ghostty.org/libghostty-vt/1.0.0/libghostty-vt-1.0.0-deps.tar.gz
+        sha256: 4d5ea5e448e4c7ea8fb55ccbaa8668f2a97d44f438cee831e2b7ecd162d85c29
+        dest: deps
+    build-commands:
+      - >-
+        ZIG_GLOBAL_CACHE_DIR="$PWD/zig-global-cache"
+        /app/toolchain/zig/zig build
+        --prefix /app/toolchain/ghostty --system "$PWD/deps"
+        -Doptimize=ReleaseFast -Dcpu=baseline
+      - rm -f /app/toolchain/ghostty/lib/libghostty-vt.so* /app/toolchain/ghostty/lib/pkgconfig/libghostty-vt.pc
+
+  - name: codeducky
+    buildsystem: simple
+    build-options:
+      append-path: /app/toolchain/rust/bin
+      env:
+        CARGO_HOME: /run/build/codeducky/cargo
+        CARGO_NET_OFFLINE: 'true'
+        PKG_CONFIG_PATH: /app/toolchain/ghostty/lib/pkgconfig
+    sources:
+      # build.sh writes this from Cargo.lock with flatpak-cargo-generator.
+      - cargo-sources.json
+      - type: dir
+        path: ../..
+        skip: [target, .toolchain, .git, spike, plugin]
+    build-commands:
+      - cargo --offline fetch --locked
+      - cargo --offline build --release --locked -p codeducky
+      - install -Dm755 target/release/codeducky /app/bin/codeducky
+      - install -Dm644 packaging/flatpak/io.github.charlesabarnes.CodeDucky.desktop -t /app/share/applications
+      - install -Dm644 packaging/flatpak/io.github.charlesabarnes.CodeDucky.metainfo.xml -t /app/share/metainfo
+      - >-
+        for size in 16 32 48 64 128 256 512; do
+        install -Dm644 assets/icons/codeducky-$size.png
+        /app/share/icons/hicolor/${size}x${size}/apps/io.github.charlesabarnes.CodeDucky.png;
+        done
