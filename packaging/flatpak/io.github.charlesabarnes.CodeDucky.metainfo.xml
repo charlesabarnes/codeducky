@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.charlesabarnes.CodeDucky</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <name>Code Ducky</name>
+  <summary>Review your branches and pull requests</summary>
+  <description>
+    <p>
+      A native code review app for your own branches and the pull requests you are asked to
+      review: split and unified diffs, notes on lines and ranges, viewed state, and review tasks
+      handed to coding agents.
+    </p>
+    <p>
+      Code Ducky runs on top of herdr-core (hc), which must be running on this machine. Git,
+      files, terminals and other machines are all reached through herdr-core.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.charlesabarnes.CodeDucky.desktop</launchable>
+  <url type="homepage">https://github.com/charlesabarnes/codeducky</url>
+  <developer id="io.github.charlesabarnes">
+    <name>Charles Barnes</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-10"/>
+  </releases>
+</component>

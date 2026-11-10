@@ -9,13 +9,17 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  HC_VERSION: 0.1.19
+  HC_SHA256: 4adcfb423d52f24c5cc4a1e2cd2fcad1f62d28bb77876ac472c29082a3eaa424
+
 jobs:
   check:
     name: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [macos-latest, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -26,20 +30,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             gcc g++ clang pkg-config libfontconfig-dev libwayland-dev \
-            libxkbcommon-x11-dev libx11-xcb-dev libssl-dev libzstd-dev \
-            libasound2-dev libvulkan1
+            libxkbcommon-dev libxkbcommon-x11-dev libx11-dev libx11-xcb-dev libxcb1-dev \
+            libssl-dev libzstd-dev libasound2-dev libvulkan-dev
 
-      # libghostty-vt 1.0.0 has no Linux prebuilt; libghostty-vt-sys builds it from source.
+      # libghostty-vt 1.0.0 has no Linux prebuilt; fetch-ghostty builds the source tarball with Zig.
       - name: Install Zig
         if: runner.os == 'Linux'
         uses: mlugg/setup-zig@v2
         with:
-          version: 0.17.0
+          version: 0.17.1
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
 
+      - uses: actions/cache@v4
+        with:
+          path: .toolchain
+          key: libghostty-vt-${{ runner.os }}-${{ hashFiles('xtask/src/ghostty/**') }}
+
       - name: Fetch libghostty-vt
-        if: runner.os == 'macOS'
         run: cargo xtask fetch-ghostty
 
       - name: Format
@@ -50,3 +58,19 @@ jobs:
 
       - name: Test
         run: cargo test --workspace --locked
+
+      # A scratch herdr-core with its own session and XDG dirs; nothing else runs on the runner.
+      - name: Install herdr-core
+        if: runner.os == 'Linux'
+        run: |
+          curl -fsSL -o hc.tgz "https://releases.herdr.dev/core/${HC_VERSION}/herdr-core-linux-x86_64.tar.gz"
+          echo "${HC_SHA256}  hc.tgz" | sha256sum -c
+          mkdir -p "$HOME/.local/bin" hc && tar -xzf hc.tgz -C hc
+          install -m755 hc/herdr-core "$HOME/.local/bin/hc"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Tests against a scratch herdr-core
+        if: runner.os == 'Linux'
+        run: |
+          cargo test --locked -p ducky-hc --features scratch --test scratch_core -- --ignored
+          cargo test --locked -p ducky-agents -- --ignored
