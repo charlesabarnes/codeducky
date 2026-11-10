@@ -25,7 +25,8 @@ UI when the screen is locked or there is no Screen Recording permission. It is d
 |---|---|
 | `crates/codeducky` | The GPUI app binary: windows, views, keymap |
 | `crates/ducky-review` | Review domain logic: notes, anchors, review session. No IO |
-| `crates/ducky-hc` | herdr-core JSON-RPC client and the `Host` trait |
+| `crates/ducky-host` | The `Host` trait (exec, read, write on one machine) and `LocalHost` |
+| `crates/ducky-hc` | herdr-core JSON-RPC client; implements `Host` per machine |
 | `crates/ducky-git` | The git CLI over `Host`, diff parsing |
 | `crates/ducky-notes` | Notes and review state files over `Host` |
 | `crates/ducky-github` | GitHub inbox, PR diffs, threads, CI |

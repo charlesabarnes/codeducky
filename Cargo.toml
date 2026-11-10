@@ -13,6 +13,7 @@ publish = false
 ducky-git = { path = "crates/ducky-git" }
 ducky-github = { path = "crates/ducky-github" }
 ducky-hc = { path = "crates/ducky-hc" }
+ducky-host = { path = "crates/ducky-host" }
 ducky-notes = { path = "crates/ducky-notes" }
 ducky-review = { path = "crates/ducky-review" }
 ducky-terminal = { path = "crates/ducky-terminal" }
@@ -20,6 +21,8 @@ ducky-terminal = { path = "crates/ducky-terminal" }
 anyhow = "1"
 gpui-kit = "=0.9.1"
 image = { version = "0.25", default-features = false, features = ["png"] }
+tempfile = "3"
+thiserror = "2"
 libghostty-vt = { git = "https://github.com/Uzaaft/libghostty-rs", rev = "768add9", features = ["pkg-config"] }
 
 [workspace.lints.rust]
