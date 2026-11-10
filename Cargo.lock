@@ -1615,6 +1615,7 @@ version = "0.1.0"
 dependencies = [
  "ducky-agents",
  "ducky-git",
+ "ducky-github",
  "ducky-hc",
  "ducky-host",
  "ducky-notes",

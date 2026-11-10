@@ -1,18 +1,17 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use ducky_git::Repo;
 use ducky_host::Host;
 use ducky_notes::ReviewNotes;
 use ducky_review::view_notes::{NoteView, ShownLines, anchor_for_view};
 use ducky_review::{
-    Author, ChangeStatus, ChecklistItemId, FileChange, NewNote, Note, NoteEdit, NoteId,
-    NumberedLine, ReviewState, Severity, Side, create_anchor, reanchor_notes,
+    Author, ChangeStatus, ChecklistItemId, FileChange, GithubComment, NewNote, Note, NoteEdit,
+    NoteId, NumberedLine, ReviewState, Severity, Side, create_anchor, reanchor_notes,
 };
 
 use crate::changes::ChangedFile;
 use crate::error::Result;
-use crate::sides::SideLines;
+use crate::sides::{Content, SideLines};
 
 /// A note being made on a line or a range of one side.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,12 +24,13 @@ pub struct NoteDraft {
     pub severity: Severity,
 }
 
-/// One review's notes and state files, on the machine that holds the repository.
+/// One review's notes and state files, on the machine that holds the repository (or, for a pull
+/// request without a checkout, in the app's data folder on this machine).
 #[derive(Clone)]
 pub struct NotesService {
     host: Arc<dyn Host>,
     store: ReviewNotes,
-    repo: Repo,
+    content: Content,
     base: String,
     head: Option<String>,
     readme_path: String,
@@ -38,16 +38,17 @@ pub struct NotesService {
 
 impl NotesService {
     pub(crate) fn new(
-        repo: Repo,
+        content: Content,
+        host: Arc<dyn Host>,
         store: ReviewNotes,
         base: String,
         head: Option<String>,
         readme_path: String,
     ) -> Self {
         Self {
-            host: repo.host().clone(),
+            host,
             store,
-            repo,
+            content,
             base,
             head,
             readme_path,
@@ -118,6 +119,16 @@ impl NotesService {
         Ok(self.store.reopen_note(&*self.host, id)?)
     }
 
+    /// Records the GitHub review comment a note was pushed as.
+    pub fn link_github(&self, id: &NoteId, comment: GithubComment) -> Result<Note> {
+        Ok(self.store.link_github_comment(&*self.host, id, comment)?)
+    }
+
+    /// Adds whole notes (carried over from another review); returns them with their new ids.
+    pub fn insert(&self, notes: Vec<Note>) -> Result<Vec<Note>> {
+        Ok(self.store.insert_notes(&*self.host, notes)?)
+    }
+
     pub fn delete(&self, id: &NoteId) -> Result<()> {
         Ok(self.store.delete_note(&*self.host, id)?)
     }
@@ -147,6 +158,9 @@ impl NotesService {
     /// Best effort: a file that cannot be stored (gone meanwhile) later shows its full diff,
     /// with the reason, instead of an interdiff.
     fn store_reviewed(&self, files: &[ChangedFile]) {
+        let Some(repo) = self.content.repo() else {
+            return;
+        };
         let paths: Vec<&str> = files
             .iter()
             .filter(|file| {
@@ -155,9 +169,9 @@ impl NotesService {
             })
             .map(ChangedFile::path)
             .collect();
-        if self.repo.store_worktree_blobs(&paths).is_err() {
+        if repo.store_worktree_blobs(&paths).is_err() {
             for path in paths {
-                self.repo.store_worktree_blobs(&[path]).ok();
+                repo.store_worktree_blobs(&[path]).ok();
             }
         }
     }
@@ -176,7 +190,7 @@ impl NotesService {
     ) -> Result<Note> {
         let final_lines = match view {
             NoteView::Commit { .. } => {
-                SideLines::new(&self.repo, &self.base).lines(&draft.path, Side::New)?
+                SideLines::new(&self.content, &self.base).lines(&draft.path, Side::New)?
             }
             _ => None,
         };
@@ -206,7 +220,7 @@ impl NotesService {
             .iter()
             .map(|file| (file.path(), file.base_path()))
             .collect();
-        let mut sides = SideLines::new(&self.repo, &self.base);
+        let mut sides = SideLines::new(&self.content, &self.base);
         let mut failure = None;
         let updates = reanchor_notes(&notes, |path, side| {
             let path = match side {

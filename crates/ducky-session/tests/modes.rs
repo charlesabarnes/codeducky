@@ -378,7 +378,9 @@ fn saves_edits_guarding_against_changes_on_disk_and_reanchors_notes() {
     let review = repo.open();
     let all = review.view(&ReviewMode::All).unwrap();
     let entry = all.entry("a.rs").unwrap();
-    let buffer = open_for_edit(&review.repo, entry).unwrap().unwrap();
+    let buffer = open_for_edit(review.repo().unwrap(), entry)
+        .unwrap()
+        .unwrap();
     assert!(buffer.text.starts_with("a line 1\na line two\n"));
 
     let shown = lines(&review, &ReviewMode::All, "a.rs");
@@ -395,7 +397,7 @@ fn saves_edits_guarding_against_changes_on_disk_and_reanchors_notes() {
         .unwrap();
 
     let edited = format!("// header\n{}", buffer.text);
-    let saved = match save_edit(&review.repo, &buffer, &edited, false).unwrap() {
+    let saved = match save_edit(review.repo().unwrap(), &buffer, &edited, false).unwrap() {
         SaveOutcome::Saved(saved) => saved,
         other => panic!("{other:?}"),
     };
@@ -409,7 +411,7 @@ fn saves_edits_guarding_against_changes_on_disk_and_reanchors_notes() {
 
     repo.write("a.rs", "someone else\n");
     assert_eq!(
-        save_edit(&review.repo, &saved, "mine\n", false).unwrap(),
+        save_edit(review.repo().unwrap(), &saved, "mine\n", false).unwrap(),
         SaveOutcome::Conflict { deleted: false }
     );
     assert_eq!(
@@ -417,19 +419,19 @@ fn saves_edits_guarding_against_changes_on_disk_and_reanchors_notes() {
         "someone else\n"
     );
     assert!(matches!(
-        save_edit(&review.repo, &saved, "mine\n", true).unwrap(),
+        save_edit(review.repo().unwrap(), &saved, "mine\n", true).unwrap(),
         SaveOutcome::Saved(_)
     ));
     std::fs::remove_file(repo.path.join("a.rs")).unwrap();
     assert_eq!(
-        save_edit(&review.repo, &saved, "x\n", false).unwrap(),
+        save_edit(review.repo().unwrap(), &saved, "x\n", false).unwrap(),
         SaveOutcome::Conflict { deleted: true }
     );
 
     let commit = ReviewMode::commits(CommitRange::single(1), &review.commits).unwrap();
     let view = review.view(&commit).unwrap();
     assert_eq!(
-        open_for_edit(&review.repo, &view.entries[0]).unwrap(),
+        open_for_edit(review.repo().unwrap(), &view.entries[0]).unwrap(),
         Err(NotEditable::Historical)
     );
     repo.git(&["rm", "-q", "b.rs"]);

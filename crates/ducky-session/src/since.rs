@@ -1,9 +1,10 @@
-use ducky_git::Repo;
+use ducky_github::CompareStatus;
 use ducky_review::last_look::{SinceCounts, SinceEntry, classify_since, count_since};
 use ducky_review::{FileChange, ReviewState};
 
 use crate::changes::ChangedFile;
 use crate::error::Result;
+use crate::sides::Content;
 
 /// How HEAD moved since the last recorded review.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,9 +38,10 @@ impl SinceLook {
 }
 
 /// `None` until some file was looked at. Reviewed versions are read from the object database;
-/// marking a file viewed stores its working-tree content there (see `NotesService`).
-pub fn since_look(
-    repo: &Repo,
+/// marking a file viewed stores its working-tree content there (see `NotesService`). A pull
+/// request read from GitHub keeps its blobs there, so every reviewed version counts as present.
+pub(crate) fn since_look(
+    content: &Content,
     files: &[ChangedFile],
     state: &ReviewState,
     head: Option<&str>,
@@ -52,17 +54,20 @@ pub fn since_look(
         .values()
         .filter_map(|look| look.oid.as_ref().map(|oid| oid.as_str()))
         .collect();
-    let present = repo.existing_objects(&reviewed)?;
+    let present = match content {
+        Content::Git(repo) => repo.existing_objects(&reviewed)?,
+        Content::GitHub(_) => reviewed.iter().map(|oid| (*oid).to_owned()).collect(),
+    };
     let changes: Vec<FileChange> = files.iter().map(|file| file.change.clone()).collect();
     let entries = classify_since(&changes, &looks, |oid| present.contains(oid.as_str()));
     let head_moved = match (&state.last_review, head) {
         (Some(last), Some(head)) if last.head != head => {
-            let moved = repo.head_move_since(&last.head)?;
+            let (commits, rewritten) = head_move(content, &last.head, head)?;
             Some(HeadMoved {
                 from: last.head.clone(),
                 to: head.to_owned(),
-                commits: moved.commits,
-                rewritten: moved.rewritten,
+                commits,
+                rewritten,
             })
         }
         _ => None,
@@ -72,4 +77,19 @@ pub fn since_look(
         entries,
         head_moved,
     }))
+}
+
+fn head_move(content: &Content, from: &str, to: &str) -> Result<(Option<usize>, bool)> {
+    Ok(match content {
+        Content::Git(repo) => {
+            let moved = repo.head_move_since(from)?;
+            (moved.commits, moved.rewritten)
+        }
+        Content::GitHub(blobs) => match blobs.client.compare(&blobs.repo, from, to) {
+            Ok(c) if c.status == CompareStatus::Ahead && c.merge_base_sha == from => {
+                (Some(c.ahead_by as usize), false)
+            }
+            _ => (None, true),
+        },
+    })
 }

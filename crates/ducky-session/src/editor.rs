@@ -89,18 +89,25 @@ pub enum NotEditable {
     NotAFile,
     #[error("this file is not UTF-8 text")]
     NotText,
+    #[error("this pull request is read from GitHub: open it from a checkout at its head to edit")]
+    NoCheckout,
 }
 
 /// Whether the entry's new side is a working-tree file the editor can take, before reading it.
 pub fn editable(entry: &ViewEntry) -> std::result::Result<(), NotEditable> {
     if !entry.shows_worktree {
-        return Err(
-            if entry.file.change.status == ducky_review::ChangeStatus::Deleted {
-                NotEditable::Deleted
-            } else {
-                NotEditable::Historical
-            },
-        );
+        let from_github = matches!(entry.new, crate::SideSource::Blob(_))
+            && !matches!(
+                entry.note_view,
+                ducky_review::view_notes::NoteView::Commit { .. }
+            );
+        return Err(if from_github {
+            NotEditable::NoCheckout
+        } else if entry.file.change.status == ducky_review::ChangeStatus::Deleted {
+            NotEditable::Deleted
+        } else {
+            NotEditable::Historical
+        });
     }
     if entry.file.git.kind() != FileKind::File {
         return Err(NotEditable::NotAFile);

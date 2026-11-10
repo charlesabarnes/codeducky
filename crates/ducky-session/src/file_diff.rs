@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use ducky_git::{FileSide, Mode, Repo};
+use ducky_git::{FileSide, Mode};
 use ducky_review::diff::{
     DiffLine, LineEndingChange, LineKind, LineOptions, MoveInput, MovedRange, build_lines,
     detect_moved_blocks, line_ending_change,
@@ -9,7 +9,7 @@ use ducky_review::{ChangeStatus, NumberedLine, Side, number_lines};
 
 use crate::changes::{ChangedFile, FileBadge};
 use crate::error::Result;
-use crate::sides::{SideSource, read_source};
+use crate::sides::{Content, SideSource};
 
 /// Text sides past this are shown as too large to diff.
 pub const MAX_TEXT_BYTES: usize = 2 << 20;
@@ -115,18 +115,31 @@ impl FileDiff {
 }
 
 /// One file's diff: the base commit's copy against the working tree's.
-pub fn load_file_diff(
-    repo: &Repo,
+pub(crate) fn load_file_diff(
+    content: &Content,
     base: &str,
     file: &ChangedFile,
     options: DiffOptions,
 ) -> Result<FileDiff> {
-    let (old, new) = branch_sides(file, base);
-    load_between(repo, file, &old, &new, options)
+    let (old, new) = branch_sides(content, file, base);
+    load_between(content, file, &old, &new, options)
 }
 
-/// The sides of a file's change on the branch: the base's copy and the working tree's.
-pub fn branch_sides(file: &ChangedFile, base: &str) -> (SideSource, SideSource) {
+/// The sides of a file's change on the branch: the base's copy and the working tree's (for a
+/// pull request read from GitHub, its two blobs).
+pub(crate) fn branch_sides(
+    content: &Content,
+    file: &ChangedFile,
+    base: &str,
+) -> (SideSource, SideSource) {
+    if let Content::GitHub(_) = content {
+        let blob = |oid: &Option<ducky_review::Oid>| {
+            oid.as_ref().map_or(SideSource::Absent, |oid| {
+                SideSource::Blob(oid.as_str().to_owned())
+            })
+        };
+        return (blob(&file.change.old_oid), blob(&file.change.new_oid));
+    }
     let old = match file.change.status {
         ChangeStatus::Added => SideSource::Absent,
         _ => SideSource::Rev(base.to_owned()),
@@ -140,8 +153,8 @@ pub fn branch_sides(file: &ChangedFile, base: &str) -> (SideSource, SideSource) 
 
 /// One file's diff between any two sides: the old side read at `file.base_path()`, the new
 /// side at `file.path()`.
-pub fn load_between(
-    repo: &Repo,
+pub(crate) fn load_between(
+    source: &Content,
     file: &ChangedFile,
     old: &SideSource,
     new: &SideSource,
@@ -163,8 +176,8 @@ pub fn load_between(
             new: file.git.new_oid.clone(),
         }
     } else {
-        let old = read_source(repo, old, file.base_path())?;
-        let new = read_source(repo, new, file.path())?;
+        let old = source.read(old, file.base_path())?;
+        let new = source.read(new, file.path())?;
         text_content(file, old, new, options, &mut notices)
     };
     Ok(FileDiff {

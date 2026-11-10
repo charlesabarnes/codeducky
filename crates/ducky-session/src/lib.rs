@@ -12,9 +12,11 @@ mod connection;
 mod editor;
 mod error;
 mod file_diff;
+pub mod github;
 pub mod machines;
 mod note_changes;
 mod notes;
+pub mod pull;
 mod review;
 mod sides;
 mod since;
@@ -32,14 +34,11 @@ pub use editor::{
     save_edit,
 };
 pub use error::{Result, SessionError};
-pub use file_diff::{
-    DiffContent, DiffOptions, FileDiff, FileNotice, MAX_TEXT_BYTES, TextDiff, branch_sides,
-    load_between, load_file_diff,
-};
+pub use file_diff::{DiffContent, DiffOptions, FileDiff, FileNotice, MAX_TEXT_BYTES, TextDiff};
 pub use note_changes::changed_notes;
 pub use notes::{NoteDraft, NotesService};
 pub use review::{Review, ReviewRequest, detached_target};
 pub use sides::SideSource;
-pub use since::{HeadMoved, SinceLook, since_look};
+pub use since::{HeadMoved, SinceLook};
 pub use tree::{TreeEntry, TreeRow, build_tree, matches_filter};
 pub use view::{CommitScope, ReviewMode, ReviewView, ViewEntry};

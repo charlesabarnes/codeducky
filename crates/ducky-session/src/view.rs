@@ -7,7 +7,7 @@ use crate::changes::ChangedFile;
 use crate::error::{Result, SessionError};
 use crate::file_diff::{DiffOptions, FileDiff, branch_sides, load_between};
 use crate::review::Review;
-use crate::sides::SideSource;
+use crate::sides::{Content, SideSource};
 
 /// What the review shows: everything on the branch, what changed since your last look, or
 /// some of its commits (held by sha, so a pick survives a reload).
@@ -101,11 +101,11 @@ impl Review {
     }
 
     pub fn load_entry_diff(&self, entry: &ViewEntry, options: DiffOptions) -> Result<FileDiff> {
-        load_between(&self.repo, &entry.file, &entry.old, &entry.new, options)
+        load_between(&self.content, &entry.file, &entry.old, &entry.new, options)
     }
 
     fn branch_entry(&self, file: &ChangedFile) -> ViewEntry {
-        let (old, new) = branch_sides(file, &self.merge_base);
+        let (old, new) = branch_sides(&self.content, file, &self.merge_base);
         ViewEntry {
             shows_worktree: new == SideSource::Worktree,
             file: file.clone(),
@@ -150,22 +150,24 @@ impl Review {
         let ends = range
             .ends(&self.commits)
             .map_err(|_| SessionError::CommitsGone)?;
-        let changes = self
-            .repo
-            .changes_between(ends.base.as_deref(), &ends.head)?;
-        let entries = changes
+        let changed = match &self.content {
+            Content::Git(repo) => repo
+                .changes_between(ends.base.as_deref(), &ends.head)?
+                .into_iter()
+                .map(ChangedFile::from_git)
+                .collect(),
+            Content::GitHub(blobs) => crate::pull::changes_between(
+                blobs,
+                ends.base.as_deref().ok_or(SessionError::NeedsCheckout)?,
+                &ends.head,
+            )?,
+        };
+        let entries = changed
             .into_iter()
-            .map(ChangedFile::from_git)
-            .map(|file| {
-                let old = match (&ends.base, file.change.status) {
-                    (Some(base), status) if status != ChangeStatus::Added => {
-                        SideSource::Rev(base.clone())
-                    }
-                    _ => SideSource::Absent,
-                };
-                let new = match file.change.status {
-                    ChangeStatus::Deleted => SideSource::Absent,
-                    _ => SideSource::Rev(ends.head.clone()),
+            .map(|file: ChangedFile| {
+                let (old, new) = match &self.content {
+                    Content::GitHub(_) => branch_sides(&self.content, &file, ""),
+                    Content::Git(_) => commit_sides(&file, ends.base.as_deref(), &ends.head),
                 };
                 ViewEntry {
                     in_final: self.file_index(file.path()).is_some(),
@@ -188,4 +190,16 @@ impl Review {
         };
         Ok((entries, scope))
     }
+}
+
+fn commit_sides(file: &ChangedFile, base: Option<&str>, head: &str) -> (SideSource, SideSource) {
+    let old = match (base, file.change.status) {
+        (Some(base), status) if status != ChangeStatus::Added => SideSource::Rev(base.to_owned()),
+        _ => SideSource::Absent,
+    };
+    let new = match file.change.status {
+        ChangeStatus::Deleted => SideSource::Absent,
+        _ => SideSource::Rev(head.to_owned()),
+    };
+    (old, new)
 }

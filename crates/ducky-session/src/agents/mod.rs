@@ -54,8 +54,15 @@ impl AgentsService {
             .clone();
         let machine = review.machine().map(str::to_owned);
         let repo_root = review.toplevel().to_owned();
-        let worktrees = review
-            .repo
+        let repo = review.repo().ok_or(SessionError::NeedsCheckout)?;
+        if let Some(reason) = review
+            .pull
+            .as_ref()
+            .and_then(|p| p.checkout.local_off_reason())
+        {
+            return Err(SessionError::AgentsOff(reason));
+        }
+        let worktrees = repo
             .worktrees()
             .map(|list| list.into_iter().map(|w| w.path).collect::<Vec<_>>())
             .unwrap_or_default();

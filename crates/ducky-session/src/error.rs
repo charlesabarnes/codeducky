@@ -24,6 +24,18 @@ pub enum SessionError {
     ViewAnchor(#[from] ducky_review::view_notes::ViewAnchorError),
     #[error(transparent)]
     Checklist(#[from] ducky_review::checklist::ChecklistFormatError),
+    #[error("agents are off: {0}")]
+    AgentsOff(String),
+    #[error(transparent)]
+    GitHub(#[from] ducky_github::GitHubError),
+    #[error(
+        "this pull request is read from GitHub without a checkout; open it from a checkout at its head for that"
+    )]
+    NeedsCheckout,
+    #[error("{0} is not on GitHub (no github.com remote named origin)")]
+    NotOnGitHub(String),
+    #[error("a pull request review compares against the pull request's base; refresh it instead")]
+    PullBase,
     #[error("those commits are no longer on this branch; pick another, or go back to All changes")]
     CommitsGone,
 }
