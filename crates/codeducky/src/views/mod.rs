@@ -1,0 +1,13 @@
+pub mod base_picker;
+pub mod diff_pane;
+pub mod files;
+pub mod help;
+pub mod note_card;
+pub mod notes_panel;
+pub mod palette;
+pub mod sidebar;
+pub mod start;
+pub mod status_bar;
+pub mod title;
+pub mod widgets;
+pub mod workspace;

@@ -1,45 +1,53 @@
 use gpui_kit::component::TitleBar;
 use gpui_kit::*;
 
-use crate::theme;
-use crate::workspace::Workspace;
+use crate::config;
+use crate::keymap::{self, Quit};
+use crate::state::ReviewModel;
+use crate::views::workspace::Workspace;
 
 pub const TITLE: &str = "Code Ducky";
-
-actions!(codeducky, [Quit]);
-
-#[cfg(target_os = "macos")]
-const QUIT_KEY: &str = "cmd-q";
-#[cfg(not(target_os = "macos"))]
-const QUIT_KEY: &str = "ctrl-q";
+const DEFAULT_SIZE: (f32, f32) = (1280., 820.);
 
 pub fn run() {
     #[cfg(feature = "screenshot")]
-    let screenshot = crate::screenshot::path_from_args();
+    let script = crate::dev::Script::from_args();
 
     gpui_kit::application().run(move |cx| {
         gpui_kit::init(cx);
-        theme::init(cx);
+        keymap::bind(cx);
         cx.on_action(|_: &Quit, cx| cx.quit());
-        cx.bind_keys([KeyBinding::new(QUIT_KEY, Quit, None)]);
-        cx.on_window_closed(|cx, _| {
+
+        #[allow(unused_mut)]
+        let mut prefs = config::load();
+        #[cfg(feature = "screenshot")]
+        let scripted = script.apply_prefs(&mut prefs);
+        let model = cx.new(|_| ReviewModel::new(prefs));
+        #[cfg(feature = "screenshot")]
+        model.update(cx, |m, _| m.persist = !scripted);
+        model.update(cx, |m, cx| m.connect(cx));
+
+        let saver = model.clone();
+        cx.on_window_closed(move |cx, _| {
+            saver.read(cx).save_prefs();
             if cx.windows().is_empty() {
                 cx.quit();
             }
         })
         .detach();
 
-        open_main_window(cx);
+        let workspace = open_main_window(model.clone(), cx);
         cx.activate(true);
 
         #[cfg(feature = "screenshot")]
-        if let Some(path) = screenshot {
-            crate::screenshot::capture_then_quit(path, cx);
-        }
+        crate::dev::run(script, model, workspace, cx);
+        #[cfg(not(feature = "screenshot"))]
+        let _ = workspace;
     });
 }
 
-fn open_main_window(cx: &mut App) {
+fn open_main_window(model: Entity<ReviewModel>, cx: &mut App) -> Entity<Workspace> {
+    let (width, height) = model.read(cx).prefs.window.unwrap_or(DEFAULT_SIZE);
     let options = WindowOptions {
         titlebar: Some(TitlebarOptions {
             title: Some(TITLE.into()),
@@ -47,13 +55,14 @@ fn open_main_window(cx: &mut App) {
         }),
         window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
             None,
-            size(px(1200.), px(800.)),
+            size(px(width.max(640.)), px(height.max(400.))),
             cx,
         ))),
         ..TitleBar::window_options()
     };
     gpui_kit::open_window(options, cx, |window, cx| {
-        cx.new(|cx| Workspace::new(window, cx))
+        cx.new(|cx| Workspace::new(model, window, cx))
     })
-    .expect("failed to open the main window");
+    .expect("failed to open the main window")
+    .1
 }

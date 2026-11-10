@@ -6,13 +6,21 @@ rust-version.workspace = true
 publish.workspace = true
 
 [features]
-# Dev only: `--screenshot <path>` renders the window to a PNG and quits.
+# Dev only: scripting flags (`--open`, `--select`, ...) and `--screenshot <path>`, which renders
+# the window to a PNG through GPUI's test-support renderer and quits.
 screenshot = ["gpui-kit/test-support", "dep:anyhow", "dep:image"]
 
 [dependencies]
 anyhow = { workspace = true, optional = true }
-gpui-kit.workspace = true
+ducky-review.workspace = true
+ducky-session.workspace = true
+gpui-kit = { workspace = true, features = ["tree-sitter-languages"] }
 image = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true
