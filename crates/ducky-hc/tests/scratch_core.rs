@@ -181,6 +181,35 @@ fn machines_and_templates() {
 
 #[test]
 #[ignore = "starts a scratch herdr-core"]
+fn another_scratch_core_is_a_machine_through_its_via_command() {
+    // Dropped after `home`: a home core still dialling it would start it again.
+    let other = ScratchCore::start("vo").unwrap();
+    let home = ScratchCore::start("vh").unwrap();
+    let client = home.client().unwrap();
+    let added = client
+        .machine_add(&ducky_hc::MachineAdd {
+            name: Some("box".into()),
+            via: Some(other.via_command().unwrap()),
+            session: Some(other.session().into()),
+            ..ducky_hc::MachineAdd::default()
+        })
+        .unwrap();
+    assert!(added.via);
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while client.machine_list().unwrap()[0].state.as_deref() != Some("connected") {
+        assert!(Instant::now() < deadline, "the machine never connected");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let host = HcHost::new(client.clone(), Some("box".into()));
+    let out = host
+        .exec(ExecRequest::new(["sh", "-c", "echo $HC_SESSION"]))
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), other.session());
+    client.machine_rm("box").unwrap();
+}
+
+#[test]
+#[ignore = "starts a scratch herdr-core"]
 fn git_through_the_core() {
     let core = ScratchCore::start("g").unwrap();
     let repo_dir = core.root().join("repo");

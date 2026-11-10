@@ -4,6 +4,7 @@ It reports status with OSC 7501 the way real agents do (idle when ready, working
 done after it), reads each message `hc send` pastes (bracketed paste, then Enter), and acts on
 Code Ducky tasks by editing the notes file the task names: a fix task resolves the listed notes,
 a review task adds one. `block` makes it ask for permission; `exit` ends it with code 3.
+`FAKE_AGENT_DELAY` (seconds, default 0.3) is how long each turn works.
 """
 
 import datetime
@@ -116,7 +117,7 @@ def main():
         if command == "exit":
             sys.exit(3)
         report("working")
-        time.sleep(0.3)
+        time.sleep(float(os.environ.get("FAKE_AGENT_DELAY", "0.3")))
         if "Code Ducky fix task" in message:
             fix(message)
         elif "Code Ducky review task" in message:

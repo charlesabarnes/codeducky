@@ -124,6 +124,29 @@ impl ScratchCore {
         self.dir.path().join("config/herdr-core")
     }
 
+    /// A `machine.add --via` command that reaches this core from another one on this computer,
+    /// without ssh: a wrapper script (in this core's folder) that runs the given shell line in
+    /// this core's environment.
+    pub fn via_command(&self) -> io::Result<String> {
+        let mut script = String::from("#!/bin/sh\nexec env -i");
+        let command = self.command(&[]);
+        for (key, value) in command.get_envs() {
+            if let Some(value) = value {
+                let value = value.to_string_lossy().replace('\'', r"'\''");
+                script.push_str(&format!(" {}='{value}'", key.to_string_lossy()));
+            }
+        }
+        script.push_str(" sh -c \"$*\"\n");
+        let path = self.dir.path().join("via.sh");
+        std::fs::write(&path, script)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))?;
+        }
+        Ok(path.to_string_lossy().into_owned())
+    }
+
     pub fn stop(&self) {
         let _ = self.hc(&["server", "stop"]);
     }
