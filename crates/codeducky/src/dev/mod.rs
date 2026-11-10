@@ -22,12 +22,27 @@
 //!           [--add-machine-dialog [--add-machine-target <t>]] [--machine-menu]
 //!           [--rename-machine <name>] [--forget-machine <name>]
 //!           [--browse-machine <name> [--browse-path <path>]] [--stop-core]
+//!
+//!   since last look, commits, checklists, the file editor (--tab also takes `checks`):
+//!           [--mark-viewed <path>]... [--mark-reviewed] [--review-mode all|since]
+//!           [--show-unchanged] [--commit <n>[-<m>]] [--commit-picker]
+//!           [--new-checklist "<title>[!]:<item>;<item>"]... [--new-global-checklist ...]...
+//!           [--import-checklists <file>]... [--import-global-checklists <file>]...
+//!           [--check <item number>]... [--export-checklists <file.json|file.md>]
+//!           [--checklists-manager [--checklist-form "<title>:<item>;<item>"]]
+//!           [--edit [--edit-text <text, \n for newlines>] [--disk-write <path>=<text>]
+//!            [--save-file] [--leave-editor]]
 //! ```
+//!
+//! `--mark-viewed` and `--mark-reviewed` write the repo's review state, and global checklists
+//! are only kept when `CODEDUCKY_CONFIG_DIR` points somewhere: use fixture repos and a scratch
+//! config dir. `--disk-write` writes into the checkout, to stage an on-disk conflict.
 //!
 //! Any of these flags keeps preferences from being written. `--scratch` starts a throwaway
 //! herdr-core (and `--scratch-machine` a second one, added as a machine through a local `via`
 //! command); both stop, and their folders go, when the run ends.
 
+mod modes;
 mod scratch;
 mod screenshot;
 mod script;

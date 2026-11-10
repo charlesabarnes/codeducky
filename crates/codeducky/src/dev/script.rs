@@ -7,6 +7,7 @@ use ducky_review::{NoteId, NoteStatus, Side};
 use ducky_session::ReviewRequest;
 use gpui_kit::*;
 
+use super::modes::ModeSteps;
 use super::scratch;
 use super::steps::Steps;
 use crate::config::{DiffMode, Prefs};
@@ -48,6 +49,7 @@ pub struct Script {
     size: Option<(f32, f32)>,
     screenshot: Option<PathBuf>,
     steps: Steps,
+    modes: ModeSteps,
     any: bool,
 }
 
@@ -94,6 +96,7 @@ impl Script {
                     script.tab = Some(parse(&flag, &value(), |v| match v {
                         "files" => Some(SidebarTab::Files),
                         "notes" => Some(SidebarTab::Notes),
+                        "checks" => Some(SidebarTab::Checks),
                         _ => None,
                     }))
                 }
@@ -146,7 +149,9 @@ impl Script {
                 }
                 "--screenshot" => script.screenshot = Some(PathBuf::from(value())),
                 other => {
-                    if !script.steps.parse(other, &mut value) {
+                    if !script.steps.parse(other, &mut value)
+                        && !script.modes.parse(other, &mut value)
+                    {
                         fail(format!("unknown flag {other}"))
                     }
                 }
@@ -186,7 +191,7 @@ impl Script {
     }
 }
 
-async fn settle_until(
+pub(super) async fn settle_until(
     cx: &mut AsyncApp,
     model: &Entity<ReviewModel>,
     what: &str,
@@ -252,6 +257,7 @@ pub fn run(script: Script, model: Entity<ReviewModel>, workspace: Entity<Workspa
                     started.elapsed()
                 );
             });
+            script.modes.before_view(&model, cx).await;
         }
         cx.update(|cx| {
             model.update(cx, |m, cx| {
@@ -345,6 +351,10 @@ pub fn run(script: Script, model: Entity<ReviewModel>, workspace: Entity<Workspa
             }
         }
         if let Some(window) = window {
+            script
+                .modes
+                .after_view(window, &workspace, &model, cx)
+                .await;
             script.steps.after_open(window, &workspace, cx).await;
         }
         for key in &script.keys {
