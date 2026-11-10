@@ -491,7 +491,7 @@ fn stores_worktree_blobs_and_counts_each_commit() {
         .unwrap();
     assert!(opened.existing_objects(&[&hashed]).unwrap().is_empty());
     let stored = opened.store_worktree_blobs(&["a.txt"]).unwrap();
-    assert_eq!(stored, [hashed.clone()]);
+    assert_eq!(stored, std::slice::from_ref(&hashed));
     assert_eq!(opened.read_blob(&hashed).unwrap(), b"uncommitted\n");
     let present = opened.existing_objects(&[&hashed, "0123456789"]).unwrap();
     assert_eq!(present.len(), 1);
