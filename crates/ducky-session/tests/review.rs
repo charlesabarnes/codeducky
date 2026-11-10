@@ -1,80 +1,8 @@
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::sync::Arc;
+mod support;
 
-use ducky_host::LocalHost;
 use ducky_review::{NoteStatus, Severity, Side};
-use ducky_session::{DiffContent, DiffOptions, FileNotice, NoteDraft, Review, ReviewRequest};
-
-struct Fixture {
-    _dir: tempfile::TempDir,
-    path: PathBuf,
-}
-
-impl Fixture {
-    fn new() -> Self {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().canonicalize().unwrap().join("work");
-        std::fs::create_dir(&path).unwrap();
-        let fixture = Self { _dir: dir, path };
-        fixture.git(&["init", "-q", "-b", "main"]);
-        fixture
-    }
-
-    fn git(&self, args: &[&str]) -> String {
-        let output = Command::new("git")
-            .args([
-                "-c",
-                "user.name=Tester",
-                "-c",
-                "user.email=t@example.com",
-                "-c",
-                "commit.gpgsign=false",
-                "-c",
-                "core.autocrlf=false",
-            ])
-            .args(args)
-            .current_dir(&self.path)
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "git {args:?}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        String::from_utf8_lossy(&output.stdout).trim().to_owned()
-    }
-
-    fn write(&self, path: &str, content: impl AsRef<[u8]>) {
-        let full = self.path.join(path);
-        std::fs::create_dir_all(full.parent().unwrap()).unwrap();
-        std::fs::write(full, content).unwrap();
-    }
-
-    fn commit(&self, message: &str) {
-        self.git(&["add", "-A"]);
-        self.git(&["commit", "-q", "-m", message]);
-    }
-
-    fn open(&self) -> Review {
-        Review::open_on(
-            Arc::new(LocalHost),
-            ReviewRequest::local(self.path.to_str().unwrap()),
-        )
-        .unwrap()
-    }
-
-    fn notes_file(&self, branch: &str) -> PathBuf {
-        let common = self.git(&["rev-parse", "--path-format=absolute", "--git-common-dir"]);
-        Path::new(&common).join(format!("codeducky/branches/{branch}/notes.json"))
-    }
-}
-
-fn numbered(prefix: &str, count: usize) -> String {
-    (1..=count)
-        .map(|i| format!("{prefix} line {i}\n"))
-        .collect()
-}
+use ducky_session::{DiffContent, DiffOptions, FileNotice, NoteDraft};
+use support::{Fixture, numbered};
 
 /// main: lib.rs, old_name.rs, gone.txt. feature: lib.rs edited, old_name.rs renamed,
 /// gone.txt deleted, a binary added, then an uncommitted new file.
@@ -335,10 +263,7 @@ fn viewed_marks_hold_until_the_file_changes() {
         .iter()
         .find(|f| f.path() == "src/lib.rs")
         .unwrap();
-    review
-        .notes_service()
-        .mark_viewed(&file.change, true)
-        .unwrap();
+    review.notes_service().mark_viewed(file, true).unwrap();
     let review = review.refresh().unwrap();
     assert_eq!(review.viewed_count(), 1);
     repo.write("src/lib.rs", numbered("lib", 31));

@@ -9,7 +9,7 @@ use ducky_review::{ChangeStatus, NumberedLine, Side, number_lines};
 
 use crate::changes::{ChangedFile, FileBadge};
 use crate::error::Result;
-use crate::sides::read_side;
+use crate::sides::{SideSource, read_source};
 
 /// Text sides past this are shown as too large to diff.
 pub const MAX_TEXT_BYTES: usize = 2 << 20;
@@ -121,6 +121,32 @@ pub fn load_file_diff(
     file: &ChangedFile,
     options: DiffOptions,
 ) -> Result<FileDiff> {
+    let (old, new) = branch_sides(file, base);
+    load_between(repo, file, &old, &new, options)
+}
+
+/// The sides of a file's change on the branch: the base's copy and the working tree's.
+pub fn branch_sides(file: &ChangedFile, base: &str) -> (SideSource, SideSource) {
+    let old = match file.change.status {
+        ChangeStatus::Added => SideSource::Absent,
+        _ => SideSource::Rev(base.to_owned()),
+    };
+    let new = match file.change.status {
+        ChangeStatus::Deleted => SideSource::Absent,
+        _ => SideSource::Worktree,
+    };
+    (old, new)
+}
+
+/// One file's diff between any two sides: the old side read at `file.base_path()`, the new
+/// side at `file.path()`.
+pub fn load_between(
+    repo: &Repo,
+    file: &ChangedFile,
+    old: &SideSource,
+    new: &SideSource,
+    options: DiffOptions,
+) -> Result<FileDiff> {
     let mut notices = rename_notices(file);
     if file.git.untracked {
         notices.push(FileNotice::Untracked);
@@ -137,14 +163,8 @@ pub fn load_file_diff(
             new: file.git.new_oid.clone(),
         }
     } else {
-        let old = match file.change.status {
-            ChangeStatus::Added => None,
-            _ => read_side(repo, base, file.base_path(), Side::Old)?,
-        };
-        let new = match file.change.status {
-            ChangeStatus::Deleted => None,
-            _ => read_side(repo, base, file.path(), Side::New)?,
-        };
+        let old = read_source(repo, old, file.base_path())?;
+        let new = read_source(repo, new, file.path())?;
         text_content(file, old, new, options, &mut notices)
     };
     Ok(FileDiff {

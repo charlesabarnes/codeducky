@@ -1,15 +1,19 @@
 use std::sync::Arc;
 
-use ducky_git::{Branch, Head, MAX_BRANCH_COMMITS, Repo};
+use std::collections::HashMap;
+
+use ducky_git::{Branch, CommitStats, Head, MAX_BRANCH_COMMITS, Repo};
 use ducky_host::Host;
 use ducky_notes::NotesRepo;
 use ducky_review::{BranchCommit, Note, ReviewState, ReviewTarget, Timestamp};
 
 use crate::changes::ChangedFile;
+use crate::checklists::ChecklistStore;
 use crate::connection::Connection;
 use crate::error::{Result, SessionError};
 use crate::file_diff::{DiffOptions, FileDiff, load_file_diff};
 use crate::notes::NotesService;
+use crate::since::{SinceLook, since_look};
 
 /// What to open: a folder in a checkout, on this machine or a herdr-core machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,11 +50,17 @@ pub struct Review {
     pub branches: Vec<Branch>,
     pub files: Vec<ChangedFile>,
     pub commits: Vec<BranchCommit>,
+    /// More commits than the picker lists; the oldest are left out.
+    pub commits_truncated: bool,
+    pub commit_stats: HashMap<String, CommitStats>,
     pub notes: Vec<Note>,
     pub state: ReviewState,
     /// The notes or state file could not be read; the review opens without them.
     pub notes_problem: Option<String>,
+    /// What changed since your last look; `None` before any look.
+    pub since: Option<SinceLook>,
     service: NotesService,
+    notes_repo: NotesRepo,
 }
 
 impl std::fmt::Debug for Review {
@@ -105,8 +115,10 @@ impl Review {
             .into_iter()
             .map(ChangedFile::from_git)
             .collect();
-        let commits = repo
-            .commits(&merge_base, &sha, MAX_BRANCH_COMMITS)?
+        let listed = repo.commits(&merge_base, &sha, MAX_BRANCH_COMMITS)?;
+        let commits_truncated = listed.truncated;
+        let commit_stats = repo.commit_stats(&merge_base, &sha)?;
+        let commits = listed
             .commits
             .into_iter()
             .map(|commit| BranchCommit {
@@ -123,6 +135,7 @@ impl Review {
             repo.clone(),
             store,
             merge_base.clone(),
+            Some(sha.clone()),
             notes_repo.readme_path(),
         );
         let mut review = Self {
@@ -136,10 +149,14 @@ impl Review {
             branches,
             files,
             commits,
+            commits_truncated,
+            commit_stats,
             notes: Vec::new(),
             state: ReviewState::default(),
             notes_problem: None,
+            since: None,
             service,
+            notes_repo,
         };
         if let Err(error) = review
             .service
@@ -170,7 +187,23 @@ impl Review {
         self.notes = self.service.notes()?;
         self.state = self.service.state()?;
         self.notes_problem = None;
+        self.refresh_since()
+    }
+
+    /// Classifies the files against your last looks again, e.g. after marking one viewed.
+    pub fn refresh_since(&mut self) -> Result<()> {
+        self.since = since_look(
+            &self.repo,
+            &self.files,
+            &self.state,
+            self.head.sha.as_deref(),
+        )?;
         Ok(())
+    }
+
+    /// Repo checklists beside the notes; global ones in `global_dir` on this machine.
+    pub fn checklist_store(&self, global_dir: Option<String>) -> ChecklistStore {
+        ChecklistStore::new(self.notes_repo.clone(), self.host().clone(), global_dir)
     }
 
     pub fn notes_service(&self) -> &NotesService {

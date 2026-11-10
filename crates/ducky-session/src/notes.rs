@@ -4,9 +4,10 @@ use std::sync::Arc;
 use ducky_git::Repo;
 use ducky_host::Host;
 use ducky_notes::ReviewNotes;
+use ducky_review::view_notes::{NoteView, ShownLines, anchor_for_view};
 use ducky_review::{
-    Author, FileChange, NewNote, Note, NoteEdit, NoteId, NumberedLine, ReviewState, Severity, Side,
-    create_anchor, reanchor_notes,
+    Author, ChangeStatus, ChecklistItemId, FileChange, NewNote, Note, NoteEdit, NoteId,
+    NumberedLine, ReviewState, Severity, Side, create_anchor, reanchor_notes,
 };
 
 use crate::changes::ChangedFile;
@@ -31,16 +32,24 @@ pub struct NotesService {
     store: ReviewNotes,
     repo: Repo,
     base: String,
+    head: Option<String>,
     readme_path: String,
 }
 
 impl NotesService {
-    pub(crate) fn new(repo: Repo, store: ReviewNotes, base: String, readme_path: String) -> Self {
+    pub(crate) fn new(
+        repo: Repo,
+        store: ReviewNotes,
+        base: String,
+        head: Option<String>,
+        readme_path: String,
+    ) -> Self {
         Self {
             host: repo.host().clone(),
             store,
             repo,
             base,
+            head,
             readme_path,
         }
     }
@@ -113,8 +122,77 @@ impl NotesService {
         Ok(self.store.delete_note(&*self.host, id)?)
     }
 
-    pub fn mark_viewed(&self, change: &FileChange, viewed: bool) -> Result<ReviewState> {
-        Ok(self.store.mark_viewed(&*self.host, change, viewed, None)?)
+    /// Marking a file viewed records the head and keeps its working-tree content in the object
+    /// database, so "since last look" can diff from it after it changes.
+    pub fn mark_viewed(&self, file: &ChangedFile, viewed: bool) -> Result<ReviewState> {
+        if viewed {
+            self.store_reviewed(std::slice::from_ref(file));
+        }
+        let head = self.head.as_deref().filter(|_| viewed);
+        Ok(self
+            .store
+            .mark_viewed(&*self.host, &file.change, viewed, head)?)
+    }
+
+    /// Records every file as reviewed at the current head: "since last look" starts here.
+    pub fn mark_reviewed(&self, files: &[ChangedFile]) -> Result<ReviewState> {
+        self.store_reviewed(files);
+        let changes: Vec<FileChange> = files.iter().map(|file| file.change.clone()).collect();
+        let head = self.head.as_deref().unwrap_or_default();
+        Ok(self
+            .store
+            .record_reviewed_files(&*self.host, head, &changes)?)
+    }
+
+    /// Best effort: a file that cannot be stored (gone meanwhile) later shows its full diff,
+    /// with the reason, instead of an interdiff.
+    fn store_reviewed(&self, files: &[ChangedFile]) {
+        let paths: Vec<&str> = files
+            .iter()
+            .filter(|file| {
+                file.change.status != ChangeStatus::Deleted
+                    && file.git.kind() == ducky_git::FileKind::File
+            })
+            .map(ChangedFile::path)
+            .collect();
+        if self.repo.store_worktree_blobs(&paths).is_err() {
+            for path in paths {
+                self.repo.store_worktree_blobs(&[path]).ok();
+            }
+        }
+    }
+
+    pub fn set_checked(&self, item: &ChecklistItemId, checked: bool) -> Result<ReviewState> {
+        Ok(self.store.set_checked(&*self.host, item, checked)?)
+    }
+
+    /// A note made on the diff of `view`: in commit mode it is anchored on the final content
+    /// while its line survives there, else pinned to the commit.
+    pub fn add_in_view(
+        &self,
+        draft: NoteDraft,
+        view: &NoteView,
+        shown: ShownLines,
+    ) -> Result<Note> {
+        let final_lines = match view {
+            NoteView::Commit { .. } => {
+                SideLines::new(&self.repo, &self.base).lines(&draft.path, Side::New)?
+            }
+            _ => None,
+        };
+        let placed = anchor_for_view(
+            view,
+            draft.side,
+            draft.line,
+            draft.end_line,
+            shown,
+            final_lines.as_deref(),
+        )?;
+        let mut new = NewNote::new(draft.path, placed.anchor, draft.body);
+        new.severity = draft.severity;
+        new.author = Author::Human;
+        new.commit = placed.commit;
+        Ok(self.store.add_note(&*self.host, new)?)
     }
 
     /// Finds every note's code again in the current content and writes down what moved.

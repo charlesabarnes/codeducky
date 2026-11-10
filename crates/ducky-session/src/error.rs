@@ -20,6 +20,12 @@ pub enum SessionError {
     UnknownFile(String),
     #[error(transparent)]
     Anchor(#[from] ducky_review::AnchorError),
+    #[error(transparent)]
+    ViewAnchor(#[from] ducky_review::view_notes::ViewAnchorError),
+    #[error(transparent)]
+    Checklist(#[from] ducky_review::checklist::ChecklistFormatError),
+    #[error("those commits are no longer on this branch; pick another, or go back to All changes")]
+    CommitsGone,
 }
 
 pub type Result<T, E = SessionError> = std::result::Result<T, E>;
