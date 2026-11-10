@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 use ducky_github::Token;
 
 const SERVICE: &str = "dev.codeducky.github-token";
+#[cfg(target_os = "macos")]
 const ACCOUNT: &str = "github.com";
 
 #[derive(Clone)]
