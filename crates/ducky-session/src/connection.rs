@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use ducky_hc::{Client, HcHost, Machine};
@@ -31,10 +32,20 @@ impl ConnectionState {
     }
 }
 
+/// Which core to talk to. A [`CoreTarget::Socket`] never falls back to the default socket, so a
+/// dev run pointed at a scratch core cannot reach the live one.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum CoreTarget {
+    #[default]
+    Default,
+    Socket(PathBuf),
+}
+
 #[derive(Clone)]
 pub struct Connection {
     client: Option<Client>,
     state: ConnectionState,
+    target: CoreTarget,
 }
 
 impl std::fmt::Debug for Connection {
@@ -48,10 +59,27 @@ impl std::fmt::Debug for Connection {
 impl Connection {
     /// The running herdr-core, else this machine through [`LocalHost`]. Never starts a core.
     pub fn connect() -> Self {
-        match Client::connect_default() {
+        Self::connect_to(CoreTarget::Default)
+    }
+
+    pub fn connect_to(target: CoreTarget) -> Self {
+        let client = match &target {
+            CoreTarget::Default => Client::connect_default(),
+            CoreTarget::Socket(path) => Client::connect(path),
+        };
+        let connection = match client {
             Ok(client) => Self::core(client),
             Err(error) => Self::local_only(error.to_string()),
+        };
+        Self {
+            target,
+            ..connection
         }
+    }
+
+    /// The same target again, for a retry or after the core restarted.
+    pub fn reconnect(&self) -> Self {
+        Self::connect_to(self.target.clone())
     }
 
     pub fn core(client: Client) -> Self {
@@ -63,6 +91,7 @@ impl Connection {
         Self {
             client: Some(client),
             state,
+            target: CoreTarget::Default,
         }
     }
 
@@ -72,7 +101,21 @@ impl Connection {
             state: ConnectionState::LocalOnly {
                 reason: reason.into(),
             },
+            target: CoreTarget::Default,
         }
+    }
+
+    pub fn target(&self) -> &CoreTarget {
+        &self.target
+    }
+
+    /// The core's client; `None` when running local only.
+    pub fn client(&self) -> Option<&Client> {
+        self.client.as_ref()
+    }
+
+    pub fn is_alive(&self) -> bool {
+        self.client.as_ref().is_some_and(Client::is_connected)
     }
 
     pub fn state(&self) -> &ConnectionState {
@@ -116,5 +159,15 @@ mod tests {
             Err(SessionError::LocalOnly)
         ));
         assert!(connection.machines().unwrap().is_empty());
+        assert!(connection.client().is_none());
+    }
+
+    #[test]
+    fn a_socket_target_never_falls_back_to_the_default_core() {
+        let missing = std::env::temp_dir().join("codeducky-no-such-core.sock");
+        let connection = Connection::connect_to(CoreTarget::Socket(missing.clone()));
+        assert!(connection.state().is_local_only());
+        assert_eq!(connection.target(), &CoreTarget::Socket(missing));
+        assert!(connection.reconnect().state().is_local_only());
     }
 }

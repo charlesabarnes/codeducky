@@ -10,6 +10,7 @@ rust-version = "1.99"
 publish = false
 
 [workspace.dependencies]
+ducky-agents = { path = "crates/ducky-agents" }
 ducky-git = { path = "crates/ducky-git" }
 ducky-github = { path = "crates/ducky-github" }
 ducky-hc = { path = "crates/ducky-hc" }

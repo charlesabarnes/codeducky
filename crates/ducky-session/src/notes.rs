@@ -31,20 +31,41 @@ pub struct NotesService {
     store: ReviewNotes,
     repo: Repo,
     base: String,
+    readme_path: String,
 }
 
 impl NotesService {
-    pub(crate) fn new(repo: Repo, store: ReviewNotes, base: String) -> Self {
+    pub(crate) fn new(repo: Repo, store: ReviewNotes, base: String, readme_path: String) -> Self {
         Self {
             host: repo.host().clone(),
             store,
             repo,
             base,
+            readme_path,
         }
     }
 
     pub fn notes_path(&self) -> String {
         self.store.notes_path()
+    }
+
+    /// The README beside the notes that tells an agent how to edit them.
+    pub fn readme_path(&self) -> String {
+        self.readme_path.clone()
+    }
+
+    pub fn target(&self) -> &ducky_review::ReviewTarget {
+        self.store.target()
+    }
+
+    /// Creates `notes.json` and the README when missing, so a prompt can point at them.
+    /// Skipped when both exist, so it never rewrites a notes file an agent may be editing.
+    pub fn ensure_files(&self) -> Result<()> {
+        let exists = |path: &str| self.host.read_file(path).is_ok();
+        if !exists(&self.readme_path) || !exists(&self.notes_path()) {
+            self.store.insert_notes(&*self.host, Vec::new())?;
+        }
+        Ok(())
     }
 
     pub fn notes(&self) -> Result<Vec<Note>> {

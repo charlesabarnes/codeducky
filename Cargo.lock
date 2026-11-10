@@ -998,8 +998,13 @@ name = "codeducky"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "ducky-agents",
+ "ducky-hc",
+ "ducky-host",
  "ducky-review",
  "ducky-session",
+ "ducky-terminal",
+ "flume",
  "gpui-kit",
  "image",
  "serde",
@@ -1605,11 +1610,13 @@ dependencies = [
 name = "ducky-session"
 version = "0.1.0"
 dependencies = [
+ "ducky-agents",
  "ducky-git",
  "ducky-hc",
  "ducky-host",
  "ducky-notes",
  "ducky-review",
+ "flume",
  "serde_json",
  "tempfile",
  "thiserror 2.0.21",

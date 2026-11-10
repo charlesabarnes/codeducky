@@ -8,6 +8,10 @@ pub enum SessionError {
     Host(#[from] ducky_host::HostError),
     #[error("herdr-core is not running, so only this machine's repositories can be opened")]
     LocalOnly,
+    #[error("agents need herdr-core; start it (`hc server status`) and connect again")]
+    AgentsNeedCore,
+    #[error(transparent)]
+    Core(#[from] ducky_hc::Error),
     #[error("{0} has no branch or commit to review yet")]
     NoHead(String),
     #[error("no base to compare against: {0}")]

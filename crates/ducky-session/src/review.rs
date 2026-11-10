@@ -70,8 +70,10 @@ pub fn detached_target(sha: &str) -> ReviewTarget {
 }
 
 impl Review {
-    pub fn open(connection: &Connection, request: ReviewRequest) -> Result<Self> {
+    /// A `~/…` path is resolved on the repo's machine first.
+    pub fn open(connection: &Connection, mut request: ReviewRequest) -> Result<Self> {
         let host = connection.host(request.machine.as_deref())?;
+        request.path = crate::browse::resolve_home(&*host, &request.path)?;
         Self::open_on(host, request)
     }
 
@@ -115,9 +117,14 @@ impl Review {
                 message: commit.message,
             })
             .collect();
-        let store =
-            NotesRepo::open(&**repo.host(), &repo.info().toplevel)?.review(target.clone())?;
-        let service = NotesService::new(repo.clone(), store, merge_base.clone());
+        let notes_repo = NotesRepo::open(&**repo.host(), &repo.info().toplevel)?;
+        let store = notes_repo.review(target.clone())?;
+        let service = NotesService::new(
+            repo.clone(),
+            store,
+            merge_base.clone(),
+            notes_repo.readme_path(),
+        );
         let mut review = Self {
             request,
             repo,
@@ -168,6 +175,11 @@ impl Review {
 
     pub fn notes_service(&self) -> &NotesService {
         &self.service
+    }
+
+    /// The machine the checkout is on; `None` for this one.
+    pub fn machine(&self) -> Option<&str> {
+        self.request.machine.as_deref()
     }
 
     pub fn host(&self) -> &Arc<dyn Host> {
