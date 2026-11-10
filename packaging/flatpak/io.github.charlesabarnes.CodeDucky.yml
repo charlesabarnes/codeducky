@@ -22,6 +22,10 @@ finish-args:
 modules:
   - name: rust
     buildsystem: simple
+    # flatpak-builder's strip pass corrupts the prebuilt toolchain's shared libraries.
+    build-options:
+      strip: false
+      no-debuginfo: true
     only-arches: [x86_64]
     cleanup: ['*']
     sources:
@@ -33,6 +37,9 @@ modules:
 
   - name: zig
     buildsystem: simple
+    build-options:
+      strip: false
+      no-debuginfo: true
     only-arches: [x86_64]
     cleanup: ['*']
     sources:
