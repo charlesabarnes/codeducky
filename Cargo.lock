@@ -1528,6 +1528,7 @@ name = "ducky-hc"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "ducky-git",
  "ducky-host",
  "serde",
  "serde_json",
@@ -1546,6 +1547,14 @@ dependencies = [
 [[package]]
 name = "ducky-notes"
 version = "0.1.0"
+dependencies = [
+ "ducky-host",
+ "ducky-review",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "ducky-review"
