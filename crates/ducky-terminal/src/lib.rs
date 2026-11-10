@@ -1,25 +1,28 @@
-//! Terminals: the hc attach stream fed through libghostty-vt, drawn by GPUI.
+//! Terminals: a source's byte stream fed through libghostty-vt, drawn by GPUI.
+//!
+//! The app creates a [`TerminalView`] from a [`source::TerminalSource`] (an hc attach in the
+//! app, [`source::LocalPtySource`] behind the `pty` feature for demos) and subscribes to its
+//! [`TerminalEvent`]s. Call [`init`] once to bind the terminal's keys.
 
-use libghostty_vt::Terminal;
+pub mod actions;
+mod boxdraw;
+mod color;
+mod config;
+mod element;
+mod emulator;
+mod frame;
+mod ime;
+mod input;
+mod links;
+mod selection;
+mod session;
+pub mod source;
+mod theme;
+mod view;
 
-/// Cursor position (column, row) after feeding `bytes` to a fresh `cols` x `rows` terminal.
-pub fn cursor_after(
-    cols: u16,
-    rows: u16,
-    bytes: &[u8],
-) -> Result<(u16, u16), libghostty_vt::Error> {
-    let mut terminal = Terminal::new(cols, rows)?;
-    terminal.vt_write(bytes);
-    Ok((terminal.cursor_x()?, terminal.cursor_y()?))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn feeds_bytes_through_libghostty_vt() {
-        assert_eq!(cursor_after(80, 24, b"hello\r\nab").unwrap(), (2, 1));
-        assert_eq!(cursor_after(80, 24, b"\x1b[5;10H").unwrap(), (9, 4));
-    }
-}
+pub use actions::init;
+pub use color::Rgb;
+pub use config::TerminalConfig;
+pub use session::{PasteOutcome, TerminalEvent};
+pub use theme::TerminalColors;
+pub use view::TerminalView;
