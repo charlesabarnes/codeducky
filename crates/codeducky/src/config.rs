@@ -25,6 +25,26 @@ pub struct RecentRepo {
     pub machine: Option<String>,
 }
 
+/// The agents panel under the diff.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PanelPrefs {
+    pub open: bool,
+    /// Logical pixels.
+    pub height: f32,
+}
+
+impl Default for PanelPrefs {
+    fn default() -> Self {
+        Self {
+            open: false,
+            height: 300.,
+        }
+    }
+}
+
+pub const DEFAULT_AGENT_COMMAND: &str = "claude";
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Prefs {
@@ -37,13 +57,57 @@ pub struct Prefs {
     pub recent: Vec<RecentRepo>,
     /// Width and height in logical pixels.
     pub window: Option<(f32, f32)>,
+    pub agents: PanelPrefs,
+    /// The command the start-agent dialog offered last; empty for the default.
+    pub agent_command: String,
+    /// The machine the start screen had picked; `None` for this one.
+    pub machine: Option<String>,
 }
 
 impl Prefs {
+    /// Kept per machine: each machine keeps its own most recent repos.
     pub fn remember(&mut self, repo: RecentRepo) {
         self.recent.retain(|r| *r != repo);
         self.recent.insert(0, repo);
-        self.recent.truncate(MAX_RECENT);
+        let mut kept = 0;
+        let machine = self.recent[0].machine.clone();
+        self.recent.retain(|r| {
+            if r.machine != machine {
+                return true;
+            }
+            kept += 1;
+            kept <= MAX_RECENT
+        });
+    }
+
+    pub fn recent_on(&self, machine: Option<&str>) -> impl Iterator<Item = &RecentRepo> {
+        self.recent
+            .iter()
+            .filter(move |r| r.machine.as_deref() == machine)
+    }
+
+    /// After a machine is renamed, its recent repos follow it; after it is forgotten, they go.
+    pub fn rename_machine(&mut self, from: &str, to: Option<&str>) {
+        if self.machine.as_deref() == Some(from) {
+            self.machine = to.map(str::to_owned);
+        }
+        match to {
+            Some(to) => {
+                for repo in &mut self.recent {
+                    if repo.machine.as_deref() == Some(from) {
+                        repo.machine = Some(to.to_owned());
+                    }
+                }
+            }
+            None => self.recent.retain(|r| r.machine.as_deref() != Some(from)),
+        }
+    }
+
+    pub fn agent_command(&self) -> &str {
+        match self.agent_command.trim() {
+            "" => DEFAULT_AGENT_COMMAND,
+            command => command,
+        }
     }
 }
 
@@ -96,9 +160,36 @@ mod tests {
     }
 
     #[test]
+    fn recent_repos_are_kept_per_machine() {
+        let mut prefs = Prefs::default();
+        let on = |path: &str, machine: Option<&str>| RecentRepo {
+            path: path.into(),
+            machine: machine.map(str::to_owned),
+        };
+        for i in 0..MAX_RECENT {
+            prefs.remember(on(&format!("/r{i}"), None));
+        }
+        prefs.remember(on("/srv/app", Some("vps")));
+        prefs.remember(on("/last", None));
+        assert_eq!(prefs.recent_on(None).count(), MAX_RECENT);
+        assert_eq!(prefs.recent_on(Some("vps")).count(), 1);
+        assert_eq!(prefs.recent_on(None).next().unwrap().path, "/last");
+
+        prefs.machine = Some("vps".into());
+        prefs.rename_machine("vps", Some("lab"));
+        assert_eq!(prefs.recent_on(Some("lab")).count(), 1);
+        assert_eq!(prefs.machine.as_deref(), Some("lab"));
+        prefs.rename_machine("lab", None);
+        assert_eq!(prefs.recent_on(Some("lab")).count(), 0);
+        assert_eq!(prefs.machine, None);
+    }
+
+    #[test]
     fn reads_partial_files_with_defaults() {
         let prefs: Prefs = serde_json::from_str(r#"{"palette": "fjord"}"#).unwrap();
         assert_eq!(prefs.palette, Palette::Fjord);
         assert_eq!(prefs.density, Density::Default);
+        assert_eq!(prefs.agents, PanelPrefs::default());
+        assert_eq!(prefs.agent_command(), "claude");
     }
 }

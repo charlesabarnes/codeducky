@@ -7,24 +7,64 @@ use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
 use gpui_kit::component::{
     ActiveTheme, WindowExt as _, h_flex, notification::Notification, v_flex,
 };
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::config::DiffMode;
 use crate::keymap::*;
 use crate::state::cursor::LinePos;
-use crate::state::{ModelEvent, NoteAction, ReviewModel, SidebarTab};
+use crate::state::{
+    AgentsModel, MachinesEvent, MachinesModel, ModelEvent, NoteAction, ReviewModel, SidebarTab,
+};
 use crate::theme::{self, Look};
+use crate::views::agents::handoff_dialog::HandOffDialog;
+use crate::views::agents::start_dialog::StartAgentDialog;
+use crate::views::agents::{AgentsPanel, Ask};
+use crate::views::machines::add_dialog::AddMachineDialog;
+use crate::views::machines::browser::FolderBrowser;
+use crate::views::machines::rename_dialog::RenameMachineDialog;
 use crate::views::{diff_pane, help, palette, sidebar, start, status_bar, title};
+
+/// The one dialog open over the window.
+pub enum Dialog {
+    StartAgent(Entity<StartAgentDialog>),
+    HandOff(Entity<HandOffDialog>),
+    AddMachine(Entity<AddMachineDialog>),
+    RenameMachine(Entity<RenameMachineDialog>),
+    Browse(Entity<FolderBrowser>),
+}
+
+impl Dialog {
+    fn view(&self) -> AnyView {
+        match self {
+            Self::StartAgent(d) => d.clone().into(),
+            Self::HandOff(d) => d.clone().into(),
+            Self::AddMachine(d) => d.clone().into(),
+            Self::RenameMachine(d) => d.clone().into(),
+            Self::Browse(d) => d.clone().into(),
+        }
+    }
+}
+
+const MIN_PANEL: f32 = 120.;
 
 pub struct Workspace {
     pub model: Entity<ReviewModel>,
+    pub agents: Entity<AgentsModel>,
+    pub machines: Entity<MachinesModel>,
+    pub panel: Entity<AgentsPanel>,
     pub diff_state: Entity<DiffState>,
     pub focus: FocusHandle,
     pub filter_input: Entity<InputState>,
     pub path_input: Entity<InputState>,
-    pub machine_input: Entity<InputState>,
     pub note_input: Option<Entity<TextareaState>>,
     pub palette: Option<Entity<palette::Palette>>,
+    pub dialog: Option<Dialog>,
+    pub show_machine_menu: bool,
+    /// The text of the last toast, for dev scripting to print.
+    pub last_toast: Option<String>,
+    /// While resizing the panel: where the drag started and the height then.
+    panel_drag: Option<(Pixels, f32)>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -48,8 +88,19 @@ impl Workspace {
         let filter_input = cx.new(|cx| InputState::new(window, cx).placeholder("filter files"));
         let path_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("/path/to/a/checkout"));
-        let machine_input = cx.new(|cx| InputState::new(window, cx).placeholder("this machine"));
+        let agents = cx.new(|_| AgentsModel::new());
+        let picked = model.read(cx).prefs.machine.clone();
+        let machines = cx.new(|_| MachinesModel::new(picked));
+        let panel = cx.new(|cx| AgentsPanel::new(agents.clone(), window, cx));
         let subscriptions = vec![
+            cx.subscribe_in(&agents, window, Self::on_agents_event),
+            cx.subscribe_in(&machines, window, Self::on_machines_event),
+            cx.observe(&machines, |_, _, cx| cx.notify()),
+            cx.observe_window_activation(window, |this, window, cx| {
+                if window.is_window_active() && this.model.read(cx).review.is_some() {
+                    this.model.update(cx, |m, cx| m.reload_notes(true, cx));
+                }
+            }),
             cx.observe_window_appearance(window, |this, window, cx| {
                 this.apply_look(Some(window), cx);
             }),
@@ -85,13 +136,19 @@ impl Workspace {
         window.focus(&focus, cx);
         let mut this = Self {
             model,
+            agents,
+            machines,
+            panel,
             diff_state,
             focus,
             filter_input,
             path_input,
-            machine_input,
             note_input: None,
             palette: None,
+            dialog: None,
+            show_machine_menu: false,
+            last_toast: None,
+            panel_drag: None,
             _subscriptions: subscriptions,
         };
         this.apply_look(Some(window), cx);
@@ -130,7 +187,108 @@ impl Workspace {
             ModelEvent::Error(message) => {
                 window.push_notification(Notification::error(message.clone()), cx);
             }
+            ModelEvent::Connected => {
+                let connection = self.model.read(cx).connection.clone();
+                self.machines
+                    .update(cx, |m, cx| m.set_connection(connection.as_ref(), cx));
+                self.follow_review(cx);
+            }
+            ModelEvent::ReviewOpened => self.follow_review(cx),
         }
+    }
+
+    /// Points the agents panel at the open review (or at nothing).
+    fn follow_review(&mut self, cx: &mut Context<Self>) {
+        let model = self.model.read(cx);
+        let (connection, generation, review) = (
+            model.connection.clone(),
+            model.connection_generation,
+            model.review.clone(),
+        );
+        self.agents.update(cx, |agents, cx| {
+            agents.follow(connection.as_ref(), generation, review.as_ref(), cx)
+        });
+    }
+
+    fn on_machines_event(
+        &mut self,
+        _: &Entity<MachinesModel>,
+        event: &MachinesEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (from, to) = match event {
+            MachinesEvent::Failed(text) => {
+                window.push_notification(Notification::error(text.clone()), cx);
+                return;
+            }
+            MachinesEvent::Renamed { from, to } => (from.clone(), Some(to.clone())),
+            MachinesEvent::Removed { name } => {
+                window.push_notification(
+                    Notification::info(format!(
+                        "Forgot {name}. Its terminals keep running there; add it again to reach \
+                         them."
+                    )),
+                    cx,
+                );
+                (name.clone(), None)
+            }
+        };
+        self.model.update(cx, |m, cx| {
+            m.prefs.rename_machine(&from, to.as_deref());
+            m.save_prefs();
+            cx.notify();
+        });
+    }
+
+    pub fn pick_machine(
+        &mut self,
+        machine: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.machines
+            .update(cx, |m, cx| m.pick(machine.clone(), cx));
+        self.model.update(cx, |m, cx| {
+            m.prefs.machine = machine;
+            m.save_prefs();
+            cx.notify();
+        });
+        if self.model.read(cx).review.is_none() {
+            self.path_input
+                .update(cx, |input, cx| input.focus(window, cx));
+        }
+    }
+
+    pub fn open_add_machine(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let workspace = cx.entity().downgrade();
+        let dialog = cx.new(|cx| AddMachineDialog::new(workspace, window, cx));
+        self.dialog = Some(Dialog::AddMachine(dialog));
+        cx.notify();
+    }
+
+    pub fn open_rename_machine(
+        &mut self,
+        machine: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let workspace = cx.entity().downgrade();
+        let dialog = cx.new(|cx| RenameMachineDialog::new(workspace, machine, window, cx));
+        self.dialog = Some(Dialog::RenameMachine(dialog));
+        cx.notify();
+    }
+
+    pub fn close_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.dialog.take().is_some() {
+            if self.model.read(cx).review.is_some() {
+                window.focus(&self.focus, cx);
+            } else {
+                self.path_input
+                    .update(cx, |input, cx| input.focus(window, cx));
+            }
+        }
+        cx.notify();
     }
 
     fn on_diff_event(
@@ -252,14 +410,13 @@ impl Workspace {
 
     pub fn open_from_inputs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let path = self.path_input.read(cx).value().trim().to_owned();
-        let machine = self.machine_input.read(cx).value().trim().to_owned();
+        let machine = self.machines.read(cx).picked.clone();
         if path.is_empty() {
             self.model.update(cx, |model, cx| {
                 model.fail("enter a path to a git checkout".into(), cx)
             });
             return;
         }
-        let machine = (!machine.is_empty()).then_some(machine);
         let path = expand_home(&path, machine.is_none());
         if machine.is_none() && !std::path::Path::new(&path).is_dir() {
             self.model.update(cx, |model, cx| {
@@ -283,7 +440,12 @@ impl Workspace {
         window.focus(&self.focus, cx);
     }
 
+    /// The native folder dialog on this machine; a folder list through herdr-core on another.
     pub fn browse(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(machine) = self.machines.read(cx).picked.clone() {
+            self.browse_on(machine, String::new(), window, cx);
+            return;
+        }
         let paths = cx.prompt_for_paths(PathPromptOptions {
             files: false,
             directories: true,
@@ -304,6 +466,35 @@ impl Workspace {
             .ok();
         })
         .detach();
+    }
+
+    pub fn browse_on(
+        &mut self,
+        machine: String,
+        start: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let host = self
+            .model
+            .read(cx)
+            .connection
+            .as_ref()
+            .map(|c| c.host(Some(&machine)));
+        let host = match host {
+            Some(Ok(host)) => host,
+            Some(Err(error)) => {
+                let text = error.to_string();
+                self.model.update(cx, |m, cx| m.fail(text, cx));
+                return;
+            }
+            None => return,
+        };
+        let workspace = cx.entity().downgrade();
+        let dialog =
+            cx.new(|cx| FolderBrowser::new(workspace, Some(machine), host, start, window, cx));
+        self.dialog = Some(Dialog::Browse(dialog));
+        cx.notify();
     }
 
     fn on_comment(&mut self, _: &Comment, _: &mut Window, cx: &mut Context<Self>) {
@@ -342,6 +533,7 @@ impl Workspace {
                 this.model.update(cx, |m, cx| m.move_line(-1, true, cx))
             }))
             .on_action(cx.listener(|this, _: &ClearSelection, _, cx| {
+                this.show_machine_menu = false;
                 this.model.update(cx, |m, cx| {
                     m.show_help = false;
                     m.show_base_picker = false;
@@ -469,7 +661,7 @@ impl Workspace {
                 }),
             )
             .on_action(cx.listener(|this, _: &ReloadNotes, _, cx| {
-                this.model.update(cx, |m, cx| m.reload_notes(cx))
+                this.model.update(cx, |m, cx| m.reload_notes(false, cx))
             }))
             .on_action(cx.listener(|this, _: &OpenRepo, window, cx| {
                 this.close_review(window, cx);
@@ -491,6 +683,34 @@ impl Workspace {
             }))
             .on_action(cx.listener(|this, _: &CommandPalette, window, cx| {
                 this.toggle_palette(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleAgents, window, cx| {
+                this.toggle_agents(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &FocusTerminal, window, cx| {
+                this.focus_terminal(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &StartAgent, window, cx| {
+                this.open_start_dialog(None, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &AskReview, window, cx| {
+                this.ask(Ask::Review, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &AskFix, window, cx| {
+                this.ask(Ask::Fix, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &AskMessage, window, cx| {
+                this.ask(Ask::Message, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ReconnectCore, _, cx| {
+                this.model.update(cx, |m, cx| m.reconnect(cx));
+            }))
+            .on_action(cx.listener(|this, _: &PickMachine, _, cx| {
+                this.show_machine_menu = !this.show_machine_menu;
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &CloseDialog, window, cx| {
+                this.close_dialog(window, cx);
             }))
     }
 
@@ -521,6 +741,8 @@ impl Workspace {
             m.composer = None;
             cx.notify();
         });
+        self.follow_review(cx);
+        self.machines.update(cx, |m, cx| m.refresh(cx));
         self.diff_state
             .update(cx, |state, cx| state.set_files([], cx));
         self.path_input
@@ -567,7 +789,9 @@ impl Render for Workspace {
         let show_base_picker = self.model.read(cx).show_base_picker;
         let (background, foreground) = (cx.theme().background, cx.theme().foreground);
         let text_size = crate::theme::ActiveCode::code(&**cx).metrics.text;
+        let panel = self.model.read(cx).prefs.agents;
         let body = if has_review {
+            let border = cx.theme().border;
             h_flex()
                 .flex_1()
                 .min_h_0()
@@ -577,15 +801,65 @@ impl Render for Workspace {
                         .flex_1()
                         .min_w_0()
                         .h_full()
-                        .child(diff_pane::render(self, window, cx)),
-                    // Mount point: the agents/terminal panel (phase 4) goes below the diff here.
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_h_0()
+                                .flex()
+                                .flex_col()
+                                .child(diff_pane::render(self, window, cx)),
+                        )
+                        .when(panel.open, |this| {
+                            this.child(
+                                div()
+                                    .id("panel-resize")
+                                    .h(px(5.))
+                                    .flex_none()
+                                    .border_t_1()
+                                    .border_color(border)
+                                    .cursor(CursorStyle::ResizeUpDown)
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, event: &MouseDownEvent, _, cx| {
+                                            let height = this.model.read(cx).prefs.agents.height;
+                                            this.panel_drag = Some((event.position.y, height));
+                                        }),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .h(px(panel.height))
+                                    .flex_none()
+                                    .child(self.panel.clone()),
+                            )
+                        }),
                 )
                 .into_any_element()
         } else {
             start::render(self, window, cx).into_any_element()
         };
+        let window_height = f32::from(window.bounds().size.height);
         let root = self
             .bind_actions(cx)
+            .on_mouse_move(cx.listener(move |this, event: &MouseMoveEvent, _, cx| {
+                let Some((start, height)) = this.panel_drag else {
+                    return;
+                };
+                let max = (window_height - 220.).max(MIN_PANEL);
+                let next = (height + f32::from(start - event.position.y)).clamp(MIN_PANEL, max);
+                this.model.update(cx, |m, cx| {
+                    m.prefs.agents.height = next;
+                    cx.notify();
+                });
+            }))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    if this.panel_drag.take().is_some() {
+                        this.model.read(cx).save_prefs();
+                    }
+                }),
+            )
             .id("workspace")
             .key_context("Review")
             .track_focus(&self.focus)
@@ -609,8 +883,17 @@ impl Render for Workspace {
         } else {
             root
         };
-        match &self.palette {
+        let root = if self.show_machine_menu {
+            root.child(crate::views::machines::menu::render(self, cx))
+        } else {
+            root
+        };
+        let root = match &self.palette {
             Some(palette) => root.child(palette.clone()),
+            None => root,
+        };
+        match &self.dialog {
+            Some(dialog) => root.child(dialog.view()),
             None => root,
         }
     }

@@ -6,7 +6,9 @@ use gpui_kit::component::{ActiveTheme, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
+use crate::keymap::AskFix;
 use crate::theme::ActiveCode;
+use crate::views::note_card::changed_mark;
 use crate::views::workspace::Workspace;
 
 const FILTERS: [(&str, StatusFilter); 4] = [
@@ -58,8 +60,32 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
                 }))
         }));
 
+    let checked_count = model.fix_selection.len();
+    let open_count = counts.status(NoteStatus::Open);
+    let fix_bar = (open_count > 0).then(|| {
+        let label = if checked_count > 0 {
+            format!("ask an agent to fix {checked_count} checked")
+        } else {
+            format!("ask an agent to fix all {open_count} open")
+        };
+        h_flex()
+            .id("fix-notes")
+            .px(code.metrics.pad_x)
+            .py_1()
+            .gap_1()
+            .border_b_1()
+            .border_color(theme.border)
+            .cursor_pointer()
+            .hover(|this| this.bg(code.bg_2))
+            .child(div().flex_1().child(label))
+            .child(div().text_color(code.accent).child("a f"))
+            .on_click(|_, window, cx| window.dispatch_action(Box::new(AskFix), cx))
+    });
     let rows = model.notes_list().into_iter().map(|note| {
         let id = note.id.clone();
+        let check_id = note.id.clone();
+        let checked = model.fix_selection.contains(&note.id);
+        let changed = model.changed_notes.contains(&note.id);
         let side = match note.anchor.side {
             Side::Old => " (base)",
             Side::New => "",
@@ -83,6 +109,32 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
                 h_flex()
                     .gap_1p5()
                     .font_family(theme.mono_font_family.clone())
+                    .when(note.is_open(), |this| {
+                        this.child(
+                            div()
+                                .id(SharedString::from(format!("note-check-{}", note.id)))
+                                .size(px(12.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .border_1()
+                                .border_color(theme.muted_foreground)
+                                .rounded(px(2.))
+                                .text_size(px(10.))
+                                .cursor_pointer()
+                                .when(checked, |this| {
+                                    this.bg(code.accent)
+                                        .border_color(code.accent)
+                                        .text_color(code.accent_fg)
+                                        .child("✓")
+                                })
+                                .on_click(cx.listener(move |ws, _, _, cx| {
+                                    cx.stop_propagation();
+                                    let id = check_id.clone();
+                                    ws.model.update(cx, |m, cx| m.toggle_fix_selection(id, cx));
+                                })),
+                        )
+                    })
                     .child(
                         div()
                             .size(px(7.))
@@ -115,7 +167,8 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
                     .child(note.severity.as_str())
                     .when(note.author.is_agent(), |this| {
                         this.child(format!("· by {}", note.author.label()))
-                    }),
+                    })
+                    .when(changed, |this| this.child(changed_mark(cx))),
             )
             .child(
                 div()
@@ -133,7 +186,7 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
             }))
     });
     let empty = model.notes_list().is_empty();
-    v_flex().size_full().child(chips).child(
+    v_flex().size_full().child(chips).children(fix_bar).child(
         v_flex()
             .id("notes-list")
             .flex_1()

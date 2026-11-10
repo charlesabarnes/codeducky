@@ -35,6 +35,16 @@ fn action(
         .on_click(move |_, window, cx| on_click(window, cx))
 }
 
+/// A small accent dot and word: changed since the last reload.
+pub fn changed_mark(cx: &App) -> Div {
+    let code = cx.code();
+    h_flex()
+        .gap_1()
+        .text_color(code.accent)
+        .child(div().size(px(6.)).rounded_full().bg(code.accent))
+        .child("changed")
+}
+
 fn card_shell(severity: Severity, dim: bool, cx: &App) -> Div {
     let theme = cx.theme();
     let code = cx.code();
@@ -49,7 +59,13 @@ fn card_shell(severity: Severity, dim: bool, cx: &App) -> Div {
         .when(dim, |this| this.opacity(0.75))
 }
 
-pub fn note_card(note: &Note, model: WeakEntity<ReviewModel>, cx: &App) -> AnyElement {
+/// `changed`: the last reload found it new or changed (an agent's work), marked until visited.
+pub fn note_card(
+    note: &Note,
+    changed: bool,
+    model: WeakEntity<ReviewModel>,
+    cx: &App,
+) -> AnyElement {
     let theme = cx.theme();
     let code = cx.code();
     let id = note.id.clone();
@@ -111,6 +127,7 @@ pub fn note_card(note: &Note, model: WeakEntity<ReviewModel>, cx: &App) -> AnyEl
                     .child(status_label),
             )
         })
+        .when(changed, |this| this.child(changed_mark(cx)))
         .child(div().flex_1())
         .child(action(key("edit"), "edit", "e", cx, edit))
         .child(action(

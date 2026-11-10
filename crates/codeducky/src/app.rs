@@ -11,10 +11,13 @@ const DEFAULT_SIZE: (f32, f32) = (1280., 820.);
 
 pub fn run() {
     #[cfg(feature = "screenshot")]
-    let script = crate::dev::Script::from_args();
+    let mut script = crate::dev::Script::from_args();
+    #[cfg(feature = "screenshot")]
+    let core_target = script.core_target();
 
     gpui_kit::application().run(move |cx| {
         gpui_kit::init(cx);
+        ducky_terminal::init(cx);
         keymap::bind(cx);
         cx.on_action(|_: &Quit, cx| cx.quit());
 
@@ -24,7 +27,12 @@ pub fn run() {
         let scripted = script.apply_prefs(&mut prefs);
         let model = cx.new(|_| ReviewModel::new(prefs));
         #[cfg(feature = "screenshot")]
-        model.update(cx, |m, _| m.persist = !scripted);
+        model.update(cx, |m, _| {
+            m.persist = !scripted;
+            if let Some(target) = core_target.clone() {
+                m.core_target = target;
+            }
+        });
         model.update(cx, |m, cx| m.connect(cx));
 
         let saver = model.clone();

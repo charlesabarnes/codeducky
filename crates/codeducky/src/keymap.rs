@@ -46,12 +46,23 @@ actions!(
         ChangeBase,
         SaveNote,
         CancelNote,
+        ToggleAgents,
+        FocusTerminal,
+        StartAgent,
+        AskReview,
+        AskFix,
+        AskMessage,
+        ReconnectCore,
+        PickMachine,
+        CloseDialog,
+        SubmitDialog,
     ]
 );
 
-/// Single-key shortcuts must not fire while typing in a field.
-pub const REVIEW: &str = "Review && !Input";
+/// Single-key shortcuts must not fire while typing in a field or a terminal.
+pub const REVIEW: &str = "Review && !Input && !Terminal && !Dialog";
 pub const NOTE_EDITOR: &str = "NoteEditor";
+pub const DIALOG: &str = "Dialog";
 
 #[cfg(target_os = "macos")]
 macro_rules! secondary {
@@ -67,6 +78,13 @@ macro_rules! secondary {
 }
 
 pub const REFRESH_KEYS: &str = secondary!("r");
+/// Works inside the terminal too: the terminal never sees it.
+pub const FOCUS_TERMINAL_KEYS: &str = "ctrl-`";
+#[cfg(target_os = "macos")]
+pub const AGENTS_KEYS: &str = "cmd-j";
+/// ctrl-j is a terminal's newline, so not that one.
+#[cfg(not(target_os = "macos"))]
+pub const AGENTS_KEYS: &str = "ctrl-shift-j";
 pub const SAVE_KEYS: &str = secondary!("enter");
 
 pub struct Shortcut {
@@ -122,6 +140,20 @@ pub const HELP: &[Shortcut] = &[
     s("/", "Filter files", "View"),
     s("g f / g n", "Files tab / notes tab", "View"),
     s("b", "Change the base", "View"),
+    s(AGENTS_KEYS, "Show or hide the agents panel", "Agents"),
+    s(
+        FOCUS_TERMINAL_KEYS,
+        "Move between the diff and the terminal",
+        "Agents",
+    ),
+    s("a n", "Start an agent", "Agents"),
+    s("a r", "Ask an agent to review the branch", "Agents"),
+    s(
+        "a f",
+        "Ask an agent to fix the open (or checked) notes",
+        "Agents",
+    ),
+    s("a m", "Send an agent a message", "Agents"),
     s(secondary!("r"), "Refresh the review", "General"),
     s(
         secondary!("shift-r"),
@@ -173,7 +205,15 @@ pub fn bind(cx: &mut App) {
         KeyBinding::new("/", FocusFilter, review),
         KeyBinding::new("g f", FilesTab, review),
         KeyBinding::new("g n", NotesTab, review),
+        KeyBinding::new(AGENTS_KEYS, ToggleAgents, None),
+        KeyBinding::new(FOCUS_TERMINAL_KEYS, FocusTerminal, None),
+        KeyBinding::new("a n", StartAgent, review),
+        KeyBinding::new("a r", AskReview, review),
+        KeyBinding::new("a f", AskFix, review),
+        KeyBinding::new("a m", AskMessage, review),
         KeyBinding::new(secondary!("enter"), SaveNote, Some(NOTE_EDITOR)),
         KeyBinding::new("escape", CancelNote, Some(NOTE_EDITOR)),
+        KeyBinding::new("escape", CloseDialog, Some(DIALOG)),
+        KeyBinding::new(secondary!("enter"), SubmitDialog, Some(DIALOG)),
     ]);
 }

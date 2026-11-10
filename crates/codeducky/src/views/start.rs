@@ -1,4 +1,5 @@
-//! No review open: recent repositories and a path to open, on this machine or a herdr-core one.
+//! No review open: pick a machine (this one or a herdr-core one), then a checkout on it — by path,
+//! by browsing, or from that machine's recent repos.
 
 use ducky_session::ReviewRequest;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -8,22 +9,21 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::theme::ActiveCode;
+use crate::views::machines::{machine_label, picker};
 use crate::views::widgets::muted;
 use crate::views::workspace::Workspace;
 
 pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -> impl IntoElement {
+    let machines = picker::render(ws, cx).into_any_element();
+    let picked = ws.machines.read(cx).picked.clone();
     let model = ws.model.read(cx);
     let theme = cx.theme();
     let code = cx.code();
-    let recent = model.prefs.recent.clone();
-    let connection = model.connection.as_ref().map(|c| c.state().clone());
-    let local_only = connection.as_ref().is_none_or(|c| c.is_local_only());
+    let recent: Vec<_> = model.prefs.recent_on(picked.as_deref()).cloned().collect();
+    let empty = recent.is_empty();
+    let on_label = machine_label(picked.as_deref());
 
     let recent_rows = recent.into_iter().enumerate().map(|(i, repo)| {
-        let label = match &repo.machine {
-            Some(machine) => format!("{machine}:{}", repo.path),
-            None => repo.path.clone(),
-        };
         div()
             .id(("recent", i))
             .px_2()
@@ -32,7 +32,7 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
             .font_family(theme.mono_font_family.clone())
             .cursor_pointer()
             .hover(|this| this.bg(code.bg_2))
-            .child(label)
+            .child(repo.path.clone())
             .on_click(cx.listener(move |ws, _, window, cx| {
                 ws.open(
                     ReviewRequest {
@@ -48,23 +48,31 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
 
     div().flex_1().min_h_0().flex().justify_center().child(
         v_flex()
-            .w(px(560.))
-            .mt(px(72.))
-            .gap_4()
-            .child(
-                div()
-                    .text_size(px(18.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child("Open a repository"),
-            )
-            .child(muted(
-                "Review the checked-out branch against its base: every change since the branch \
-                 left it, committed or not.",
-                cx,
-            ))
+            .id("start")
+            .w(px(640.))
+            .mt(px(56.))
+            .gap_5()
+            .overflow_y_scroll()
             .child(
                 v_flex()
-                    .gap_2()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_size(px(18.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child("Open a repository"),
+                    )
+                    .child(muted(
+                        "Review the checked-out branch against its base: every change since the \
+                         branch left it, committed or not.",
+                        cx,
+                    )),
+            )
+            .child(machines)
+            .child(
+                v_flex()
+                    .gap_1()
+                    .child(muted(format!("checkout on {on_label}"), cx))
                     .child(
                         h_flex()
                             .gap_2()
@@ -83,34 +91,14 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
                                         ws.open_from_inputs(window, cx)
                                     })),
                             ),
-                    )
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .child(muted("machine", cx).w(px(64.)))
-                            .child(
-                                div().w(px(220.)).child(
-                                    Input::new(&ws.machine_input).small().disabled(local_only),
-                                ),
-                            )
-                            .child(muted(
-                                if local_only {
-                                    "herdr-core not running — local only"
-                                } else {
-                                    "a herdr-core machine name, or empty for this one"
-                                },
-                                cx,
-                            )),
                     ),
             )
             .child(
                 v_flex()
                     .gap_1()
-                    .child(muted("recent", cx))
+                    .child(muted(format!("recent on {on_label}"), cx))
                     .children(recent_rows)
-                    .when(model.prefs.recent.is_empty(), |this| {
-                        this.child(muted("nothing yet", cx).px_2())
-                    }),
-            ), // Mount point: the machine picker and remote browsing (phase 8) go here.
+                    .when(empty, |this| this.child(muted("nothing yet", cx).px_2())),
+            ),
     )
 }

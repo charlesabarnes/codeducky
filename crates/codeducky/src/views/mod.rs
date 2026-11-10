@@ -1,7 +1,10 @@
+pub mod agents;
 pub mod base_picker;
+pub mod dialog;
 pub mod diff_pane;
 pub mod files;
 pub mod help;
+pub mod machines;
 pub mod note_card;
 pub mod notes_panel;
 pub mod palette;

@@ -148,6 +148,7 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
             .collect();
     }
     let weak_model = ws.model.downgrade();
+    let changed = model.changed_notes.clone();
     let lost_cards = (!lost.is_empty()).then(|| {
         v_flex()
             .border_b_1()
@@ -160,10 +161,9 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
                 ),
                 cx,
             ))
-            .children(
-                lost.iter()
-                    .map(|note| note_card::note_card(note, weak_model.clone(), cx)),
-            )
+            .children(lost.iter().map(|note| {
+                note_card::note_card(note, changed.contains(&note.id), weak_model.clone(), cx)
+            }))
     });
 
     let body = match model.diff.as_ref().map(|d| &d.diff.content) {
@@ -331,6 +331,7 @@ fn diff_view(ws: &Workspace, path: &str, cx: &mut Context<Workspace>) -> AnyElem
             .map(|n| (format!("note:{}", n.id), n))
             .collect(),
         composer,
+        changed: model.changed_notes.clone(),
         input: ws.note_input.clone(),
         model: ws.model.downgrade(),
         workspace: cx.entity().downgrade(),
@@ -389,6 +390,7 @@ fn diff_view(ws: &Workspace, path: &str, cx: &mut Context<Workspace>) -> AnyElem
 struct AnnotationContext {
     notes: HashMap<String, Note>,
     composer: Option<Composer>,
+    changed: std::collections::HashSet<ducky_review::NoteId>,
     input: Option<Entity<TextareaState>>,
     model: WeakEntity<ReviewModel>,
     workspace: WeakEntity<Workspace>,
@@ -412,7 +414,12 @@ impl AnnotationContext {
             };
         }
         match self.notes.get(name.as_ref()) {
-            Some(note) => note_card::note_card(note, self.model.clone(), cx),
+            Some(note) => note_card::note_card(
+                note,
+                self.changed.contains(&note.id),
+                self.model.clone(),
+                cx,
+            ),
             None => div().into_any_element(),
         }
     }

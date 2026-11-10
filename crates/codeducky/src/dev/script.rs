@@ -7,6 +7,8 @@ use ducky_review::{NoteId, NoteStatus, Side};
 use ducky_session::ReviewRequest;
 use gpui_kit::*;
 
+use super::scratch;
+use super::steps::Steps;
 use crate::config::{DiffMode, Prefs};
 use crate::state::cursor::LinePos;
 use crate::state::{ReviewModel, SidebarTab};
@@ -45,11 +47,14 @@ pub struct Script {
     palette_open: bool,
     size: Option<(f32, f32)>,
     screenshot: Option<PathBuf>,
+    steps: Steps,
     any: bool,
 }
 
-fn fail(message: String) -> ! {
+/// Stops the run's scratch cores, then exits.
+pub fn fail(message: String) -> ! {
     eprintln!("codeducky: {message}");
+    scratch::stop_all();
     std::process::exit(2);
 }
 
@@ -140,7 +145,11 @@ impl Script {
                     }))
                 }
                 "--screenshot" => script.screenshot = Some(PathBuf::from(value())),
-                other => fail(format!("unknown flag {other}")),
+                other => {
+                    if !script.steps.parse(other, &mut value) {
+                        fail(format!("unknown flag {other}"))
+                    }
+                }
             }
             script.any = true;
         }
@@ -168,7 +177,12 @@ impl Script {
         if let Some(size) = self.size {
             prefs.window = Some(size);
         }
+        self.steps.apply_prefs(prefs);
         self.any
+    }
+
+    pub fn core_target(&mut self) -> Option<ducky_session::CoreTarget> {
+        self.steps.core_target()
     }
 }
 
@@ -206,11 +220,13 @@ pub fn run(script: Script, model: Entity<ReviewModel>, workspace: Entity<Workspa
     if !script.any {
         return;
     }
+    super::screenshot::pump_frames(cx);
     cx.spawn(async move |cx| {
         settle_until(cx, &model, "connecting", |m| {
             m.connection.is_some() && m.is_ready()
         })
         .await;
+        script.steps.before_open(&workspace, cx).await;
         if let Some(path) = script.open.clone() {
             let request = ReviewRequest {
                 path,
@@ -328,6 +344,9 @@ pub fn run(script: Script, model: Entity<ReviewModel>, workspace: Entity<Workspa
                     .ok();
             }
         }
+        if let Some(window) = window {
+            script.steps.after_open(window, &workspace, cx).await;
+        }
         for key in &script.keys {
             let keystroke: &'static str = Box::leak(key.clone().into_boxed_str());
             let keystroke = Keystroke::parse(keystroke)
@@ -357,9 +376,11 @@ pub fn run(script: Script, model: Entity<ReviewModel>, workspace: Entity<Workspa
                     Ok(()) => eprintln!("screenshot saved to {}", path.display()),
                     Err(error) => fail(format!("screenshot failed: {error:#}")),
                 }
+                scratch::stop_all();
                 cx.quit();
             });
         } else if script.quit {
+            scratch::stop_all();
             cx.update(|cx| cx.quit());
         }
     })

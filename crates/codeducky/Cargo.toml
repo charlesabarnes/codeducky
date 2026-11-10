@@ -8,12 +8,18 @@ publish.workspace = true
 [features]
 # Dev only: scripting flags (`--open`, `--select`, ...) and `--screenshot <path>`, which renders
 # the window to a PNG through GPUI's test-support renderer and quits.
-screenshot = ["gpui-kit/test-support", "dep:anyhow", "dep:image"]
+# Also `--scratch`: a throwaway herdr-core for agents and machines, never the live one.
+screenshot = ["gpui-kit/test-support", "dep:anyhow", "dep:image", "ducky-hc/scratch"]
 
 [dependencies]
 anyhow = { workspace = true, optional = true }
+ducky-agents.workspace = true
+ducky-hc.workspace = true
+ducky-host.workspace = true
 ducky-review.workspace = true
 ducky-session.workspace = true
+ducky-terminal.workspace = true
+flume.workspace = true
 gpui-kit = { workspace = true, features = ["tree-sitter-languages"] }
 image = { workspace = true, optional = true }
 serde.workspace = true

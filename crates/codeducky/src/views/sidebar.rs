@@ -6,6 +6,7 @@ use gpui_kit::component::{ActiveTheme, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
+use crate::keymap::{AGENTS_KEYS, AskFix, AskMessage, AskReview, ToggleAgents};
 use crate::state::SidebarTab;
 use crate::theme::ActiveCode;
 use crate::views::widgets::{counts, progress, short_rev, short_sha};
@@ -89,8 +90,68 @@ pub fn render(
                 .child(format!("{viewed}/{total}"))
                 .into_any_element(),
         ));
-    // Mount point: since-last-look and the commit picker (phase 5), checklists (phase 3b) and the
-    // agent buttons (phase 4) go below the summary.
+    // Mount point: since-last-look and the commit picker (phase 5) and checklists (phase 3b) go
+    // below the summary.
+    let agents = ws.agents.read(cx);
+    let live = agents.agents.iter().filter(|a| a.is_live()).count();
+    let working = agents
+        .agents
+        .iter()
+        .filter(|a| a.status == ducky_agents::AgentStatus::Working)
+        .count();
+    let needs_core = matches!(agents.line, crate::state::agents::Line::NeedsCore { .. });
+    let agents_label = match (live, working) {
+        _ if needs_core => "agents: need herdr-core".to_owned(),
+        (0, _) => "agents: none here".to_owned(),
+        (n, 0) => format!("agents: {n}"),
+        (n, w) => format!("agents: {n}, {w} working"),
+    };
+    let agent_button = |id: &'static str, label: &'static str, keys: &'static str| {
+        h_flex()
+            .id(id)
+            .gap_1()
+            .px_1()
+            .rounded(theme.radius)
+            .cursor_pointer()
+            .border_1()
+            .border_color(theme.border)
+            .hover(|this| this.bg(code.bg_2))
+            .child(label)
+            .child(div().text_color(code.accent).child(keys))
+    };
+    let agent_bar = v_flex()
+        .px(code.metrics.pad_x)
+        .pb(code.metrics.pad_y)
+        .gap_1()
+        .font_family(theme.mono_font_family.clone())
+        .child(
+            h_flex()
+                .id("agents-toggle")
+                .gap_1()
+                .cursor_pointer()
+                .text_color(theme.muted_foreground)
+                .child(agents_label)
+                .child(div().flex_1())
+                .child(div().text_color(code.accent).child(AGENTS_KEYS))
+                .on_click(|_, w, cx| w.dispatch_action(Box::new(ToggleAgents), cx)),
+        )
+        .child(
+            h_flex()
+                .flex_wrap()
+                .gap_1()
+                .child(
+                    agent_button("side-review", "review", "a r")
+                        .on_click(|_, w, cx| w.dispatch_action(Box::new(AskReview), cx)),
+                )
+                .child(
+                    agent_button("side-fix", "fix notes", "a f")
+                        .on_click(|_, w, cx| w.dispatch_action(Box::new(AskFix), cx)),
+                )
+                .child(
+                    agent_button("side-message", "message", "a m")
+                        .on_click(|_, w, cx| w.dispatch_action(Box::new(AskMessage), cx)),
+                ),
+        );
 
     let tab_button = |id: &'static str, label: String, this_tab: SidebarTab| {
         let on = tab == this_tab;
@@ -143,6 +204,7 @@ pub fn render(
         .border_r_1()
         .border_color(theme.sidebar_border)
         .child(summary)
+        .child(agent_bar)
         .child(tabs)
         .child(div().flex_1().min_h_0().flex().flex_col().child(content))
         .into_any_element()

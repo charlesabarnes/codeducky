@@ -35,6 +35,20 @@ fn commands() -> Vec<(&'static str, Box<dyn Action>)> {
         ("Refresh the review", Box::new(Refresh)),
         ("Reload notes", Box::new(ReloadNotes)),
         ("Open a repository", Box::new(OpenRepo)),
+        ("Agents: show or hide the panel", Box::new(ToggleAgents)),
+        (
+            "Agents: move between diff and terminal",
+            Box::new(FocusTerminal),
+        ),
+        ("Agents: start an agent", Box::new(StartAgent)),
+        ("Agents: ask for a review", Box::new(AskReview)),
+        ("Agents: fix the open or checked notes", Box::new(AskFix)),
+        ("Agents: send a message", Box::new(AskMessage)),
+        ("herdr-core: connect again", Box::new(ReconnectCore)),
+        (
+            "Machines: open a repository on another machine",
+            Box::new(PickMachine),
+        ),
         ("Theme: light, dark or system", Box::new(CycleAppearance)),
         ("Theme: next palette", Box::new(CyclePalette)),
         (

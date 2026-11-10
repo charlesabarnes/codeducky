@@ -4,12 +4,36 @@ use gpui_kit::component::{ActiveTheme, TitleBar, h_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use crate::keymap::{ChangeBase, Refresh, ToggleHelp};
+use crate::keymap::{ChangeBase, PickMachine, Refresh, ToggleHelp};
 use crate::theme::ActiveCode;
+use crate::views::machines::{machine_label, state_dot};
 use crate::views::widgets::{key_hint, short_rev, short_sha};
 use crate::views::workspace::Workspace;
 
 pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -> impl IntoElement {
+    let machines = ws.machines.read(cx);
+    let review_machine = ws
+        .model
+        .read(cx)
+        .review
+        .as_ref()
+        .map(|r| r.request.machine.clone());
+    let machine_chip = review_machine.map(|machine| {
+        let state = machine
+            .as_deref()
+            .and_then(|name| machines.entry(name))
+            .map(|entry| entry.state.clone());
+        h_flex()
+            .id("machine-chip")
+            .gap_1()
+            .px_1()
+            .rounded(cx.theme().radius)
+            .cursor_pointer()
+            .hover(|this| this.bg(cx.code().bg_3))
+            .child(state_dot(state.as_ref(), cx))
+            .child(format!("on {}", machine_label(machine.as_deref())))
+            .on_click(|_, window, cx| window.dispatch_action(Box::new(PickMachine), cx))
+    });
     let model = ws.model.read(cx);
     let theme = cx.theme();
     let code = cx.code();
@@ -73,6 +97,7 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
                     .child("code ducky"),
             )
             .children(location)
+            .children(machine_chip)
             .child(div().flex_1())
             .when(model.review.is_some(), |this| {
                 this.child(

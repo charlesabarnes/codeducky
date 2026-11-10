@@ -1,14 +1,14 @@
 //! The review on screen and everything the views show about it. Work below the UI runs on the
 //! background executor; results come back here and views re-render from this state.
 
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 
 use ducky_review::order::FileOrder;
 use ducky_review::summary::StatusFilter;
 use ducky_review::{Note, NoteId, NumberedLine, ReviewState, Severity, Side};
 use ducky_session::{
-    Connection, DiffOptions, FileDiff, NoteDraft, Review, ReviewRequest, TreeRow, build_tree,
-    matches_filter, order,
+    Connection, CoreTarget, DiffOptions, FileDiff, NoteDraft, Review, ReviewRequest, TreeRow,
+    build_tree, changed_notes, matches_filter, order,
 };
 use gpui_kit::component::diff::DiffFile;
 use gpui_kit::*;
@@ -65,6 +65,10 @@ pub enum ModelEvent {
     ComposerOpened,
     ExpandAll,
     Error(String),
+    /// A connection (first, or again after a retry) is in place.
+    Connected,
+    /// A review was opened, refreshed or re-based: agents follow it.
+    ReviewOpened,
 }
 
 impl EventEmitter<ModelEvent> for ReviewModel {}
@@ -90,6 +94,13 @@ pub struct ReviewModel {
     pub status: Option<Status>,
     pub show_help: bool,
     pub show_base_picker: bool,
+    /// Notes the last reload found new or changed (an agent resolved or added them).
+    pub changed_notes: HashSet<NoteId>,
+    /// Notes checked in the notes panel for a fix hand-off.
+    pub fix_selection: BTreeSet<NoteId>,
+    pub core_target: CoreTarget,
+    /// Bumped with every new connection, so agents know to subscribe again.
+    pub connection_generation: u64,
     diff_generation: u64,
     pending_open: Option<ReviewRequest>,
 }
@@ -117,6 +128,10 @@ impl ReviewModel {
             status: None,
             show_help: false,
             show_base_picker: false,
+            changed_notes: HashSet::new(),
+            fix_selection: BTreeSet::new(),
+            core_target: CoreTarget::Default,
+            connection_generation: 0,
             diff_generation: 0,
             pending_open: None,
         }
@@ -173,17 +188,30 @@ impl ReviewModel {
     }
 
     pub fn connect(&mut self, cx: &mut Context<Self>) {
+        let target = self.core_target.clone();
         self.run(
             "connecting to herdr-core",
             cx,
-            Box::new(|| Ok(Connection::connect())),
+            Box::new(move || Ok(Connection::connect_to(target))),
             |this, connection, cx| {
                 this.connection = Some(connection);
+                this.connection_generation += 1;
+                cx.emit(ModelEvent::Connected);
                 if let Some(request) = this.pending_open.take() {
                     this.open(request, cx);
                 }
             },
         );
+    }
+
+    /// Connects again (after herdr-core started or restarted) and reopens the review on the new
+    /// connection, since its hosts went with the old one.
+    pub fn reconnect(&mut self, cx: &mut Context<Self>) {
+        if let Some(review) = &self.review {
+            self.pending_open = Some(review.request.clone());
+        }
+        self.connection = None;
+        self.connect(cx);
     }
 
     #[cfg(feature = "screenshot")]
@@ -222,8 +250,16 @@ impl ReviewModel {
             .selected
             .clone()
             .filter(|path| review.file_index(path).is_some());
+        let same_review = self.review.as_ref().is_some_and(|old| {
+            old.toplevel() == review.toplevel() && old.request.machine == review.request.machine
+        });
+        if !same_review {
+            self.changed_notes.clear();
+            self.fix_selection.clear();
+        }
         self.review = Some(review);
         self.composer = None;
+        cx.emit(ModelEvent::ReviewOpened);
         match keep.or_else(|| self.first_file()) {
             Some(path) => self.load_diff(path, cx),
             None => {
@@ -272,27 +308,50 @@ impl ReviewModel {
         );
     }
 
-    pub fn reload_notes(&mut self, cx: &mut Context<Self>) {
+    /// `quiet`: an automatic reload (focus, an agent's turn ended) that only speaks up when
+    /// something changed.
+    pub fn reload_notes(&mut self, quiet: bool, cx: &mut Context<Self>) {
         let Some(review) = self.review.as_ref() else {
             return;
         };
         let service = review.notes_service().clone();
         let files = review.files.clone();
-        self.run(
-            "reloading notes",
-            cx,
-            Box::new(move || {
-                service.reanchor(&files).map_err(|e| e.to_string())?;
-                Ok((
-                    service.notes().map_err(|e| e.to_string())?,
-                    service.state().map_err(|e| e.to_string())?,
-                ))
-            }),
-            |this, (notes, state), cx| {
-                this.set_notes(notes, state, cx);
+        let before = review.notes.clone();
+        let work: Work<(Vec<Note>, ReviewState)> = Box::new(move || {
+            service.reanchor(&files).map_err(|e| e.to_string())?;
+            Ok((
+                service.notes().map_err(|e| e.to_string())?,
+                service.state().map_err(|e| e.to_string())?,
+            ))
+        });
+        let label = if quiet {
+            "checking notes"
+        } else {
+            "reloading notes"
+        };
+        self.run(label, cx, work, move |this, (notes, state), cx| {
+            let changed = changed_notes(&before, &notes);
+            if !changed.is_empty() {
+                this.changed_notes = changed;
+                let count = this.changed_notes.len();
+                this.say(
+                    format!("{count} note{} changed", if count == 1 { "" } else { "s" }),
+                    cx,
+                );
+            } else if !quiet {
                 this.say("notes reloaded", cx);
-            },
-        );
+            }
+            this.fix_selection
+                .retain(|id| notes.iter().any(|n| n.id == *id && n.is_open()));
+            this.set_notes(notes, state, cx);
+        });
+    }
+
+    pub fn toggle_fix_selection(&mut self, id: NoteId, cx: &mut Context<Self>) {
+        if !self.fix_selection.remove(&id) {
+            self.fix_selection.insert(id);
+        }
+        cx.notify();
     }
 
     fn set_notes(&mut self, notes: Vec<Note>, state: ReviewState, cx: &mut Context<Self>) {
@@ -799,6 +858,7 @@ impl ReviewModel {
             line: note.anchor.line,
         };
         let path = note.path.clone();
+        self.changed_notes.remove(id);
         if self.selected.as_deref() == Some(&path) {
             self.focus_line(at, false, cx);
         } else {
