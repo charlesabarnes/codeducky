@@ -49,10 +49,12 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
                 .text_color(code.accent_fg)
                 .font_weight(FontWeight::BOLD)
                 .child(match (&model.review, model.pane, &model.mode) {
+                    _ if ws.github.read(cx).inbox_open => "INBOX",
                     (None, _, _) => "OPEN",
                     (Some(_), crate::state::Pane::Edit, _) => "EDIT",
                     (Some(_), _, ducky_session::ReviewMode::Since) => "SINCE",
                     (Some(_), _, ducky_session::ReviewMode::Commits { .. }) => "COMMITS",
+                    (Some(r), _, ducky_session::ReviewMode::All) if r.pull.is_some() => "PR",
                     (Some(_), _, ducky_session::ReviewMode::All) => "REVIEW",
                 }),
         )

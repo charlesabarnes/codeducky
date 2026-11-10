@@ -21,8 +21,13 @@ use crate::state::cursor::LinePos;
 use crate::state::{Composer, Pane, ReviewModel};
 use crate::theme::ActiveCode;
 use crate::views::note_card;
+use crate::views::pull::ci::annotation_card;
+use crate::views::pull::inline::InlinePull;
+use crate::views::pull::threads::{ThreadView, thread_card};
 use crate::views::widgets::{badge_color, counts, muted, toggle};
 use crate::views::workspace::{Workspace, side_from, side_of};
+use ducky_github::CheckAnnotation;
+use ducky_github::threads::ReviewThread;
 
 const COMPOSER: &str = "composer";
 
@@ -195,6 +200,9 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
             }))
     });
 
+    let inline = InlinePull::for_file(ws, &path, cx);
+    let pull_cards = pull_cards(ws, &inline, cx.entity().downgrade(), cx);
+
     if pane == Pane::Edit
         && let Some(editor) = ws.editor.clone()
     {
@@ -230,7 +238,7 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
         {
             placeholder("no lines to show", cx)
         }
-        Some(DiffContent::Text(_)) => diff_view(ws, &path, cx),
+        Some(DiffContent::Text(_)) => diff_view(ws, &path, inline, cx),
     };
 
     v_flex()
@@ -239,11 +247,91 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
         .children(notices)
         .children(lost_cards)
         .children(elsewhere_cards)
+        .children(pull_cards)
         .child(div().flex_1().min_h_0().child(body))
         .into_any_element()
 }
 
-fn diff_view(ws: &Workspace, path: &str, cx: &mut Context<Workspace>) -> AnyElement {
+/// Threads that are not on a line of this diff, and annotations that do not fit, above it.
+fn pull_cards(
+    ws: &Workspace,
+    inline: &InlinePull,
+    workspace: WeakEntity<Workspace>,
+    cx: &App,
+) -> Option<AnyElement> {
+    if inline.listed.is_empty() && inline.unplaced.is_empty() {
+        return None;
+    }
+    let theme = cx.theme();
+    let pull = ws.pull.read(cx);
+    let pull_weak = ws.pull.downgrade();
+    let cards = inline.listed.iter().map(|thread| {
+        thread_card(
+            ThreadView {
+                thread,
+                focused: pull.thread_focus.as_deref() == Some(thread.id.as_str()),
+                show_where: true,
+                reply: reply_for(ws, &thread.id, cx),
+                writes_off: pull.writes_refused(),
+            },
+            pull_weak.clone(),
+            workspace.clone(),
+            cx,
+        )
+    });
+    let annotations = inline.unplaced.iter().map(|u| {
+        v_flex()
+            .child(muted(u.reason.clone(), cx).px_2())
+            .child(annotation_card(
+                &u.annotation,
+                inline
+                    .run_names
+                    .get(&u.annotation.check_run_id)
+                    .map(String::as_str),
+                cx,
+            ))
+    });
+    Some(
+        v_flex()
+            .id("pull-cards")
+            .max_h(px(260.))
+            .overflow_y_scroll()
+            .border_b_1()
+            .border_color(theme.border)
+            .bg(cx.code().bg_2)
+            .when(!inline.listed.is_empty(), |this| {
+                this.child(notice_row(
+                    format!(
+                        "Threads not on a line of this diff: outdated or on the file ({})",
+                        inline.listed.len()
+                    ),
+                    cx,
+                ))
+            })
+            .children(cards)
+            .when(!inline.unplaced.is_empty(), |this| {
+                this.child(notice_row(
+                    format!("CI annotations not placed ({})", inline.unplaced.len()),
+                    cx,
+                ))
+            })
+            .children(annotations)
+            .into_any_element(),
+    )
+}
+
+fn reply_for(ws: &Workspace, thread: &str, cx: &App) -> Option<Entity<TextareaState>> {
+    (ws.pull.read(cx).replying.as_deref() == Some(thread))
+        .then(|| ws.reply_input.clone())
+        .flatten()
+}
+
+fn diff_view(
+    ws: &Workspace,
+    path: &str,
+    inline: InlinePull,
+    cx: &mut Context<Workspace>,
+) -> AnyElement {
     let code = *cx.code();
     let theme = cx.theme().clone();
     let model = ws.model.read(cx);
@@ -274,8 +362,34 @@ fn diff_view(ws: &Workspace, path: &str, cx: &mut Context<Workspace>) -> AnyElem
             position(c.side, c.last_line()),
         ));
     }
+    let mut thread_groups: HashMap<String, Vec<ReviewThread>> = HashMap::new();
+    let mut thread_markers: Vec<DiffGutterMarker> = Vec::new();
+    for ((side, line), threads) in inline.threads {
+        let key = format!("threads:{side:?}:{line}");
+        annotations.push(DiffAnnotation::line(
+            SharedString::from(key.clone()),
+            position(side, line),
+        ));
+        thread_markers.push(
+            DiffGutterMarker::new(
+                SharedString::from(format!("marker-{key}")),
+                position(side, line),
+            )
+            .with_label("thread"),
+        );
+        thread_groups.insert(key, threads);
+    }
+    let mut ci_groups: HashMap<String, Vec<CheckAnnotation>> = HashMap::new();
+    for (line, list) in inline.annotations {
+        let key = format!("ci:{line}");
+        annotations.push(DiffAnnotation::line(
+            SharedString::from(key.clone()),
+            position(Side::New, line),
+        ));
+        ci_groups.insert(key, list);
+    }
     let mut decorations: Vec<DiffDecoration> = Vec::new();
-    let mut markers: Vec<DiffGutterMarker> = Vec::new();
+    let mut markers: Vec<DiffGutterMarker> = thread_markers;
     let text = model.diff.as_ref().and_then(|d| d.diff.text());
     let mut mark_range = |side: Side, start: u32, end: u32, background: Hsla| {
         decorations.push(
@@ -374,6 +488,18 @@ fn diff_view(ws: &Workspace, path: &str, cx: &mut Context<Workspace>) -> AnyElem
         input: ws.note_input.clone(),
         model: ws.model.downgrade(),
         workspace: cx.entity().downgrade(),
+        threads: thread_groups,
+        ci: ci_groups,
+        run_names: inline.run_names,
+        pull: ws.pull.downgrade(),
+        replying: ws
+            .pull
+            .read(cx)
+            .replying
+            .clone()
+            .zip(ws.reply_input.clone()),
+        thread_focus: ws.pull.read(cx).thread_focus.clone(),
+        writes_off: ws.pull.read(cx).writes_refused(),
     });
     let render_context = context.clone();
     let compose_model = ws.model.downgrade();
@@ -392,6 +518,7 @@ fn diff_view(ws: &Workspace, path: &str, cx: &mut Context<Workspace>) -> AnyElem
         .gutter_markers(markers)
         .render_gutter_marker(move |marker, _, _| {
             let is_note = marker.label() == "note";
+            let is_thread = marker.label() == "thread";
             div()
                 .id(marker.id().clone())
                 .size_full()
@@ -399,9 +526,17 @@ fn diff_view(ws: &Workspace, path: &str, cx: &mut Context<Workspace>) -> AnyElem
                 .items_center()
                 .justify_center()
                 .font_family(mono.clone())
-                .text_color(if is_note { note_color } else { moved_color })
-                .child(if is_note { "✎" } else { "⇅" })
-                .when(!is_note, |this| {
+                .text_color(if is_note || is_thread {
+                    note_color
+                } else {
+                    moved_color
+                })
+                .child(match (is_note, is_thread) {
+                    (true, _) => "✎",
+                    (_, true) => "◆",
+                    _ => "⇅",
+                })
+                .when(!is_note && !is_thread, |this| {
                     let label = marker.label().clone();
                     this.tooltip(move |window, cx| {
                         gpui_kit::component::tooltip::Tooltip::new(label.clone()).build(window, cx)
@@ -433,6 +568,13 @@ struct AnnotationContext {
     input: Option<Entity<TextareaState>>,
     model: WeakEntity<ReviewModel>,
     workspace: WeakEntity<Workspace>,
+    threads: HashMap<String, Vec<ReviewThread>>,
+    ci: HashMap<String, Vec<CheckAnnotation>>,
+    run_names: HashMap<u64, String>,
+    pull: WeakEntity<crate::state::PullModel>,
+    replying: Option<(String, Entity<TextareaState>)>,
+    thread_focus: Option<String>,
+    writes_off: Option<&'static str>,
 }
 
 impl AnnotationContext {
@@ -451,6 +593,40 @@ impl AnnotationContext {
                 ),
                 _ => div().into_any_element(),
             };
+        }
+        if let Some(threads) = self.threads.get(name.as_ref()) {
+            return v_flex()
+                .children(threads.iter().map(|thread| {
+                    let reply = self
+                        .replying
+                        .as_ref()
+                        .filter(|(id, _)| *id == thread.id)
+                        .map(|(_, input)| input.clone());
+                    thread_card(
+                        ThreadView {
+                            thread,
+                            focused: self.thread_focus.as_deref() == Some(thread.id.as_str()),
+                            show_where: false,
+                            reply,
+                            writes_off: self.writes_off,
+                        },
+                        self.pull.clone(),
+                        self.workspace.clone(),
+                        cx,
+                    )
+                }))
+                .into_any_element();
+        }
+        if let Some(list) = self.ci.get(name.as_ref()) {
+            return v_flex()
+                .children(list.iter().map(|a| {
+                    annotation_card(
+                        a,
+                        self.run_names.get(&a.check_run_id).map(String::as_str),
+                        cx,
+                    )
+                }))
+                .into_any_element();
         }
         match self.notes.get(name.as_ref()) {
             Some(note) => note_card::note_card(

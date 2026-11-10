@@ -36,6 +36,16 @@ pub fn render(
     let listed = model.visible.len();
     let tab = model.tab;
     let checks = model.checklists.progress(&review.state);
+    let is_pull = review.pull.is_some();
+    let open_threads = ws
+        .pull
+        .read(cx)
+        .threads()
+        .iter()
+        .filter(|t| !t.is_resolved)
+        .count();
+    let ci_icon = crate::views::pull::ci::chip(ws.pull.read(cx), cx).map(|c| c.0);
+    let pull_summary = crate::views::pull::summary::render(ws, cx);
 
     let row = |label: &'static str, value: AnyElement| {
         h_flex()
@@ -61,10 +71,12 @@ pub fn render(
         .py(code.metrics.pad_y)
         .gap_0p5()
         .font_family(theme.mono_font_family.clone())
-        .child(row(
-            "branch",
-            div().child(review.branch_label()).into_any_element(),
-        ))
+        .when(!is_pull, |this| {
+            this.child(row(
+                "branch",
+                div().child(review.branch_label()).into_any_element(),
+            ))
+        })
         .child(row(
             "base",
             div()
@@ -207,6 +219,20 @@ pub fn render(
             format!("notes {open}"),
             SidebarTab::Notes,
         ))
+        .when(is_pull, |this| {
+            this.child(div().w(px(1.)).h_full().bg(theme.border))
+                .child(tab_button(
+                    "tab-threads",
+                    format!("threads {open_threads}"),
+                    SidebarTab::Threads,
+                ))
+                .child(div().w(px(1.)).h_full().bg(theme.border))
+                .child(tab_button(
+                    "tab-ci",
+                    format!("ci {}", ci_icon.unwrap_or("…")),
+                    SidebarTab::Ci,
+                ))
+        })
         .child(div().w(px(1.)).h_full().bg(theme.border))
         .child(tab_button(
             "tab-checks",
@@ -222,6 +248,8 @@ pub fn render(
         SidebarTab::Files => files::render(ws, window, cx).into_any_element(),
         SidebarTab::Notes => notes_panel::render(ws, window, cx).into_any_element(),
         SidebarTab::Checks => checklists::render(ws, window, cx).into_any_element(),
+        SidebarTab::Threads => crate::views::pull::threads::render_tab(ws, cx),
+        SidebarTab::Ci => crate::views::pull::ci::render_tab(ws, cx),
     };
 
     v_flex()
@@ -232,6 +260,7 @@ pub fn render(
         .bg(theme.sidebar)
         .border_r_1()
         .border_color(theme.sidebar_border)
+        .children(pull_summary)
         .child(summary)
         .child(modes)
         .child(agent_bar)

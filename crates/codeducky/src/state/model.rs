@@ -25,6 +25,10 @@ pub enum SidebarTab {
     Files,
     Notes,
     Checks,
+    /// A pull request's review threads.
+    Threads,
+    /// A pull request's CI.
+    Ci,
 }
 
 /// What the main pane shows for the selected file.
@@ -274,7 +278,7 @@ impl ReviewModel {
         );
     }
 
-    fn show_review(&mut self, review: Review, cx: &mut Context<Self>) {
+    pub(super) fn show_review(&mut self, review: Review, cx: &mut Context<Self>) {
         if let Some(problem) = &review.notes_problem {
             self.fail(format!("notes: {problem}"), cx);
         } else {

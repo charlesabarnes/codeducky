@@ -96,6 +96,24 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
             .child(
                 v_flex()
                     .gap_1()
+                    .child(muted("pull requests on GitHub", cx))
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .child(Button::new("open-inbox").label("Inbox").small().on_click(
+                                |_, w, cx| {
+                                    w.dispatch_action(Box::new(crate::keymap::OpenInbox), cx)
+                                },
+                            ))
+                            .child(muted(
+                                "pull requests waiting on you; or paste a link there (g i)",
+                                cx,
+                            )),
+                    ),
+            )
+            .child(
+                v_flex()
+                    .gap_1()
                     .child(muted(format!("recent on {on_label}"), cx))
                     .children(recent_rows)
                     .when(empty, |this| this.child(muted("nothing yet", cx).px_2())),

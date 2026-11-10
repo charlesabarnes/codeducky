@@ -68,12 +68,32 @@ actions!(
         ToggleEditor,
         SaveFile,
         RevertFile,
+        OpenInbox,
+        CloseInbox,
+        InboxNext,
+        InboxPrev,
+        InboxOpen,
+        InboxFocusInput,
+        RefreshInbox,
+        GitHubSettings,
+        OpenBranchPull,
+        PushNotes,
+        SubmitReview,
+        NextThread,
+        PrevThread,
+        ReplyThread,
+        ResolveThread,
+        ThreadsTab,
+        CiTab,
     ]
 );
 
 /// Single-key shortcuts must not fire while typing in a field or a terminal.
 pub const REVIEW: &str = "Review && !Input && !Terminal && !Dialog";
 pub const NOTE_EDITOR: &str = "NoteEditor";
+pub const INBOX: &str = "Inbox && !Input && !Dialog";
+/// Works on the review and on the inbox.
+pub const ANYWHERE: &str = "(Review || Inbox) && !Input && !Terminal && !Dialog";
 pub const DIALOG: &str = "Dialog";
 pub const FILE_EDITOR: &str = "FileEditor";
 
@@ -154,6 +174,23 @@ pub const HELP: &[Shortcut] = &[
     s("d", "Dismiss the note at or near the focus", "Notes"),
     s(secondary!("enter"), "Save the note", "Note editor"),
     s("escape", "Cancel the note", "Note editor"),
+    s("t / T", "Next / previous review thread", "Pull request"),
+    s("R", "Reply to the current thread", "Pull request"),
+    s(
+        "X",
+        "Resolve or unresolve the current thread",
+        "Pull request",
+    ),
+    s("g t", "Threads tab", "Pull request"),
+    s("g x", "CI tab: checks and annotations", "Pull request"),
+    s("g p", "Push notes to your pending review", "Pull request"),
+    s("g s", "Submit your review", "Pull request"),
+    s("g o", "Open the branch's pull request", "Pull request"),
+    s("g i", "Inbox: pull requests waiting on you", "Inbox"),
+    s("j / k", "Next / previous pull request (inbox)", "Inbox"),
+    s("enter", "Open the highlighted pull request", "Inbox"),
+    s("o", "Open a pull request by URL or owner/repo#123", "Inbox"),
+    s(secondary!("r"), "Refresh the inbox", "Inbox"),
     s(
         "v",
         "Toggle viewed, then go to the next unviewed file",
@@ -288,5 +325,23 @@ pub fn bind(cx: &mut App) {
         KeyBinding::new("shift-e", ToggleEditor, review),
         KeyBinding::new(LEAVE_EDITOR_KEYS, ToggleEditor, Some(FILE_EDITOR)),
         KeyBinding::new(SAVE_FILE_KEYS, SaveFile, Some(FILE_EDITOR)),
+        KeyBinding::new("g i", OpenInbox, Some(ANYWHERE)),
+        KeyBinding::new("escape", CloseInbox, Some(INBOX)),
+        KeyBinding::new("j", InboxNext, Some(INBOX)),
+        KeyBinding::new("k", InboxPrev, Some(INBOX)),
+        KeyBinding::new("down", InboxNext, Some(INBOX)),
+        KeyBinding::new("up", InboxPrev, Some(INBOX)),
+        KeyBinding::new("enter", InboxOpen, Some(INBOX)),
+        KeyBinding::new("o", InboxFocusInput, Some(INBOX)),
+        KeyBinding::new(secondary!("r"), RefreshInbox, Some("Inbox")),
+        KeyBinding::new("g o", OpenBranchPull, review),
+        KeyBinding::new("g p", PushNotes, review),
+        KeyBinding::new("g s", SubmitReview, review),
+        KeyBinding::new("t", NextThread, review),
+        KeyBinding::new("shift-t", PrevThread, review),
+        KeyBinding::new("shift-r", ReplyThread, review),
+        KeyBinding::new("shift-x", ResolveThread, review),
+        KeyBinding::new("g t", ThreadsTab, review),
+        KeyBinding::new("g x", CiTab, review),
     ]);
 }

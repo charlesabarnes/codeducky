@@ -4,7 +4,9 @@ use gpui_kit::component::{ActiveTheme, TitleBar, h_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use crate::keymap::{ChangeBase, PickMachine, Refresh, ToggleHelp};
+use crate::keymap::{
+    ChangeBase, CiTab, GitHubSettings, OpenBranchPull, PickMachine, Refresh, ToggleHelp,
+};
 use crate::theme::ActiveCode;
 use crate::views::machines::{machine_label, state_dot};
 use crate::views::widgets::{key_hint, short_rev, short_sha};
@@ -17,6 +19,7 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
         .read(cx)
         .review
         .as_ref()
+        .filter(|r| r.repo().is_some())
         .map(|r| r.request.machine.clone());
     let machine_chip = review_machine.map(|machine| {
         let state = machine
@@ -34,6 +37,16 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
             .child(format!("on {}", machine_label(machine.as_deref())))
             .on_click(|_, window, cx| window.dispatch_action(Box::new(PickMachine), cx))
     });
+    let pull_chip = pull_chip(ws, cx);
+    let github_label = ws.github.read(cx).status_label();
+    let github_unhappy = !matches!(
+        ws.github.read(cx).status,
+        ducky_session::github::GitHubStatus::SignedIn {
+            scope_hint: None,
+            ..
+        } | ducky_session::github::GitHubStatus::Unchecked
+            | ducky_session::github::GitHubStatus::Checking
+    );
     let model = ws.model.read(cx);
     let theme = cx.theme();
     let code = cx.code();
@@ -98,6 +111,7 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
             )
             .children(location)
             .children(machine_chip)
+            .children(pull_chip)
             .child(div().flex_1())
             .when(model.review.is_some(), |this| {
                 this.child(
@@ -110,6 +124,18 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
                         .on_click(|_, window, cx| window.dispatch_action(Box::new(Refresh), cx)),
                 )
             })
+            .child(
+                div()
+                    .id("github-status")
+                    .cursor_pointer()
+                    .text_color(if github_unhappy {
+                        code.modified
+                    } else {
+                        theme.muted_foreground
+                    })
+                    .child(github_label)
+                    .on_click(|_, window, cx| window.dispatch_action(Box::new(GitHubSettings), cx)),
+            )
             .child(
                 div()
                     .text_color(if local_only {
@@ -128,5 +154,44 @@ pub fn render(ws: &mut Workspace, _: &mut Window, cx: &mut Context<Workspace>) -
                     .child(key_hint("?", cx))
                     .on_click(|_, window, cx| window.dispatch_action(Box::new(ToggleHelp), cx)),
             ),
+    )
+}
+
+/// On a pull request: its CI. On a branch with an open pull request: a chip that opens it.
+fn pull_chip(ws: &Workspace, cx: &App) -> Option<AnyElement> {
+    let code = cx.code();
+    let pull = ws.pull.read(cx);
+    if pull.context().is_some() {
+        let (icon, text, color) = crate::views::pull::ci::chip(pull, cx)?;
+        return Some(
+            h_flex()
+                .id("ci-chip")
+                .gap_1()
+                .px_1()
+                .rounded(cx.theme().radius)
+                .cursor_pointer()
+                .text_color(color)
+                .hover(|this| this.bg(code.bg_3))
+                .child(icon)
+                .child(text)
+                .on_click(|_, window, cx| window.dispatch_action(Box::new(CiTab), cx))
+                .into_any_element(),
+        );
+    }
+    let (_, pr) = pull.branch_pull.as_ref()?;
+    Some(
+        h_flex()
+            .id("branch-pr")
+            .gap_1()
+            .px_1()
+            .rounded(cx.theme().radius)
+            .border_1()
+            .border_color(code.accent.opacity(0.6))
+            .cursor_pointer()
+            .hover(|this| this.bg(code.bg_3))
+            .child(format!("this branch has PR #{}: review it", pr.number))
+            .child(key_hint("g o", cx))
+            .on_click(|_, window, cx| window.dispatch_action(Box::new(OpenBranchPull), cx))
+            .into_any_element(),
     )
 }

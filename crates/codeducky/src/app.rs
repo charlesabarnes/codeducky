@@ -3,7 +3,7 @@ use gpui_kit::*;
 
 use crate::config;
 use crate::keymap::{self, Quit};
-use crate::state::ReviewModel;
+use crate::state::{GitHubModel, ReviewModel};
 use crate::views::workspace::Workspace;
 
 pub const TITLE: &str = "Code Ducky";
@@ -14,6 +14,10 @@ pub fn run() {
     let mut script = crate::dev::Script::from_args();
     #[cfg(feature = "screenshot")]
     let core_target = script.core_target();
+    #[cfg(feature = "screenshot")]
+    let github_setup = script.github_setup();
+    #[cfg(not(feature = "screenshot"))]
+    let github_setup = crate::state::github::GitHubSetup::real();
 
     gpui_kit::application().run(move |cx| {
         gpui_kit::init(cx);
@@ -44,7 +48,8 @@ pub fn run() {
         })
         .detach();
 
-        let workspace = open_main_window(model.clone(), cx);
+        let github = cx.new(|_| GitHubModel::new(github_setup.clone()));
+        let workspace = open_main_window(model.clone(), github, cx);
         cx.activate(true);
 
         #[cfg(feature = "screenshot")]
@@ -54,7 +59,11 @@ pub fn run() {
     });
 }
 
-fn open_main_window(model: Entity<ReviewModel>, cx: &mut App) -> Entity<Workspace> {
+fn open_main_window(
+    model: Entity<ReviewModel>,
+    github: Entity<GitHubModel>,
+    cx: &mut App,
+) -> Entity<Workspace> {
     let (width, height) = model.read(cx).prefs.window.unwrap_or(DEFAULT_SIZE);
     let options = WindowOptions {
         titlebar: Some(TitlebarOptions {
@@ -69,7 +78,7 @@ fn open_main_window(model: Entity<ReviewModel>, cx: &mut App) -> Entity<Workspac
         ..TitleBar::window_options()
     };
     gpui_kit::open_window(options, cx, |window, cx| {
-        cx.new(|cx| Workspace::new(model, window, cx))
+        cx.new(|cx| Workspace::new(model, github, window, cx))
     })
     .expect("failed to open the main window")
     .1

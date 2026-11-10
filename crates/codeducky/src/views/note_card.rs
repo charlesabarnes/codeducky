@@ -132,6 +132,9 @@ pub fn note_card(
                     .child(status_label),
             )
         })
+        .when(note.github.is_some(), |this| {
+            this.child(div().text_color(code.moved).child("on GitHub"))
+        })
         .when(changed, |this| this.child(changed_mark(cx)))
         .child(div().flex_1())
         .child(action(key("edit"), "edit", "e", cx, edit))

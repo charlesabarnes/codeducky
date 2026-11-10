@@ -14,7 +14,8 @@ use crate::config::DiffMode;
 use crate::keymap::*;
 use crate::state::cursor::LinePos;
 use crate::state::{
-    AgentsModel, MachinesEvent, MachinesModel, ModelEvent, NoteAction, ReviewModel, SidebarTab,
+    AgentsModel, GitHubModel, MachinesEvent, MachinesModel, ModelEvent, NoteAction, PullModel,
+    ReviewModel, SidebarTab,
 };
 use crate::theme::{self, Look};
 use crate::views::agents::handoff_dialog::HandOffDialog;
@@ -25,7 +26,10 @@ use crate::views::editor_pane::EditorPane;
 use crate::views::machines::add_dialog::AddMachineDialog;
 use crate::views::machines::browser::FolderBrowser;
 use crate::views::machines::rename_dialog::RenameMachineDialog;
-use crate::views::{diff_pane, help, palette, sidebar, start, status_bar, title};
+use crate::views::pull::push_dialog::PushDialog;
+use crate::views::pull::settings::GitHubSettingsDialog;
+use crate::views::pull::submit_dialog::SubmitReviewDialog;
+use crate::views::{diff_pane, help, inbox, palette, sidebar, start, status_bar, title};
 
 /// The one dialog open over the window.
 pub enum Dialog {
@@ -35,6 +39,9 @@ pub enum Dialog {
     RenameMachine(Entity<RenameMachineDialog>),
     Browse(Entity<FolderBrowser>),
     Checklists(Entity<ChecklistManager>),
+    PushNotes(Entity<PushDialog>),
+    SubmitReview(Entity<SubmitReviewDialog>),
+    GitHubSettings(Entity<GitHubSettingsDialog>),
 }
 
 impl Dialog {
@@ -46,6 +53,9 @@ impl Dialog {
             Self::RenameMachine(d) => d.clone().into(),
             Self::Browse(d) => d.clone().into(),
             Self::Checklists(d) => d.clone().into(),
+            Self::PushNotes(d) => d.clone().into(),
+            Self::SubmitReview(d) => d.clone().into(),
+            Self::GitHubSettings(d) => d.clone().into(),
         }
     }
 }
@@ -54,6 +64,13 @@ const MIN_PANEL: f32 = 120.;
 
 pub struct Workspace {
     pub model: Entity<ReviewModel>,
+    pub github: Entity<GitHubModel>,
+    pub pull: Entity<PullModel>,
+    /// The inbox's "open a pull request" field.
+    pub pr_input: Entity<InputState>,
+    pub pr_input_error: Option<String>,
+    /// The reply box of the thread being answered.
+    pub reply_input: Option<Entity<TextareaState>>,
     pub agents: Entity<AgentsModel>,
     pub machines: Entity<MachinesModel>,
     pub panel: Entity<AgentsPanel>,
@@ -89,7 +106,16 @@ pub fn side_from(side: DiffSide) -> Side {
 }
 
 impl Workspace {
-    pub fn new(model: Entity<ReviewModel>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        model: Entity<ReviewModel>,
+        github: Entity<GitHubModel>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let pull = cx.new(|_| PullModel::new());
+        let pr_input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder("Open a pull request: URL or owner/repo#123")
+        });
         let diff_state = cx.new(|cx| DiffState::new([], cx).with_expansion_lines(20));
         let filter_input = cx.new(|cx| InputState::new(window, cx).placeholder("filter files"));
         let path_input =
@@ -103,10 +129,29 @@ impl Workspace {
             cx.subscribe_in(&machines, window, Self::on_machines_event),
             cx.observe(&machines, |_, _, cx| cx.notify()),
             cx.observe_window_activation(window, |this, window, cx| {
-                if window.is_window_active() && this.model.read(cx).review.is_some() {
+                let active = window.is_window_active();
+                if active && this.model.read(cx).review.is_some() {
                     this.model.update(cx, |m, cx| m.reload_notes(true, cx));
                 }
+                this.pull.update(cx, |p, cx| p.set_active(active, cx));
             }),
+            cx.observe(&github, |_, _, cx| cx.notify()),
+            cx.observe(&pull, |_, _, cx| cx.notify()),
+            cx.subscribe_in(&pull, window, |this, _, event, window, cx| {
+                this.on_pull_event(event, window, cx)
+            }),
+            cx.subscribe_in(&github, window, |this, _, event, window, cx| {
+                this.on_github_event(event, window, cx)
+            }),
+            cx.subscribe_in(
+                &pr_input,
+                window,
+                |this, _, event: &InputEvent, window, cx| {
+                    if matches!(event, InputEvent::PressEnter { .. }) {
+                        this.open_pr_input(window, cx);
+                    }
+                },
+            ),
             cx.observe_window_appearance(window, |this, window, cx| {
                 this.apply_look(Some(window), cx);
             }),
@@ -142,6 +187,11 @@ impl Workspace {
         window.focus(&focus, cx);
         let mut this = Self {
             model,
+            github,
+            pull,
+            pr_input,
+            pr_input_error: None,
+            reply_input: None,
             agents,
             machines,
             panel,
@@ -200,11 +250,17 @@ impl Workspace {
             }
             ModelEvent::Connected => {
                 let connection = self.model.read(cx).connection.clone();
+                if let Some(host) = connection.as_ref().and_then(|c| c.host(None).ok()) {
+                    self.github.update(cx, |g, _| g.set_local_host(host));
+                }
                 self.machines
                     .update(cx, |m, cx| m.set_connection(connection.as_ref(), cx));
                 self.follow_review(cx);
             }
-            ModelEvent::ReviewOpened => self.follow_review(cx),
+            ModelEvent::ReviewOpened => {
+                self.follow_review(cx);
+                self.follow_pull(cx);
+            }
         }
     }
 
@@ -840,6 +896,7 @@ impl Workspace {
             cx.notify();
         });
         self.follow_review(cx);
+        self.follow_pull(cx);
         self.machines.update(cx, |m, cx| m.refresh(cx));
         self.diff_state
             .update(cx, |state, cx| state.set_files([], cx));
@@ -883,12 +940,15 @@ impl Focusable for Workspace {
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let has_review = self.model.read(cx).review.is_some();
+        let inbox_open = self.github.read(cx).inbox_open;
         let show_help = self.model.read(cx).show_help;
         let show_base_picker = self.model.read(cx).show_base_picker;
         let (background, foreground) = (cx.theme().background, cx.theme().foreground);
         let text_size = crate::theme::ActiveCode::code(&**cx).metrics.text;
         let panel = self.model.read(cx).prefs.agents;
-        let body = if has_review {
+        let body = if inbox_open {
+            inbox::render(self, window, cx).into_any_element()
+        } else if has_review {
             let border = cx.theme().border;
             h_flex()
                 .flex_1()
@@ -905,6 +965,7 @@ impl Render for Workspace {
                                 .min_h_0()
                                 .flex()
                                 .flex_col()
+                                .children(crate::views::pull::banner::head_moved(self, cx))
                                 .child(diff_pane::render(self, window, cx)),
                         )
                         .when(panel.open, |this| {
@@ -937,8 +998,9 @@ impl Render for Workspace {
             start::render(self, window, cx).into_any_element()
         };
         let window_height = f32::from(window.bounds().size.height);
+        let root = self.bind_actions(cx).id("workspace");
         let root = self
-            .bind_actions(cx)
+            .bind_pull_actions(root, cx)
             .on_mouse_move(cx.listener(move |this, event: &MouseMoveEvent, _, cx| {
                 let Some((start, height)) = this.panel_drag else {
                     return;
@@ -958,8 +1020,7 @@ impl Render for Workspace {
                     }
                 }),
             )
-            .id("workspace")
-            .key_context("Review")
+            .key_context(if inbox_open { "Inbox" } else { "Review" })
             .track_focus(&self.focus)
             .size_full()
             .relative()

@@ -22,7 +22,15 @@ impl Workspace {
         let (Some(review), Some(entry)) = (model.review.as_ref(), model.current_entry()) else {
             return;
         };
-        let (repo, entry) = (review.repo.clone(), entry.clone());
+        let entry = entry.clone();
+        let Some(repo) = review.repo().cloned() else {
+            let text = format!(
+                "cannot edit here: {}",
+                ducky_session::NotEditable::NoCheckout
+            );
+            self.model.update(cx, |m, cx| m.fail(text, cx));
+            return;
+        };
         let line = match (
             model.cursor,
             model.diff.as_ref().and_then(|d| d.diff.text()),
