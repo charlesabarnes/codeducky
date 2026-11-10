@@ -21,7 +21,7 @@
 //!           [--ask review|fix|message] [--start-dialog]
 //!           [--add-machine-dialog [--add-machine-target <t>]] [--machine-menu]
 //!           [--rename-machine <name>] [--forget-machine <name>]
-//!           [--browse-machine <name> [--browse-path <path>]]
+//!           [--browse-machine <name> [--browse-path <path>]] [--stop-core]
 //! ```
 //!
 //! Any of these flags keeps preferences from being written. `--scratch` starts a throwaway

@@ -56,6 +56,7 @@ pub struct Steps {
     browse_machine: Option<String>,
     browse_path: Option<String>,
     focus_terminal: bool,
+    stop_core: bool,
 }
 
 impl Steps {
@@ -112,6 +113,7 @@ impl Steps {
             "--browse-machine" => self.browse_machine = Some(value()),
             "--browse-path" => self.browse_path = Some(value()),
             "--focus-terminal" => self.focus_terminal = true,
+            "--stop-core" => self.stop_core = true,
             _ => return false,
         }
         true
@@ -306,6 +308,13 @@ impl Steps {
                     cx.notify();
                 })
             });
+        }
+        if self.stop_core {
+            scratch::stop_first();
+            wait(cx, "the disconnect", |cx| {
+                matches!(agents.read(cx).line, Line::Disconnected { .. })
+            })
+            .await;
         }
         if self.machine_menu {
             ui(cx, &|ws, _, cx| {

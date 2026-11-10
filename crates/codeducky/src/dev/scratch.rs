@@ -47,3 +47,10 @@ pub fn add_template(name: &str, command: &str) -> Result<(), String> {
     );
     std::fs::write(dir.join(format!("{name}.md")), text).map_err(|e| e.to_string())
 }
+
+/// Stops the first scratch core but keeps its folder (`--stop-core`), to see a disconnect.
+pub fn stop_first() {
+    if let Some(core) = cores().first() {
+        core.stop();
+    }
+}
