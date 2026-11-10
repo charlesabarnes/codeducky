@@ -15,7 +15,9 @@ cargo test --workspace
 cargo run -p codeducky --features screenshot -- --screenshot /tmp/codeducky.png
 ```
 
-`--screenshot` renders the window through GPUI's test-support renderer and quits. Use it to see the
+`--screenshot` renders the window through GPUI's test-support renderer and quits. The same
+feature scripts the app into a state first (`--open <repo> --select <file> --mode split
+--compose 10-12 --keys "n c" ...`); the full flag list is in `crates/codeducky/src/dev/mod.rs`. Use it to see the
 UI when the screen is locked or there is no Screen Recording permission. It is dev only, behind the
 `screenshot` feature.
 
@@ -29,6 +31,7 @@ UI when the screen is locked or there is no Screen Recording permission. It is d
 | `crates/ducky-hc` | herdr-core JSON-RPC client; implements `Host` per machine |
 | `crates/ducky-git` | The git CLI over `Host`, diff parsing |
 | `crates/ducky-notes` | Notes and review state files over `Host` |
+| `crates/ducky-session` | What the UI talks to: connection (hc or local only), review, file diffs, notes, file tree |
 | `crates/ducky-github` | GitHub inbox, PR diffs, threads, CI |
 | `crates/ducky-terminal` | hc attach stream, libghostty-vt, GPUI cell renderer |
 | `xtask` | `cargo xtask fetch-ghostty` |
