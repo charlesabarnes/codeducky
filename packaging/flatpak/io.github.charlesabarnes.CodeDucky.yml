@@ -16,16 +16,18 @@ finish-args:
   - --filesystem=~/.local/state/herdr-core
   - --filesystem=~/.config/herdr-core:ro
 
+# Every module's strip pass walks all of /app and corrupts the prebuilt toolchain's shared
+# libraries, so stripping is off throughout; the app binary is stripped by hand.
+build-options:
+  strip: false
+  no-debuginfo: true
+
 # The toolchains are pinned tarballs rather than SDK extensions: libghostty-vt 1.0 needs Zig 0.17
 # exactly, and rust-toolchain.toml pins a Rust newer than the rust-stable extension may carry.
 # Both are removed from the final app by their module's cleanup.
 modules:
   - name: rust
     buildsystem: simple
-    # flatpak-builder's strip pass corrupts the prebuilt toolchain's shared libraries.
-    build-options:
-      strip: false
-      no-debuginfo: true
     only-arches: [x86_64]
     cleanup: ['*']
     sources:
@@ -37,9 +39,6 @@ modules:
 
   - name: zig
     buildsystem: simple
-    build-options:
-      strip: false
-      no-debuginfo: true
     only-arches: [x86_64]
     cleanup: ['*']
     sources:
@@ -88,7 +87,7 @@ modules:
     build-commands:
       - cargo --offline fetch --locked
       - cargo --offline build --release --locked -p codeducky
-      - install -Dm755 target/release/codeducky /app/bin/codeducky
+      - install -Dm755 -s target/release/codeducky /app/bin/codeducky
       - install -Dm644 packaging/flatpak/io.github.charlesabarnes.CodeDucky.desktop -t /app/share/applications
       - install -Dm644 packaging/flatpak/io.github.charlesabarnes.CodeDucky.metainfo.xml -t /app/share/metainfo
       - >-
