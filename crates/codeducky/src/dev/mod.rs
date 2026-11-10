@@ -32,6 +32,15 @@
 //!           [--checklists-manager [--checklist-form "<title>:<item>;<item>"]]
 //!           [--edit [--edit-text <text, \n for newlines>] [--disk-write <path>=<text>]
 //!            [--save-file] [--leave-editor]]
+//!
+//!   GitHub (writes only against a fake; without one a run reads charlesabarnes/codeducky only):
+//!           [--fake-github [--fake-auth ok|signed-out|missing-scopes] | --github-base-url <url>]
+//!           [--inbox [--inbox-cursor <n>]] [--open-pr <url|owner/repo#n>] [--open-branch-pr]
+//!           [--pr-note <path>:<line>:<text>]... [--tab threads|ci] [--focus-thread <id>]
+//!           [--reply-thread <id> [--reply-text <md>] [--send-reply]] [--resolve-thread <id>]
+//!           [--push-dialog] [--push] [--submit-dialog [--submit-event comment|approve|
+//!            request-changes] [--submit-body <md>] [--submit-review]] [--head-move]
+//!           [--github-settings [--paste-token <t>]]
 //! ```
 //!
 //! `--mark-viewed` and `--mark-reviewed` write the repo's review state, and global checklists
@@ -42,6 +51,7 @@
 //! herdr-core (and `--scratch-machine` a second one, added as a machine through a local `via`
 //! command); both stop, and their folders go, when the run ends.
 
+mod github;
 mod modes;
 mod scratch;
 mod screenshot;

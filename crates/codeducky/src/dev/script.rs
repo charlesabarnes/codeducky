@@ -7,6 +7,7 @@ use ducky_review::{NoteId, NoteStatus, Side};
 use ducky_session::ReviewRequest;
 use gpui_kit::*;
 
+use super::github::GitHubSteps;
 use super::modes::ModeSteps;
 use super::scratch;
 use super::steps::Steps;
@@ -50,6 +51,7 @@ pub struct Script {
     screenshot: Option<PathBuf>,
     steps: Steps,
     modes: ModeSteps,
+    github: GitHubSteps,
     any: bool,
 }
 
@@ -97,6 +99,8 @@ impl Script {
                         "files" => Some(SidebarTab::Files),
                         "notes" => Some(SidebarTab::Notes),
                         "checks" => Some(SidebarTab::Checks),
+                        "threads" => Some(SidebarTab::Threads),
+                        "ci" => Some(SidebarTab::Ci),
                         _ => None,
                     }))
                 }
@@ -151,6 +155,7 @@ impl Script {
                 other => {
                     if !script.steps.parse(other, &mut value)
                         && !script.modes.parse(other, &mut value)
+                        && !script.github.parse(other, &mut value)
                     {
                         fail(format!("unknown flag {other}"))
                     }
@@ -184,6 +189,10 @@ impl Script {
         }
         self.steps.apply_prefs(prefs);
         self.any
+    }
+
+    pub fn github_setup(&self) -> crate::state::github::GitHubSetup {
+        self.github.setup(self.any)
     }
 
     pub fn core_target(&mut self) -> Option<ducky_session::CoreTarget> {
@@ -258,6 +267,16 @@ pub fn run(script: Script, model: Entity<ReviewModel>, workspace: Entity<Workspa
                 );
             });
             script.modes.before_view(&model, cx).await;
+        }
+        if let Some(window) = cx.update(|cx| cx.windows().first().copied()) {
+            script
+                .github
+                .before_view(window, &workspace, &model, cx)
+                .await;
+            let opened_pull = cx.update(|cx| model.read(cx).review.is_some());
+            if script.open.is_none() && opened_pull {
+                script.modes.before_view(&model, cx).await;
+            }
         }
         cx.update(|cx| {
             model.update(cx, |m, cx| {
@@ -356,6 +375,10 @@ pub fn run(script: Script, model: Entity<ReviewModel>, workspace: Entity<Workspa
                 .after_view(window, &workspace, &model, cx)
                 .await;
             script.steps.after_open(window, &workspace, cx).await;
+            script
+                .github
+                .after_view(window, &workspace, &model, cx)
+                .await;
         }
         for key in &script.keys {
             let keystroke: &'static str = Box::leak(key.clone().into_boxed_str());
