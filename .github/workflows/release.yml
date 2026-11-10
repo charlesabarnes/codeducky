@@ -3,6 +3,7 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -32,13 +33,14 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Build
         run: packaging/flatpak/build.sh
-      - run: mv target/flatpak/codeducky.flatpak "CodeDucky-${GITHUB_REF_NAME#v}-linux-x86_64.flatpak"
+      - run: mv target/flatpak/codeducky.flatpak "CodeDucky-$(echo "${GITHUB_REF_NAME#v}" | tr / -)-linux-x86_64.flatpak"
       - uses: actions/upload-artifact@v4
         with:
           name: flatpak
           path: '*.flatpak'
 
   release:
+    if: github.ref_type == 'tag'
     needs: [macos, flatpak]
     runs-on: ubuntu-latest
     steps:
