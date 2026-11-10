@@ -6,6 +6,9 @@
 //! - Every attach gets a fresh emulator: the repaint resets the screen, not our scrollback.
 //! - Attaching while the program is on the alternate screen replays only that screen, so when
 //!   it leaves the alternate screen we attach again to fetch the main screen and history.
+//! - For the same reason, a width change on the main screen of at least a quarter of the attach
+//!   width (and at least [`REFLOW_MIN_COLS`]) attaches again instead of resizing, so the source
+//!   replays history wrapped at the new width. Smaller changes just resize.
 
 use libghostty_vt::focus;
 use libghostty_vt::paste;
@@ -42,6 +45,8 @@ pub enum PasteOutcome {
     Rejected,
 }
 
+const REFLOW_MIN_COLS: u16 = 8;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Phase {
     WaitingForSize,
@@ -60,6 +65,8 @@ pub struct Session {
     options: SessionOptions,
     phase: Phase,
     grid: Option<GridSize>,
+    /// The width the current stream was attached at: its replayed history is wrapped there.
+    attached_cols: Option<u16>,
     /// The program's size when another viewer set it; we render that grid letterboxed.
     program_size: Option<(u16, u16)>,
     terminal: Option<(Emulator, EffectsHandle)>,
@@ -78,6 +85,7 @@ impl Session {
             options,
             phase: Phase::WaitingForSize,
             grid: None,
+            attached_cols: None,
             program_size: None,
             terminal: None,
             stream: None,
@@ -139,6 +147,7 @@ impl Session {
         self.grid = Some(size);
         match self.phase {
             Phase::WaitingForSize => self.attach(),
+            Phase::Attached if self.needs_reflow(size.cols) => self.attach(),
             Phase::Attached => {
                 self.program_size = None;
                 self.resize_emulator(size.cols, size.rows);
@@ -147,6 +156,17 @@ impl Session {
             }
             Phase::Closed => Ok(()),
         }
+    }
+
+    fn needs_reflow(&self, cols: u16) -> bool {
+        let Some(attached) = self.attached_cols else {
+            return false;
+        };
+        let on_main = self
+            .terminal()
+            .is_some_and(|t| matches!(t.active_screen(), Ok(Screen::Primary)));
+        let threshold = (attached / 4).max(REFLOW_MIN_COLS);
+        self.options.history > 0 && on_main && cols.abs_diff(attached) >= threshold
     }
 
     /// Detaches and attaches again, replaying the screen and `history` lines.
@@ -173,6 +193,7 @@ impl Session {
         self.stream = Some(rx);
         self.generation += 1;
         self.phase = Phase::Attached;
+        self.attached_cols = Some(size.cols);
         self.program_size = None;
         self.attached_on_alt = None;
         if let Some(focused) = self.focused {
@@ -432,10 +453,49 @@ mod tests {
         assert_eq!(attaches[0].history, 500);
         assert_eq!(attaches[0].display.cell_width, 8);
 
-        let bigger = GridSize { cols: 80, ..GRID };
-        session.set_grid(bigger).unwrap();
+        let wider = GridSize { cols: 44, ..GRID };
+        session.set_grid(wider).unwrap();
         assert_eq!(handle.attaches().len(), 1);
-        assert!(handle.take_sent().contains(&ViewerMessage::Resize(bigger)));
+        assert!(handle.take_sent().contains(&ViewerMessage::Resize(wider)));
+    }
+
+    #[test]
+    fn a_large_width_change_on_the_main_screen_reattaches_to_rewrap_history() {
+        let (mut session, handle) = session();
+        session.set_grid(GRID).unwrap();
+        let rx = session.take_stream().unwrap();
+        handle.output(b"$ prompt");
+        pump(&mut session, &rx);
+
+        session.set_grid(GridSize { cols: 47, ..GRID }).unwrap();
+        assert_eq!(handle.attaches().len(), 1, "7 columns: resize only");
+
+        let wide = GridSize { cols: 80, ..GRID };
+        session.set_grid(wide).unwrap();
+        let attaches = handle.attaches();
+        assert_eq!(attaches.len(), 2);
+        assert_eq!(attaches[1].size, wide);
+        assert!(!handle.take_sent().contains(&ViewerMessage::Resize(wide)));
+
+        let rx = session.take_stream().unwrap();
+        handle.output(b"$ vim");
+        handle.output(b"\x1b[?1049h");
+        pump(&mut session, &rx);
+        session.set_grid(GridSize { cols: 160, ..GRID }).unwrap();
+        assert_eq!(
+            handle.attaches().len(),
+            2,
+            "full-screen apps redraw themselves"
+        );
+
+        handle.output(b"\x1b[?1049l");
+        pump(&mut session, &rx);
+        session.set_grid(GridSize { cols: 120, ..GRID }).unwrap();
+        assert_eq!(
+            handle.attaches().len(),
+            3,
+            "measured from the attach width, 80"
+        );
     }
 
     #[test]

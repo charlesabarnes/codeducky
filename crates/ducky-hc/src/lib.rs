@@ -10,6 +10,8 @@ mod client;
 mod error;
 mod events;
 mod host;
+#[cfg(feature = "scratch")]
+pub mod scratch;
 pub mod socket;
 mod types;
 pub mod wire;

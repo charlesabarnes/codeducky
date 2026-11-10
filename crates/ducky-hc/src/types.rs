@@ -95,6 +95,20 @@ pub struct Status {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct FirstMessage {
+    pub sent: bool,
+    /// Why it was not sent.
+    #[serde(default)]
+    pub reason: Option<String>,
+    /// Whether the agent went `working` on it; `None` when it does not report status.
+    #[serde(default)]
+    pub started: Option<bool>,
+    /// The turn when it went in.
+    #[serde(default)]
+    pub turn: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Foreground {
     pub pid: i32,
     pub name: String,
@@ -127,8 +141,18 @@ pub struct Terminal {
     pub title: String,
     #[serde(default)]
     pub status: Option<Status>,
+    /// Whether the program ever sent an OSC 7501 status report; plain programs never do.
+    #[serde(default)]
+    pub reported: bool,
+    /// When the status word last changed, ms since the epoch.
+    #[serde(default)]
+    pub status_ms: Option<u64>,
+    /// Goes up each time the status leaves `working`.
     #[serde(default)]
     pub turn: u64,
+    /// Template launches: whether the first message went in.
+    #[serde(default)]
+    pub first_message: Option<FirstMessage>,
     #[serde(default)]
     pub parent: Option<String>,
     #[serde(default)]

@@ -1,95 +1,23 @@
-//! Against a real herdr-core that each test starts for itself and stops again: its own
-//! `HC_SESSION`, scratch `XDG_*` dirs, and none of the calling terminal's `HC_*` variables, so the
-//! user's live core is never involved. Opt in: `cargo test -p ducky-hc -- --ignored`
-//! (`HC_BIN` picks the binary; default `hc` on PATH, then `~/.local/bin/hc`).
+//! Against a real herdr-core that each test starts for itself and stops again (see
+//! `ducky_hc::scratch`), so the user's live core is never involved.
+//! Opt in: `cargo test -p ducky-hc -- --ignored`.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, Instant};
 
+use ducky_hc::scratch::ScratchCore;
 use ducky_hc::{
-    AttachParams, Client, EventKind, EventMessage, HcHost, RunParams, SendParams, Size,
-    StreamEvent, SubscribeParams,
+    AttachParams, EventKind, EventMessage, HcHost, RunParams, SendParams, Size, StreamEvent,
+    SubscribeParams,
 };
 use ducky_host::{ExecRequest, Host, HostError};
-
-struct ScratchCore {
-    dir: tempfile::TempDir,
-    session: String,
-    socket: PathBuf,
-}
-
-fn hc_bin() -> PathBuf {
-    if let Ok(bin) = std::env::var("HC_BIN") {
-        return bin.into();
-    }
-    let on_path = Command::new("hc").arg("--version").output();
-    if on_path.is_ok_and(|o| o.status.success()) {
-        return "hc".into();
-    }
-    Path::new(&std::env::var("HOME").unwrap()).join(".local/bin/hc")
-}
-
-impl ScratchCore {
-    fn start(tag: &str) -> Self {
-        let dir = tempfile::Builder::new()
-            .prefix("dk")
-            .tempdir_in("/tmp")
-            .unwrap();
-        let session = format!("dk{tag}{}", std::process::id() % 10_000);
-        let socket = dir
-            .path()
-            .join("run/herdr-core")
-            .join(format!("{session}.sock"));
-        let core = Self {
-            dir,
-            session,
-            socket,
-        };
-        let status = core.hc(&["server", "status"]);
-        assert!(status.status.success(), "{status:?}");
-        let deadline = Instant::now() + Duration::from_secs(10);
-        while !core.socket.exists() {
-            assert!(Instant::now() < deadline, "no socket at {:?}", core.socket);
-            std::thread::sleep(Duration::from_millis(50));
-        }
-        core
-    }
-
-    fn hc(&self, args: &[&str]) -> std::process::Output {
-        let root = self.dir.path();
-        Command::new(hc_bin())
-            .args(args)
-            .env_remove("HC_TERMINAL_ID")
-            .env_remove("HC_TERMINAL_SOCKET")
-            .env_remove("HC_SCOPE")
-            .env_remove("HC_SOCKET")
-            .env("HC_SESSION", &self.session)
-            .env("XDG_STATE_HOME", root.join("state"))
-            .env("XDG_CONFIG_HOME", root.join("config"))
-            .env("XDG_RUNTIME_DIR", root.join("run"))
-            .env("SSH_CONNECTION", "127.0.0.1 0 127.0.0.1 0")
-            .output()
-            .unwrap()
-    }
-
-    fn client(&self) -> Client {
-        assert!(self.socket.starts_with(self.dir.path()));
-        Client::connect(&self.socket).unwrap()
-    }
-}
-
-impl Drop for ScratchCore {
-    fn drop(&mut self) {
-        let _ = self.hc(&["server", "stop"]);
-    }
-}
 
 #[test]
 #[ignore = "starts a scratch herdr-core"]
 fn exec_and_byte_exact_files() {
-    let core = ScratchCore::start("f");
-    let client = core.client();
+    let core = ScratchCore::start("f").unwrap();
+    let client = core.client().unwrap();
     let status = client.server_status().unwrap();
     assert_eq!(status.version, client.hello().version);
 
@@ -111,7 +39,7 @@ fn exec_and_byte_exact_files() {
         Err(HostError::NotFound(_))
     ));
 
-    let root = core.dir.path().join("files");
+    let root = core.root().join("files");
     let path = |name: &str| root.join(name).to_str().unwrap().to_owned();
     let cases: Vec<(&str, Vec<u8>)> = vec![
         ("empty", vec![]),
@@ -147,8 +75,8 @@ fn exec_and_byte_exact_files() {
 #[test]
 #[ignore = "starts a scratch herdr-core"]
 fn terminals_events_and_attach() {
-    let core = ScratchCore::start("t");
-    let client = core.client();
+    let core = ScratchCore::start("t").unwrap();
+    let client = core.client().unwrap();
     let mut events = client.subscribe(&SubscribeParams::default()).unwrap();
     assert!(events.snapshot().terminals.is_empty());
 
@@ -228,8 +156,8 @@ fn terminals_events_and_attach() {
 #[test]
 #[ignore = "starts a scratch herdr-core"]
 fn machines_and_templates() {
-    let core = ScratchCore::start("m");
-    let client = core.client();
+    let core = ScratchCore::start("m").unwrap();
+    let client = core.client().unwrap();
     assert!(client.machine_list().unwrap().is_empty());
     let _ = client.templates_list().unwrap();
     assert_eq!(
@@ -254,8 +182,8 @@ fn machines_and_templates() {
 #[test]
 #[ignore = "starts a scratch herdr-core"]
 fn git_through_the_core() {
-    let core = ScratchCore::start("g");
-    let repo_dir = core.dir.path().join("repo");
+    let core = ScratchCore::start("g").unwrap();
+    let repo_dir = core.root().join("repo");
     std::fs::create_dir_all(&repo_dir).unwrap();
     let git = |args: &[&str]| {
         let status = Command::new("git")
@@ -280,7 +208,7 @@ fn git_through_the_core() {
     std::fs::write(repo_dir.join("a file.txt"), "one\ntwo\n").unwrap();
     std::fs::write(repo_dir.join("new.bin"), [0u8, 1, 2]).unwrap();
 
-    let host = std::sync::Arc::new(HcHost::new(core.client(), None));
+    let host = std::sync::Arc::new(HcHost::new(core.client().unwrap(), None));
     let repo = ducky_git::Repo::open(host, repo_dir.to_str().unwrap()).unwrap();
     assert_eq!(repo.head().unwrap().branch.as_deref(), Some("main"));
     let changes = repo.working_changes("HEAD").unwrap();
